@@ -1,122 +1,97 @@
-# Weather Insights: group capstone project
+# Pitwall · Race Weather
 
-Your group will build a small but real software project: an **object-oriented Python application** that
-pulls live data from the [OpenWeatherMap API](https://openweathermap.org/api), turns it into **analytics that
-are actually useful** (not just a number on a page), and presents it through a **Streamlit** web app. You will
-work in a shared **GitHub repository**, using an AI coding agent as a collaborator the way you've used Claude
-throughout this course — and you will document that collaboration the same way your work is documented: as
-part of the repo's history, not as a separate essay.
+A local racetrack weather application that compares forecasts, exposes disagreement, overlays recent radar on circuit maps, and checks the outlook during your planned sessions.
 
-This is a capstone: it combines almost everything from PDA2 — APIs, error handling, OOP (classes, inheritance,
-encapsulation, special methods), datetimes, and Streamlit — into one project you design yourselves.
+**Run it on your computer at `http://localhost:4173`.** GitHub stores the source code and runs checks. No website publication, cloud account or hosting setup is needed.
 
-See [`summary.md`](summary.md) for a quick reference of the concepts this project draws on, and
-[`starter_template/`](starter_template) for a ready-to-use project scaffold (packaging, `.env` loading,
-folder layout) your group can copy into its own repo so you can start on the actual design work right away.
+## Start Pitwall
 
-## The brief
+Requires Node.js 22.13 or newer and npm. From this repository's folder:
 
-"Analytics in any shape that is useful" is intentionally open — you choose what story your app tells and how
-it tells it. But every submission must meet the **minimum requirements** below. Think of these as the floor,
-not the ceiling: a group that does exactly the minimum, correctly, passes; a group that builds something a
-real user would actually want to open gets the higher grades.
+```sh
+npm ci
+npm run build
+npm start -- --open
+```
 
-### 1. Object-oriented design
+The last command starts the local application and opens it in your browser. Keep its terminal open while using the app; press **Ctrl+C** there to stop the local server. On later launches, run `npm start -- --open` again. On macOS, the included **Start Pitwall.command** launcher is a convenient alternative after setup.
 
-- **Inheritance, used for a real reason.** At minimum, a base class that knows how to call a JSON API
-  generically (handle the request, check the status code, raise on failure) and a subclass specific to
-  OpenWeatherMap that knows the actual endpoint and fields. Don't inherit just to tick a box — the base
-  class should capture behavior that a *different* weather or data provider could also reuse.
-- **Encapsulation applied with intent.** Use the public / `_protected` / `__private` convention correctly
-  (see [`s11_advanced_oop`](../class_material/s11_advanced_oop) and
-  [`s13_oop_apis_practice`](../class_material/s13_oop_apis_practice)) — public attributes for what callers
-  need, `_protected` for internal helpers subclasses may still touch, `__private` only where name-mangling
-  genuinely protects something.
-- **At least one special method** beyond `__init__` — `__str__`/`__repr__` at minimum, and ideally something
-  that makes your objects more useful in Python itself (`__eq__`, `__lt__` so locations can be `sorted()` by
-  temperature, etc.).
-- **At least one `@property`** where it makes sense (e.g. a computed value derived from stored attributes,
-  not just a renamed attribute).
+No weather API key or account is needed for the main application. Fresh forecasts, location search, radar and map tiles need an internet connection. The application and its saved data remain local; weather requests go directly to the respective providers.
 
-### 2. API integration and robustness
+See the [local run guide](docs/RUN_LOCALLY.md) for updating, development mode and troubleshooting.
 
-- The API key is read from an environment variable via `python-dotenv` (`variables.env`, never hardcoded,
-  never committed, never shown in the UI).
-- **Specific error handling per failure mode** — a bad city name, an invalid/expired key, and a network or
-  server error should each produce a clear, distinct message, not a raw traceback. No bare `except:`.
-- Fetching data for **multiple locations** must degrade gracefully — one bad location should not stop the
-  rest from loading (same pattern as the batch loop in `s13_oop_apis_practice`).
-- Basic input validation before calling the API (empty string, obviously invalid input).
+## What it does
 
-### 3. Data and analytics
+- Save curated circuits, search towns or add an exact coordinate and timezone.
+- Compare up to 72 hours of named forecasts: ECMWF IFS, DWD ICON, NOAA GFS and Météo-France through Open-Meteo, plus MET Norway Locationforecast.
+- Inspect per-source precipitation charts, family-weighted summaries, air temperature, wind and gusts.
+- Play recent RainViewer radar, inspect its coverage mask and overlay real mapped circuit outlines where available.
+- Plan practice, qualifying and race windows in the circuit's timezone; review rain, gusts and model disagreement over overlapping hours.
+- Export actual forecast rows as CSV and inspect how each source changes a prediction for the same valid hour.
 
-OpenWeatherMap's free tier gives you *current* conditions, not history — so to analyze anything "over time"
-your app has to **build its own dataset** by logging what it fetches.
+These are five forecast feeds through **two weather API transports**, not five independent forecasts. MET Norway shares ECMWF ancestry outside its regional coverage and is grouped with IFS when counting families. Other models also share observations and methods. A wet vote is the fraction of reporting families exceeding your chosen hourly amount; it is not a calibrated precipitation probability.
 
-- Every successful fetch is appended to a local data file (CSV or SQLite) with a timestamp — this is your own
-  mini time series, and it should accumulate as your group tests the app over the following days/weeks.
-- Your app must implement **at least three distinct analytical views**, drawing on at least two of these
-  categories:
-  - **Trend over time** for at least one location, using your own logged history.
-  - **Cross-location comparison** (ranking, sorting, highlighting extremes among tracked locations).
-  - **A derived/computed metric** that the API does not return directly — e.g. a simple comfort index from
-    temperature + humidity + wind, a "feels colder/warmer than actual" delta, a daily range.
-- Analytics must run on real fetched/logged data, not hardcoded or fabricated numbers.
+Precipitation is normalized to the hourly interval beginning at the displayed time. Air temperature and wind are model/provider estimates near the selected coordinates. They do not measure track temperature, grip, standing water or corner-by-corner weather. RainViewer's public radar has limited native detail; zooming over a circuit does not create finer meteorological resolution. Missing data stay unavailable rather than being replaced by dry conditions.
 
-### 4. Streamlit app
+## Saved data and privacy
 
-- At least **two views** (e.g. "Live Conditions" and "Analytics") — a single page dumping everything is not
-  enough.
-- Meaningful user interaction: adding/selecting locations, not just static output.
-- At least **two charts**, labeled with units, built from real data.
-- The API key must never appear in the UI, in `st.write`/print output, or in the repo.
+Circuits, preferences and session plans live in this browser's local storage. Real forecast snapshots are stored in **IndexedDB on this device**, under `http://localhost:4173`. They are not uploaded to GitHub, saved to a cloud database or synchronized between devices. Browser storage can be cleared or evicted; export important data. A different browser profile, hostname or port has a separate store—use the same localhost address for daily use.
 
-### 5. Repository, packaging, and AI collaboration
+Weather and mapping providers receive the requested coordinates or map area and normal connection metadata. No automatic GPS access is needed. There is no browser API-key field, login backend or secret embedded in the application. Keep credentials out of `VITE_` environment variables, whose values become part of the browser code.
 
-- A real **GitHub repository**, structured as an installable local package (`src/` layout, `pyproject.toml`)
-  the way [`weather-tools`](../class_material/s16_custom_libraries/weather-tools) did in Session 16 — not one
-  giant script.
-- **Commit history from every group member.** A repo with one commit from one person does not show group
-  work, regardless of who wrote the README.
-- A `PROMPTS.md` log at the repo root: for each feature or class you asked an AI agent to help with, record
-  what you asked, what it produced, and what you kept / changed / rejected and why. Keep this file running —
-  don't write it retroactively from memory.
-- Any commit where an AI agent substantially authored the code must carry a co-author trailer, exactly the
-  way this course's own repository does it:
-  ```
-  Co-Authored-By: Claude <noreply@anthropic.com>
-  ```
-  (or the equivalent for whichever tool/model your group used — name it).
-- A top-level `README.md` in your submitted repo (not this one) with setup instructions, how to run the app,
-  and a short description of what your app does.
+A supported browser can optionally install the local interface as a PWA. That is a convenience, not a requirement. Its offline shell does not generate fresh weather or radar without a connection.
 
-## What to submit
+## Development and checks
 
-Submit the **URL of your group's GitHub repository**. Make sure:
+```sh
+npm run dev
+npm test
+npm run typecheck
+npm run build
+```
 
-- the repo is either public, or private with the instructor added as a collaborator (confirm the exact
-  submission channel — Blackboard / email / other — with the instructor);
-- it runs from a clean clone following only your own `README.md` instructions;
-- `variables.env` (or any file holding a real API key) is **not** committed — only the course `.gitignore`
-  pattern or your own `.env.example` should be;
-- the data log file your app has been building *is* committed, so the grader can see real accumulated history,
-  not an empty database.
+Development mode uses the Vite URL printed in the terminal and refreshes after source edits. The production build is written to `dist/`, which the local launcher serves. CI checks the web application and Python package on GitHub; it does not publish or deploy anything.
 
-## Grading rubric (10 points)
+## Python II companion
 
-Graded by cloning the repo fresh and running it. Points are awarded in **0.5-point increments** — partial,
-correct work earns partial credit; a missing or broken piece loses credit only for that piece, not the whole
-project.
+[`python-companion/`](python-companion/README.md) contains the course-facing Python implementation: shared API-client inheritance, an OpenWeather subclass, validated domain objects, computed properties, safe error handling, multi-location fetching, SQLite logging, analytical views, a CLI and an optional Streamlit interface.
 
-| Criterion | Points | What earns the points |
-|---|---:|---|
-| **OOP design** | **2** | **0.5**: inheritance used for a genuine shared behavior. **0.5**: public/`_protected`/`__private` applied correctly and deliberately. **0.5**: at least one special method beyond `__init__` used meaningfully. **0.5**: at least one `@property` used where appropriate. |
-| **API integration & robustness** | **2** | **0.5**: API key via environment variable, never hardcoded or exposed. **0.5**: distinct, specific handling for bad input / bad key / bad location / network failure. **0.5**: multi-location fetches skip failures instead of crashing. **0.5**: user input validated before the API call. |
-| **Data & analytics** | **2** | **0.5**: real fetched data is logged with timestamps and accumulates over time. **1**: at least three distinct, correctly computed analytical views spanning at least two categories (trend / comparison / derived metric). **0.5**: analytics run on real logged data, not fabricated numbers. |
-| **Streamlit app** | **2** | **0.5**: runs cleanly with at least two views. **0.5**: real, meaningful user interaction. **0.5**: at least two labeled, correct charts. **0.5**: overall usability — a stranger could use it without reading the code. |
-| **Repository & AI collaboration record** | **1** | **0.5**: proper `src/` package structure, `pyproject.toml`, working `README.md`, no secrets committed. **0.5**: `PROMPTS.md` is specific and consistent with the commit history, and AI-assisted commits carry the co-author trailer. |
-| **Team collaboration evidence** | **1** | **0.5**: commit history shows real contributions from every group member. **0.5**: the group can explain any part of the code when asked — including the parts an agent wrote. |
-| **Total** | **10** | |
+```sh
+cd python-companion
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[ui]'
+cp variables.env.example variables.env
+pitwall-weather fetch --track portimao --track nogaro --track spa
+python -m streamlit run streamlit_app.py
+```
 
-A failing component (e.g. a broken API call, an empty `PROMPTS.md`, analytics computed on fake numbers) loses
-credit only for that row — it does not zero out the rest of the project.
+Open-Meteo works without a key. To fetch OpenWeather from Python, configure your own `OPENWEATHER_API_KEY` in the ignored `variables.env`. Keep it out of source control and the browser application. Python current-condition snapshots use a separate local SQLite database; they are not the browser's forecast history.
+
+The [original assignment brief](assignment/BRIEF.md), [quick reference](summary.md) and supplied [`starter_template/`](starter_template/) are preserved. [Assignment alignment](docs/ASSIGNMENT_ALIGNMENT.md) distinguishes implemented features from remaining submission responsibilities. Genuine teammate contributions, accumulated multi-day data, instructor access and the final submission remain group responsibilities; they are not fabricated by this project.
+
+## Repository layout
+
+```text
+web/                    React interface, browser data adapters, optional PWA assets
+scripts/                Local application launcher
+python-companion/       Installable Python package, Streamlit app and unit tests
+tests/                  Weather, input, time and storage tests
+assignment/BRIEF.md     Preserved original assignment
+starter_template/       Preserved supplied scaffold
+docs/                   Local setup and assignment alignment
+.github/workflows/      CI checks only
+```
+
+See [`PROMPTS.md`](PROMPTS.md) for the AI collaboration record. AI-authored commits should carry the actual tool's co-author trailer; the group should be able to explain the submitted code.
+
+## Data sources
+
+- [Open-Meteo documentation](https://open-meteo.com/en/docs)
+- [MET Norway Locationforecast](https://api.met.no/weatherapi/locationforecast/2.0/documentation)
+- [RainViewer Weather Maps API](https://www.rainviewer.com/api/weather-maps-api.html)
+- [OpenStreetMap contributors](https://www.openstreetmap.org/copyright)
+- [F1 circuit geometry by Tomislav Bacinger](https://github.com/bacinger/f1-circuits), with its MIT license retained under `web/public/circuits/`
+
+Provider quotas, availability, licenses and CORS policies apply. The app uses the public endpoints normally and does not proxy around access restrictions. Review the relevant plans before commercial use.

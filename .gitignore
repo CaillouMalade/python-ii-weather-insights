@@ -16,3 +16,11 @@ __pycache__/
 build/
 dist/
 .streamlit/secrets.toml
+
+# Web application dependencies and build output
+node_modules/
+*.tsbuildinfo
+coverage/
+.vite/
+*.log
+.DS_Store

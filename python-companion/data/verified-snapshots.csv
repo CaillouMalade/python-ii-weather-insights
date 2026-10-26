@@ -1,0 +1,4 @@
+id,location,latitude,longitude,timezone,provider,fetched_at,valid_at,temperature_c,humidity_pct,wind_kmh,gust_kmh,precipitation_mm,precipitation_interval_minutes,feels_like_c,dewpoint_c,kind
+1,Portimão,37.2319,-8.6267,Europe/Lisbon,Open-Meteo best match,2026-10-26T20:17:29+00:00,2026-10-26T20:15:00+00:00,14.9,94.0,5.7,10.8,0.0,15,15.3,13.94,modeled current conditions; dewpoint derived from temperature and RH
+2,Nogaro,43.7699,-0.0327,Europe/Paris,Open-Meteo best match,2026-10-26T20:17:29+00:00,2026-10-26T20:15:00+00:00,15.1,94.0,12.8,21.2,0.0,15,14.6,14.14,modeled current conditions; dewpoint derived from temperature and RH
+3,Spa-Francorchamps,50.4372,5.9714,Europe/Brussels,Open-Meteo best match,2026-10-26T20:17:29+00:00,2026-10-26T20:15:00+00:00,8.5,94.0,10.4,24.1,0.0,15,6.3,7.59,modeled current conditions; dewpoint derived from temperature and RH
