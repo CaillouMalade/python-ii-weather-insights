@@ -5,7 +5,12 @@ const VERSION = 1;
 const MAX_POINTS_PER_LOCATION = 3000;
 const RETENTION_MS = 7 * 86400000;
 type StoredPoint = HistoryPoint & { id: string; locationKey: string };
-type CacheRecord<T = unknown> = { key: string; expires: number; value: T };
+type CacheRecord<T = unknown> = {
+  key: string;
+  expires: number;
+  retainUntil?: number;
+  value: T;
+};
 let databasePromise: Promise<IDBDatabase | null> | null = null;
 const memoryCache = new Map<string, CacheRecord>();
 
@@ -48,10 +53,18 @@ function openDatabase(): Promise<IDBDatabase | null> {
   return databasePromise;
 }
 
-export async function readCache<T>(key: string): Promise<T | null> {
+export async function readCache<T>(
+  key: string,
+  options: { allowStale?: boolean } = {},
+): Promise<T | null> {
   const memory = memoryCache.get(key);
-  if (memory && memory.expires > Date.now()) return memory.value as T;
-  if (memory) memoryCache.delete(key);
+  const usable = (record: CacheRecord) =>
+    (options.allowStale
+      ? (record.retainUntil ?? record.expires)
+      : record.expires) > Date.now();
+  if (memory && usable(memory)) return memory.value as T;
+  if (memory && (memory.retainUntil ?? memory.expires) <= Date.now())
+    memoryCache.delete(key);
   const db = await openDatabase();
   if (!db) return null;
   return new Promise((resolve) => {
@@ -62,7 +75,7 @@ export async function readCache<T>(key: string): Promise<T | null> {
         .get(key);
       request.onsuccess = () => {
         const record = request.result as CacheRecord<T> | undefined;
-        if (record && record.expires > Date.now()) {
+        if (record && usable(record)) {
           memoryCache.set(key, record);
           resolve(record.value);
         } else resolve(null);
@@ -78,23 +91,25 @@ export async function writeCache<T>(
   key: string,
   value: T,
   expires: number,
+  retainUntil = expires,
 ): Promise<void> {
   if (memoryCache.size > 150)
     memoryCache.delete(memoryCache.keys().next().value!);
-  memoryCache.set(key, { key, value, expires });
+  memoryCache.set(key, { key, value, expires, retainUntil });
   const db = await openDatabase();
   if (!db) return;
   await new Promise<void>((resolve) => {
     try {
       const tx = db.transaction("cache", "readwrite");
       const store = tx.objectStore("cache");
-      store.put({ key, value, expires });
+      store.put({ key, value, expires, retainUntil });
       // A bounded cleanup keeps stale place/radar caches from accumulating indefinitely.
       const request = store.openCursor();
       request.onsuccess = () => {
         const cursor = request.result;
         if (!cursor) return;
-        if (cursor.value.expires <= Date.now()) cursor.delete();
+        if ((cursor.value.retainUntil ?? cursor.value.expires) <= Date.now())
+          cursor.delete();
         cursor.continue();
       };
       tx.oncomplete = () => resolve();

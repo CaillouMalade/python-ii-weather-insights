@@ -1,7 +1,7 @@
 /* Pitwall app-shell cache. No provider responses, radar tiles or weather API data are cached. */
 const SCOPE = self.registration.scope;
 const CACHE_PREFIX = `pitwall-shell-${encodeURIComponent(new URL(SCOPE).pathname)}-`;
-const CACHE_NAME = `${CACHE_PREFIX}v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v2`;
 const SHELL_URL = new URL('index.html', SCOPE).href;
 const STATIC_FILES = ['manifest.webmanifest', 'favicon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png'];
 

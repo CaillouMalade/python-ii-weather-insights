@@ -4,6 +4,10 @@ import { mkdtemp, writeFile, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { createAppServer } from "../scripts/start.mjs";
+import { createServer } from "node:http";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 
 async function withServer(t) {
   const temporary = await mkdtemp(path.join(os.tmpdir(), "pitwall-test-"));
@@ -47,5 +51,51 @@ test("local app supports navigation fallback and rejects unexpected writes", asy
   assert.deepEqual(await (await fetch(base + "/__pitwall_health")).json(), {
     app: "pitwall",
     mode: "localhost",
+  });
+});
+
+test("launching Pitwall twice reuses the verified loopback app without changing ports", async (t) => {
+  const base = await withServer(t);
+  const port = new URL(base).port;
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    [
+      fileURLToPath(new URL("../scripts/start.mjs", import.meta.url)),
+      "--port",
+      port,
+    ],
+    { timeout: 5000 },
+  );
+  assert.match(stdout, /Pitwall is already running/);
+  assert.ok(stdout.includes(`http://localhost:${port}/`));
+  assert.equal((await fetch(base + "/")).status, 200);
+});
+
+test("the launcher leaves another application on the requested port untouched", async (t) => {
+  const other = createServer((_request, response) => {
+    response.setHeader("Content-Type", "application/json");
+    response.end('{"app":"other"}');
+  });
+  await new Promise((resolve) => other.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => other.close(resolve)));
+  const port = other.address().port;
+  await assert.rejects(
+    promisify(execFile)(
+      process.execPath,
+      [
+        fileURLToPath(new URL("../scripts/start.mjs", import.meta.url)),
+        "--port",
+        String(port),
+      ],
+      { timeout: 5000 },
+    ),
+    (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stderr, /another application/);
+      return true;
+    },
+  );
+  assert.deepEqual(await (await fetch(`http://127.0.0.1:${port}/`)).json(), {
+    app: "other",
   });
 });

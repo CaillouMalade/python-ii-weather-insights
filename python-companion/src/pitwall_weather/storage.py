@@ -1,6 +1,7 @@
 """Append-only fetched snapshots; a real dataset grows only when requests succeed."""
 import csv
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 from .models import WeatherSnapshot
 
@@ -27,10 +28,17 @@ class SnapshotStore:
     def __repr__(self):
         return f"SnapshotStore(path={str(self.path)!r})"
 
+    @contextmanager
     def _connect(self):
         connection = sqlite3.connect(str(self.path), timeout=10)
         connection.row_factory = sqlite3.Row
-        return connection
+        try:
+            with connection:
+                yield connection
+        finally:
+            # sqlite3's transaction context commits/rolls back, but does not close.
+            # Explicit closure also releases the database file on Windows.
+            connection.close()
 
     def append(self, snapshot: WeatherSnapshot):
         record = snapshot.to_record()

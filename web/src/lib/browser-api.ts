@@ -40,14 +40,32 @@ async function weatherFor(
   lat: number,
   lon: number,
   zone: string,
+  refresh = false,
 ): Promise<WeatherResponse> {
   const key = `weather-v1:${locationKey(lat, lon)}:${zone}`;
-  const cached = await readCache<WeatherResponse>(key);
-  if (cached) return cached;
+  const cached = !refresh && (await readCache<WeatherResponse>(key));
+  if (cached)
+    return {
+      ...cached,
+      delivery:
+        cached.delivery === "network" || !cached.delivery
+          ? "cache"
+          : cached.delivery,
+    };
   return once(key, async () => {
     // A second check handles callers that completed IndexedDB reads at the same time.
-    const prior = await readCache<WeatherResponse>(key);
-    if (prior) return prior;
+    const prior = !refresh && (await readCache<WeatherResponse>(key));
+    if (prior)
+      return {
+        ...prior,
+        delivery:
+          prior.delivery === "network" || !prior.delivery
+            ? "cache"
+            : prior.delivery,
+      };
+    const fallback = await readCache<WeatherResponse>(key, {
+      allowStale: true,
+    });
     const open = new OpenMeteoClient(),
       met = new MetNorwayClient();
     const sources = [
@@ -74,26 +92,49 @@ async function weatherFor(
           fetchedAt: result.value.fetchedAt,
           message: `${result.value.hours.length} forecast hours available directly from the public provider.`,
         });
-      } else
+      } else {
+        const message =
+          result.reason instanceof ProviderError
+            ? result.reason.message
+            : "This source is temporarily unavailable from this browser.";
+        const previous = fallback?.forecasts.find(
+          (f) =>
+            f.id === source.id &&
+            Date.now() - Date.parse(f.fetchedAt) < 86400000 &&
+            f.hours.some((h) => h.time + 3600 > Date.now() / 1000),
+        );
+        if (previous) forecasts.push(previous);
         statuses.push({
           id: source.id,
           name: source.name,
-          status: "error",
-          message:
-            result.reason instanceof ProviderError
-              ? result.reason.message
-              : "This source is temporarily unavailable from this browser.",
+          status: previous ? "cached" : "error",
+          fetchedAt: previous?.fetchedAt,
+          message: previous
+            ? `${message} Showing the last saved forecast, fetched ${previous.fetchedAt}; it has not been refreshed.`
+            : message,
         });
+      }
     });
     statuses.push({
       id: "openweather",
       name: "OpenWeather",
       status: "unconfigured",
       message:
-        "Available through the local Python companion. This website does not collect or store API keys.",
+        "Available through the local Python companion. Pitwall does not collect or store API keys in the browser.",
     });
     const weather: WeatherResponse = {
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: forecasts.length
+        ? forecasts
+            .map((f) => f.fetchedAt)
+            .sort()
+            .at(-1)!
+        : new Date().toISOString(),
+      checkedAt: new Date().toISOString(),
+      delivery: statuses.some((s) => s.status === "cached")
+        ? statuses.some((s) => s.status === "ok")
+          ? "partial"
+          : "stale"
+        : "network",
       location: { lat, lon, timezone: zone },
       forecasts,
       statuses,
@@ -102,7 +143,8 @@ async function weatherFor(
         "Forecasts are model estimates at the selected coordinates, not observations of track grip or track-surface temperature.",
         "Times begin each one-hour precipitation interval. Open-Meteo preceding-hour rain totals and peak gusts are shifted to the matching interval; MET Norway next-hour amounts already use that convention.",
         "Model agreement is the share of distinct model families exceeding the selected rain threshold, not a calibrated probability. MET Norway and IFS share ECMWF ancestry and are grouped together.",
-        "Forecast fetches are cached for ten minutes in this browser; MET Norway Expires is respected where supplied. Fetch time is not model initialization time.",
+        "Automatic forecast fetches are cached for ten minutes. Refresh requests an update while respecting provider cooldowns and MET Norway Expires. Fetch time is not model initialization time.",
+        "If a source cannot refresh, its last successful forecast may be retained for up to 24 hours, with its original fetch time and an explicit saved-data warning. Missing hours remain unavailable.",
         "History is actual forecast snapshots stored in this browser's IndexedDB only. It does not sync across devices and can be removed when browser data is cleared.",
         "Open-Meteo public access is for non-commercial evaluation. Review the providers' licensing and plans before commercial use.",
       ],
@@ -110,7 +152,12 @@ async function weatherFor(
     await writeCache(
       key,
       weather,
-      Date.now() + (forecasts.length ? 600000 : 60000),
+      Date.now() +
+        (statuses.some((s) => s.status === "error" || s.status === "cached") ||
+        !forecasts.length
+          ? 60000
+          : 600000),
+      Date.now() + 86400000,
     );
     return weather;
   });
@@ -320,7 +367,12 @@ async function dispatch(path: string, init?: RequestInit): Promise<Response> {
       case "/api/weather": {
         const { lat, lon } = coordinates(url.searchParams),
           zone = timezone(url.searchParams.get("timezone"));
-        const weather = await weatherFor(lat, lon, zone);
+        const weather = await weatherFor(
+          lat,
+          lon,
+          zone,
+          url.searchParams.get("refresh") === "1",
+        );
         const storage = await logWeather(weather);
         return response(
           {
@@ -370,7 +422,7 @@ async function dispatch(path: string, init?: RequestInit): Promise<Response> {
   }
 }
 
-/** Local dispatch for a static GitHub Pages app. Upstream calls go directly to public CORS APIs. */
+/** Browser-local dispatch. Upstream calls go directly to the public provider APIs. */
 export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const signal = init?.signal;
   if (signal?.aborted)

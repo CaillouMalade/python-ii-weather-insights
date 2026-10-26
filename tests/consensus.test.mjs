@@ -110,3 +110,9 @@ test("related sources do not hide range extremes or peak gusts", () => {
   assert.equal(c.tempMax, 20);
   assert.equal(c.count, 2);
 });
+
+test("session family-vote means are weighted by the actual overlap duration", () => {
+  const c = buildConsensus([f("a", "a", [hour(0, 0), hour(3600, 1)])]);
+  assert.equal(summarizeSession(c, 1800, 7200).meanWetShare, 2 / 3);
+  assert.equal(summarizeSession([c[0], c[0]], 0, 7200).coverage, 0.5);
+});

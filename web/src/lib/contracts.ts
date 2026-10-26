@@ -8,6 +8,16 @@ export type Track = {
   lengthKm?: number;
   custom?: boolean;
 };
+export type Session = {
+  id: string;
+  name: string;
+  trackId: string;
+  date: string;
+  time: string;
+  duration: number;
+  /** Retain custom coordinates/timezone even if the circuit is later unfavorited. */
+  track?: Track;
+};
 export type Hour = {
   time: number;
   temperature: number | null;
@@ -39,12 +49,15 @@ export type Forecast = {
 export type SourceStatus = {
   id: string;
   name: string;
-  status: "ok" | "error" | "unconfigured";
+  status: "ok" | "cached" | "error" | "unconfigured";
   message: string;
   fetchedAt?: string;
 };
 export type WeatherResponse = {
   fetchedAt: string;
+  checkedAt?: string;
+  delivery?: "network" | "cache" | "partial" | "stale";
+  storage?: { saved: boolean; message: string };
   location: { lat: number; lon: number; timezone: string };
   forecasts: Forecast[];
   statuses: SourceStatus[];
@@ -80,7 +93,7 @@ export type RadarResponse = {
   coverageUrl: string;
   note: string;
 };
-/** Geometry coordinate pairs are [latitude, longitude], ready for Leaflet. GeoJSON assets are converted once by the backend. */
+/** Geometry coordinate pairs are [latitude, longitude], ready for Leaflet. */
 export type GeometryResponse = {
   coordinates: [number, number][][];
   source: string;

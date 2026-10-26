@@ -104,10 +104,31 @@ if (
     process.exit(1);
   }
   const app = createAppServer();
-  app.on("error", (error) => {
+  app.on("error", async (error) => {
+    if (error.code === "EADDRINUSE") {
+      try {
+        const response = await fetch(
+          `http://127.0.0.1:${port}/__pitwall_health`,
+          { signal: AbortSignal.timeout(1500) },
+        );
+        const health = await response.json();
+        if (
+          response.ok &&
+          health.app === "pitwall" &&
+          health.mode === "localhost"
+        ) {
+          const url = `http://localhost:${port}/`;
+          console.log(`Pitwall is already running: ${url}`);
+          if (process.argv.includes("--open")) openBrowser(url);
+          return;
+        }
+      } catch {
+        /* A different application owns the port. Leave it untouched. */
+      }
+    }
     console.error(
       error.code === "EADDRINUSE"
-        ? `Port ${port} is already in use. Try npm start -- --port ${port + 1}.`
+        ? `Port ${port} is used by another application. Stop that application before starting Pitwall at http://localhost:${port}/.`
         : error.message,
     );
     process.exitCode = 1;

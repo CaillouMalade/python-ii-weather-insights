@@ -23,3 +23,13 @@ Verification and hosting instructions are in docs/. The group must review and un
 ### Clarification: local application, GitHub source only
 
 Arthur clarified that he wants an app that opens on localhost, with no hosting needed. Public Pages publication was therefore cancelled. The publishing workflow was removed before any push, and no repository visibility changed. The app now has a production local Node server, npm start, and Mac/Windows launchers; its source remains in the existing private GitHub repository. CI remains enabled for code quality.
+
+## 26 October 2026 — G14 improvements, version 1.1
+
+**Asked:** Continue the existing Pitwall implementation and improve it extensively, preserving the local architecture at localhost:4173. Arthur clarified: “i want the work to be done directly on github or on the G14. nothing on the mac”.
+
+**Produced:** Incremental session evidence and planning improvements, editable plans with calendar export and JSON backup/restore, rainfall/wind history views and CSV export, explicit saved-forecast fallback, local Leaflet packaging, Windows SQLite closure, a patched Vite dependency, bounded vendor bundles, keyboard focus handling, same-port launcher reuse, and cross-platform CI coverage. The current GitHub main was cloned on the G14; no Mac files or older assignment work were changed.
+
+**Checked:** Baseline web tests passed, but five Python tests failed on Windows because connections were not closed; that failure was reproduced and repaired. The updated suite has 51 passing web tests and 18 passing Python tests on the G14, with successful types/build and zero npm audit findings. Browser checks use real forecast snapshots; controlled failure checks are identified separately in docs/VERIFICATION.md. Synthetic fixtures exist only in isolated automated tests.
+
+**Kept / changed / rejected:** Kept React/Vite, local-only storage, source attribution, family-aware votes, honest missing fields, the original assignment/scaffold and existing visual design. Changed model-dry windows to require rain evidence from every enabled source, while separately disclosing gust coverage. Rejected silent overwrite during backup import, duplicate sessions, replacing unavailable weather with dry values, renewing old fetch timestamps after failures, moving the app to another origin, and any hosting/login/cloud rebuild.

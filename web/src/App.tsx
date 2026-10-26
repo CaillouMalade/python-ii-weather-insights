@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -39,6 +39,7 @@ import {
   Sun,
   Thermometer,
   Trash2,
+  Upload,
   Wind,
   X,
 } from "lucide-react";
@@ -51,20 +52,23 @@ import type {
   Forecast,
   ConsensusHour,
   HistoryPoint,
+  Session,
 } from "@/lib/contracts";
 import { buildConsensus, summarizeSession } from "@/lib/consensus";
+import { getDryWindows, sessionSources } from "@/lib/session-planner";
+import {
+  createBackup,
+  mergeBackup,
+  parseBackup,
+  parsePreferences,
+  validSession,
+} from "@/lib/device-state";
+import { csvEscape, download, sessionsCalendar, toCsv } from "@/lib/exports";
+import { useModalFocus } from "@/lib/use-modal-focus";
 import { localEpoch } from "@/lib/local-time";
 import { INITIAL_TRACKS, TRACKS, validTrack } from "@/lib/tracks";
 
 type View = "overview" | "comparison" | "planner" | "history";
-type Session = {
-  id: string;
-  name: string;
-  trackId: string;
-  date: string;
-  time: string;
-  duration: number;
-};
 const TABS: [View, string, typeof Activity][] = [
   ["overview", "Overview", Activity],
   ["comparison", "Forecast comparison", Layers],
@@ -132,21 +136,6 @@ function compass(deg: number | null) {
         "NW",
         "NNW",
       ][Math.round(deg / 22.5) % 16];
-}
-function download(name: string, text: string, type = "text/csv") {
-  const a = document.createElement("a");
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-function csvEscape(s: unknown) {
-  const text =
-    typeof s === "string" && /^[\t\r\n ]*[=+\-@]/.test(s)
-      ? "'" + s
-      : String(s ?? "");
-  return '"' + text.replaceAll('"', '""') + '"';
 }
 function WeatherIcon({
   rain,
@@ -234,7 +223,11 @@ function RainChart({
     );
   return (
     <div className="chart" style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer
+        width="100%"
+        height="100%"
+        initialDimension={{ width: 320, height }}
+      >
         <AreaChart
           data={rows}
           margin={{ top: 12, right: 16, left: -18, bottom: 0 }}
@@ -310,7 +303,11 @@ function MetricChart({
 }) {
   return (
     <div className="chart" style={{ height: 185 }}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer
+        width="100%"
+        height="100%"
+        initialDimension={{ width: 320, height: 185 }}
+      >
         <LineChart
           data={hours}
           margin={{ top: 12, right: 12, left: -18, bottom: 0 }}
@@ -381,6 +378,8 @@ function MetricChart({
 
 export default function Pitwall() {
   const pwa = usePwa();
+  const refreshRequested = useRef(false);
+  const backupInput = useRef<HTMLInputElement>(null);
   const [view, setView] = useState<View>("overview"),
     [track, setTrack] = useState<Track>(TRACKS[0]),
     [favorites, setFavorites] = useState<Track[]>(INITIAL_TRACKS),
@@ -416,63 +415,91 @@ export default function Pitwall() {
     [historyLoading, setHistoryLoading] = useState(false),
     [historyMessage, setHistoryMessage] = useState(""),
     [historyRefresh, setHistoryRefresh] = useState(0),
-    [historyValidHour, setHistoryValidHour] = useState(0);
+    [historyValidHour, setHistoryValidHour] = useState(0),
+    [historyMetric, setHistoryMetric] = useState<
+      "temperature" | "precipitation" | "wind"
+    >("temperature"),
+    [clock, setClock] = useState(Date.now()),
+    [editingSessionId, setEditingSessionId] = useState<string | null>(null),
+    [sessionFeedback, setSessionFeedback] = useState(""),
+    [deletedSession, setDeletedSession] = useState<Session | null>(null),
+    [storageMessage, setStorageMessage] = useState(""),
+    [canSave, setCanSave] = useState(true),
+    [backupMessage, setBackupMessage] = useState("");
+  useModalFocus(searchOpen || settings);
   useEffect(() => {
     try {
       const saved = JSON.parse(
         localStorage.getItem("pitwall-preferences") || "null",
       );
       if (saved) {
-        if (Array.isArray(saved.favorites) && saved.favorites.length) {
-          const fs = saved.favorites
-            .filter(validTrack)
-            .map((f: Track) => TRACKS.find((t) => t.id === f.id) || f);
-          if (fs.length) setFavorites(fs);
-        }
-        if (validTrack(saved.track))
-          setTrack(TRACKS.find((t) => t.id === saved.track.id) || saved.track);
-        if (Array.isArray(saved.disabled))
-          setDisabled(
-            saved.disabled.filter((s: unknown) => typeof s === "string"),
-          );
-        if ([0.1, 0.2, 0.5, 1].includes(saved.threshold))
-          setThreshold(saved.threshold);
-        if (Number.isFinite(saved.gustLimit)) setGustLimit(saved.gustLimit);
+        const preferences = parsePreferences(saved);
+        setFavorites(preferences.favorites);
+        setTrack(preferences.track);
+        setDisabled(preferences.disabled);
+        setThreshold(preferences.threshold);
+        setGustLimit(preferences.gustLimit);
       }
+    } catch {
+      setCanSave(false);
+      setStorageMessage(
+        "Saved preferences could not be read. Automatic saving is paused to preserve the existing data. Export your current plans or restore a Pitwall backup in preferences.",
+      );
+    }
+    try {
       const ss = JSON.parse(localStorage.getItem("pitwall-sessions") || "[]");
-      if (Array.isArray(ss))
-        setSessions(
-          ss.filter(
-            (s) =>
-              typeof s.id === "string" &&
-              typeof s.trackId === "string" &&
-              /^\d{4}-\d{2}-\d{2}$/.test(s.date) &&
-              /^\d{2}:\d{2}$/.test(s.time) &&
-              Number.isFinite(s.duration),
-          ),
-        );
-    } catch {}
+      if (!Array.isArray(ss) || !ss.every(validSession))
+        throw Error("Invalid saved sessions");
+      setSessions(ss);
+    } catch {
+      setCanSave(false);
+      setStorageMessage(
+        "Saved sessions could not be read. Automatic saving is paused to preserve the existing data. Restore a Pitwall backup in preferences to resume saving.",
+      );
+    }
     setHydrated(true);
   }, []);
   useEffect(() => {
-    if (hydrated)
+    if (hydrated && canSave)
       try {
         localStorage.setItem(
           "pitwall-preferences",
           JSON.stringify({ favorites, track, disabled, threshold, gustLimit }),
         );
         localStorage.setItem("pitwall-sessions", JSON.stringify(sessions));
-      } catch {}
-  }, [hydrated, favorites, track, disabled, threshold, gustLimit, sessions]);
+        setStorageMessage("");
+      } catch {
+        setStorageMessage(
+          "This browser could not save your latest changes. Keep Pitwall open and export a backup in preferences; storage may be full or blocked.",
+        );
+      }
+  }, [
+    hydrated,
+    canSave,
+    favorites,
+    track,
+    disabled,
+    threshold,
+    gustLimit,
+    sessions,
+  ]);
   useEffect(() => {
     if (!hydrated) return;
     const controller = new AbortController();
     setLoading(true);
     setError("");
-    setData(null);
-    setSelectedDay("");
+    setData((previous) =>
+      previous &&
+      previous.location.lat.toFixed(4) === track.lat.toFixed(4) &&
+      previous.location.lon.toFixed(4) === track.lon.toFixed(4) &&
+      previous.location.timezone === track.timezone
+        ? previous
+        : null,
+    );
+    const force = refreshRequested.current;
+    refreshRequested.current = false;
     apiFetch(
-      `/api/weather?lat=${track.lat}&lon=${track.lon}&timezone=${encodeURIComponent(track.timezone)}`,
+      `/api/weather?lat=${track.lat}&lon=${track.lon}&timezone=${encodeURIComponent(track.timezone)}${force ? "&refresh=1" : ""}`,
       { signal: controller.signal },
     )
       .then(async (r) => {
@@ -497,21 +524,43 @@ export default function Pitwall() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [hydrated, track.id, track.lat, track.lon, refresh]);
+  }, [hydrated, track.id, track.lat, track.lon, track.timezone, refresh]);
   useEffect(() => {
     if (!hydrated) return;
     const nextHour = (Math.floor(Date.now() / 3600000) + 1) * 3600;
     setSessionDate(day(nextHour, track.timezone));
     setSessionTime(time(nextHour, track.timezone));
+    setSelectedDay("");
+    setEditingSessionId(null);
+    setSessionFeedback("");
+    setSessionError("");
+    setDeletedSession(null);
   }, [hydrated, track.id, track.timezone]);
   useEffect(() => {
     const i = setInterval(() => setRefresh((v) => v + 1), 10 * 60 * 1000);
     return () => clearInterval(i);
   }, []);
   useEffect(() => {
+    const tick = () => setClock(Date.now());
+    const connected = () => {
+      tick();
+      refreshRequested.current = true;
+      setRefresh((v) => v + 1);
+    };
+    const interval = setInterval(tick, 60000);
+    window.addEventListener("focus", tick);
+    window.addEventListener("online", connected);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", tick);
+      window.removeEventListener("online", connected);
+    };
+  }, []);
+  useEffect(() => {
     if (!searchOpen || query.trim().length < 2) {
       setSearchResults([]);
       setSearchError("");
+      setSearching(false);
       return;
     }
     const controller = new AbortController();
@@ -545,7 +594,9 @@ export default function Pitwall() {
         .catch((e) => {
           if (e.name !== "AbortError") setSearchError(e.message);
         })
-        .finally(() => setSearching(false));
+        .finally(() => {
+          if (!controller.signal.aborted) setSearching(false);
+        });
     }, 350);
     return () => {
       clearTimeout(timer);
@@ -575,7 +626,9 @@ export default function Pitwall() {
           setHistoryMessage(e.message);
         }
       })
-      .finally(() => setHistoryLoading(false));
+      .finally(() => {
+        if (!controller.signal.aborted) setHistoryLoading(false);
+      });
     return () => controller.abort();
   }, [view, track.lat, track.lon, historyRefresh, data?.fetchedAt]);
   useEffect(() => {
@@ -589,18 +642,21 @@ export default function Pitwall() {
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
   }, [searchOpen, settings]);
-  const active = (data?.forecasts || []).filter(
-    (f) => !disabled.includes(f.id),
+  const active = useMemo(
+    () => (data?.forecasts || []).filter((f) => !disabled.includes(f.id)),
+    [data, disabled],
   );
   const consensus = useMemo(
     () => buildConsensus(active, threshold),
-    [data, disabled, threshold],
+    [active, threshold],
   );
-  const now = Date.now() / 1000;
+  const now = clock / 1000;
   const future = consensus.filter((h) => h.time + 3600 > now);
-  const current = future[0];
+  const current = future.find((h) => h.time <= now);
   const days = [...new Set(future.map((h) => day(h.time, track.timezone)))];
-  const shownDay = selectedDay || days[0] || day(now, track.timezone);
+  const shownDay = days.includes(selectedDay)
+    ? selectedDay
+    : days[0] || day(now, track.timezone);
   const hours = future
     .filter((h) => day(h.time, track.timezone) === shownDay)
     .slice(0, horizon);
@@ -608,13 +664,30 @@ export default function Pitwall() {
   const hasRainEvidence = future.slice(0, 24).some((h) => h.wetShare !== null);
   const wetHour = future
     .slice(0, 24)
-    .find((h) => h.wetShare !== null && h.wetShare > 0);
+    .find((h) => h.rainMax !== null && h.rainMax >= threshold);
+  const wetSignalSources = wetHour
+    ? active.filter((f) =>
+        f.hours.some(
+          (h) =>
+            h.time === wetHour.time &&
+            h.precipitation !== null &&
+            h.precipitation >= threshold,
+        ),
+      )
+    : [];
   const maxGust = max(hours.map((h) => h.gust));
   const dissent = upcoming.find(
     (h) => h.agreement === "split" || h.agreement === "mixed",
   );
   const availableCount = data?.forecasts.length || 0;
   const families = [...new Set(active.map((f) => f.family))].length;
+  const cachedSources =
+    data?.statuses.filter((s) => s.status === "cached") ?? [];
+  const oldestFetch = min(active.map((f) => Date.parse(f.fetchedAt) / 1000));
+  const oldestAge =
+    oldestFetch === null
+      ? null
+      : Math.max(0, Math.floor((now - oldestFetch) / 60));
   const first = upcoming[0];
   const narrative = !active.length
     ? "Enable a source to compare the forecast."
@@ -622,13 +695,17 @@ export default function Pitwall() {
       ? "Forecast hours are not available for this location."
       : first.wetShare === null
         ? "Rainfall is unavailable for the current forecast hour. No wet or dry agreement can be assessed for this interval."
-        : families < 3
+        : first.count < 3
           ? "Fewer than three model families are available. Rain agreement is limited; inspect the individual sources."
           : dissent
             ? `Models diverge around ${time(dissent.time, track.timezone)}: ${dissent.wetCount} of ${dissent.count} families forecast at least ${threshold} mm in that hourly interval. Keep the radar in view.`
             : wetHour
-              ? `The first wet signal appears in the ${time(wetHour.time, track.timezone)} hourly interval. ${wetHour.wetCount} of ${wetHour.count} model families meet the ${threshold} mm threshold.`
+              ? `The first wet signal appears in the ${time(wetHour.time, track.timezone)} hourly interval: ${wetSignalSources.map((f) => f.name).join(", ")} reaches ${threshold} mm. ${wetHour.wetCount} of ${wetHour.count} family medians cross that threshold; individual related feeds can disagree.`
               : `No enabled model family crosses ${threshold} mm per hour in the next 24 forecast hours. Local showers can still be missed.`;
+  function refreshWeather() {
+    refreshRequested.current = true;
+    setRefresh((v) => v + 1);
+  }
   function choose(t: Track) {
     setTrack(t);
     setFavorites((fs) => (fs.some((f) => f.id === t.id) ? fs : [...fs, t]));
@@ -732,45 +809,182 @@ export default function Pitwall() {
       end = start + s.duration * 60;
     const hs = consensus.filter((h) => h.time < end && h.time + 3600 > start);
     const coverage = summarizeSession(consensus, start, end);
+    const sources = sessionSources(active, start, end, threshold);
     const complete =
       coverage.coverage === 1 &&
-      !coverage.partialRainCoverage &&
-      coverage.minFamilies > 0;
+      sources.length > 0 &&
+      sources.every((source) => source.rainCoverage === 1);
+    const rawDisagreement = hs.some((h) => {
+      const rain = sources
+        .flatMap((source) =>
+          source.hours.filter((hour) => hour.time === h.time),
+        )
+        .map((hour) => hour.precipitation)
+        .filter(
+          (value): value is number => value !== null && Number.isFinite(value),
+        );
+      return (
+        rain.some((value) => value >= threshold) &&
+        rain.some((value) => value < threshold)
+      );
+    });
     return {
       start,
       end,
       hs,
       complete,
+      sources,
+      anyWet: sources.some((source) => source.wetIntervals > 0),
+      partialGusts: sources.some((source) => source.gustCoverage < 1),
       rain: max(hs.map((h) => h.rainMax)),
       gust: max(hs.map((h) => h.gust)),
       temp: mean(hs.map((h) => h.temperature)),
       share: max(hs.map((h) => h.wetShare)),
-      split: hs.some((h) => h.agreement === "split" || h.agreement === "mixed"),
+      split: rawDisagreement,
     };
   }
   const draft: Session = {
     id: "draft",
     name: sessionName,
     trackId: track.id,
-    date: sessionDate || shownDay,
+    date: sessionDate,
     time: sessionTime,
     duration,
+    track,
   };
   const stats = sessionStats(draft);
-  const localSessions = sessions.filter((s) => s.trackId === track.id);
-  const dryWindows: ConsensusHour[][] = [];
-  future.forEach((h) => {
+  const localSessions = sessions
+    .filter((s) => s.trackId === track.id)
+    .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
+  const dryWindows = useMemo(
+    () => getDryWindows(active, now, threshold, gustLimit, duration),
+    [active, now, threshold, gustLimit, duration],
+  );
+  const preferences = { favorites, track, disabled, threshold, gustLimit };
+  function saveSession() {
+    setSessionError("");
+    setSessionFeedback("");
+    const session: Session = {
+      ...draft,
+      id: editingSessionId ?? `session-${crypto.randomUUID()}`,
+      name: sessionName.trim(),
+    };
     if (
-      h.wetShare === 0 &&
-      h.count >= 2 &&
-      h.gust !== null &&
-      h.gust < gustLimit
+      !validSession(session) ||
+      !Number.isFinite(localEpoch(session.date, session.time, track.timezone))
     ) {
-      const last = dryWindows[dryWindows.length - 1];
-      if (last && last[last.length - 1].time + 3600 === h.time) last.push(h);
-      else dryWindows.push([h]);
+      setSessionError(
+        "Enter a valid name, date, duration and local time. Skipped or repeated daylight-saving times cannot be used; choose an unambiguous local hour.",
+      );
+      return;
     }
-  });
+    const duplicate = sessions.find(
+      (s) =>
+        s.id !== session.id &&
+        s.trackId === session.trackId &&
+        s.name === session.name &&
+        s.date === session.date &&
+        s.time === session.time &&
+        s.duration === session.duration,
+    );
+    if (duplicate) {
+      setSessionError(
+        "This session is already saved. Select it below to edit it.",
+      );
+      return;
+    }
+    setSessions((saved) =>
+      editingSessionId
+        ? saved.map((s) => (s.id === editingSessionId ? session : s))
+        : [...saved, session],
+    );
+    setEditingSessionId(session.id);
+    setSessionFeedback(
+      `${editingSessionId ? "Updated" : "Saved"} ${session.name} for ${niceDate(session.date)} at ${session.time}.`,
+    );
+  }
+  function exportCalendar() {
+    try {
+      download(
+        `pitwall-${track.id}-sessions.ics`,
+        sessionsCalendar(localSessions, [...TRACKS, ...favorites, track]),
+        "text/calendar;charset=utf-8",
+      );
+      setSessionFeedback(
+        "Calendar file downloaded. Import it into your calendar to add these session times.",
+      );
+    } catch (error) {
+      setSessionError(
+        error instanceof Error
+          ? error.message
+          : "The calendar could not be exported.",
+      );
+    }
+  }
+  async function importBackup(file: File | undefined) {
+    if (!file) return;
+    setBackupMessage("");
+    try {
+      if (file.size > 1048576)
+        throw new Error("Choose a Pitwall backup smaller than 1 MB.");
+      const merged = mergeBackup(
+        preferences,
+        sessions,
+        parseBackup(await file.text()),
+        () => `session-${crypto.randomUUID()}`,
+      );
+      setFavorites(merged.preferences.favorites);
+      setTrack(merged.preferences.track);
+      setDisabled(merged.preferences.disabled);
+      setThreshold(merged.preferences.threshold);
+      setGustLimit(merged.preferences.gustLimit);
+      setSessions(merged.sessions);
+      setEditingSessionId(null);
+      setCanSave(true);
+      setBackupMessage(
+        `Backup restored: ${merged.added} session${merged.added === 1 ? "" : "s"} added. Existing circuits and sessions were kept; backup preferences applied.`,
+      );
+    } catch (error) {
+      setBackupMessage(
+        error instanceof Error
+          ? error.message
+          : "The backup could not be imported. Existing data are unchanged.",
+      );
+    } finally {
+      if (backupInput.current) backupInput.current.value = "";
+    }
+  }
+  function exportHistory() {
+    download(
+      `pitwall-${track.id}-history.csv`,
+      toCsv([
+        [
+          "location",
+          "latitude",
+          "longitude",
+          "timezone",
+          "source",
+          "fetched_at_utc",
+          "forecast_time_utc",
+          "temperature_C",
+          "precipitation_mm_hour",
+          "wind_km_h",
+        ],
+        ...history.map((p) => [
+          track.name,
+          track.lat,
+          track.lon,
+          track.timezone,
+          p.provider,
+          p.fetchedAt,
+          new Date(p.forecastTime * 1000).toISOString(),
+          p.temperature,
+          p.precipitation,
+          p.wind,
+        ]),
+      ]),
+    );
+  }
   const filteredTracks = TRACKS.filter((t) =>
     `${t.name} ${t.country}`.toLowerCase().includes(query.toLowerCase()),
   );
@@ -791,6 +1005,18 @@ export default function Pitwall() {
   const historyForHour = history.filter(
     (p) => p.forecastTime === selectedHistoryHour,
   );
+  const historyLabel =
+    historyMetric === "temperature"
+      ? "air temperature"
+      : historyMetric === "precipitation"
+        ? "hourly rainfall"
+        : "wind speed";
+  const historyUnit =
+    historyMetric === "temperature"
+      ? "°C"
+      : historyMetric === "precipitation"
+        ? "mm/h"
+        : "km/h";
   const historySourceIds = [...new Set(historyForHour.map((p) => p.provider))];
   const historySeries = historySourceIds.map((id) => ({
     id,
@@ -798,27 +1024,29 @@ export default function Pitwall() {
       .filter((p) => p.provider === id)
       .map((p) => ({
         time: new Date(p.fetchedAt).getTime() / 1000,
-        temperature: p.temperature,
+        value: p[historyMetric],
       }))
       .sort((a, b) => a.time - b.time),
   }));
   const hasHistoryEvolution = historySeries.some(
     (series) =>
-      new Set(
-        series.points.filter((p) => p.temperature !== null).map((p) => p.time),
-      ).size >= 2,
+      new Set(series.points.filter((p) => p.value !== null).map((p) => p.time))
+        .size >= 2,
   );
   const historyByFetch = [...new Set(historyForHour.map((p) => p.fetchedAt))]
     .map((f) => {
       const ps = historyForHour.filter((p) => p.fetchedAt === f);
       const row: Record<string, any> = { time: new Date(f).getTime() / 1000 };
-      ps.forEach((p) => (row[p.provider] = p.temperature));
+      ps.forEach((p) => (row[p.provider] = p[historyMetric]));
       return row;
     })
     .sort((a, b) => a.time - b.time);
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
+      <aside
+        id="saved-circuits"
+        className={`sidebar ${mobileNav ? "open" : ""}`}
+      >
         <a
           className="brand"
           href="#"
@@ -878,7 +1106,7 @@ export default function Pitwall() {
           <Plus size={15} /> Add a circuit or location
         </button>
         <div className="sidebar-bottom">
-            <InstallApp pwa={pwa} />
+          <InstallApp pwa={pwa} />
           <div className="sidebar-note">
             <Compass size={19} />
             <strong>
@@ -900,7 +1128,7 @@ export default function Pitwall() {
             <ChevronRight size={12} />
           </button>
           <span className="version">
-            PITWALL / V1.0 <span>LOCAL WORKSPACE</span>
+            PITWALL / V1.1 <span>LOCAL WORKSPACE</span>
           </span>
         </div>
       </aside>
@@ -918,6 +1146,8 @@ export default function Pitwall() {
               className="mobile-menu"
               onClick={() => setMobileNav((v) => !v)}
               aria-label="Open saved circuits"
+              aria-expanded={mobileNav}
+              aria-controls="saved-circuits"
             >
               <Flag size={17} />
             </button>
@@ -972,7 +1202,7 @@ export default function Pitwall() {
               </button>
               <button
                 className="button"
-                onClick={() => setRefresh((v) => v + 1)}
+                onClick={refreshWeather}
                 disabled={loading}
               >
                 <RefreshCw size={14} className={loading ? "spin" : ""} />
@@ -985,6 +1215,7 @@ export default function Pitwall() {
               <button
                 key={id}
                 className={view === id ? "active" : ""}
+                aria-current={view === id ? "page" : undefined}
                 onClick={() => setView(id)}
               >
                 <Icon size={15} />
@@ -999,7 +1230,14 @@ export default function Pitwall() {
                 </>
               ) : data ? (
                 <>
-                  <span className="tiny-dot lime" />
+                  <span
+                    className={`tiny-dot ${cachedSources.length ? "amber" : "lime"}`}
+                  />
+                  {cachedSources.length
+                    ? "Saved data · "
+                    : data.delivery === "cache"
+                      ? "Cached · "
+                      : ""}
                   Fetched{" "}
                   {time(
                     new Date(data.fetchedAt).getTime() / 1000,
@@ -1011,7 +1249,78 @@ export default function Pitwall() {
               )}
             </span>
           </nav>
-          {pwa.offline && <div className="offline-banner" role="status"><Info size={17}/><div><strong>You are offline</strong><p>Saved circuits and sessions are available on this device. Forecasts and radar require a connection; anything still on screen may be out of date.</p></div></div>}
+          {data?.forecasts.length ? (
+            <div className="forecast-provenance">
+              <span>
+                {active.length} enabled feed{active.length === 1 ? "" : "s"} ·{" "}
+                {families} model famil{families === 1 ? "y" : "ies"}
+              </span>
+              <span
+                title={
+                  oldestFetch === null
+                    ? undefined
+                    : `Oldest enabled forecast fetched ${time(oldestFetch, track.timezone, true)}`
+                }
+              >
+                {oldestAge === null
+                  ? "No source enabled"
+                  : `Oldest fetch ${oldestAge < 60 ? `${oldestAge} min` : `${Math.floor(oldestAge / 60)}h ${oldestAge % 60}m`} ago`}
+              </span>
+            </div>
+          ) : null}
+          {pwa.offline && (
+            <div className="offline-banner" role="status">
+              <Info size={17} />
+              <div>
+                <strong>You are offline</strong>
+                <p>
+                  Saved circuits and sessions are available on this device.
+                  Forecasts and radar require a connection; anything still on
+                  screen may be out of date.
+                </p>
+              </div>
+            </div>
+          )}
+          {cachedSources.length > 0 && (
+            <div className="offline-banner" role="status">
+              <History size={17} />
+              <div>
+                <strong>
+                  {data?.delivery === "stale"
+                    ? "Showing saved forecasts"
+                    : "Some sources are using saved forecasts"}
+                </strong>
+                <p>
+                  {cachedSources
+                    .map(
+                      (s) =>
+                        `${s.name} (${s.fetchedAt ? time(Date.parse(s.fetchedAt) / 1000, track.timezone, true) : "fetch time unavailable"})`,
+                    )
+                    .join(" · ")}
+                  . These sources could not refresh. Their original fetch times
+                  and missing values are preserved.
+                </p>
+              </div>
+            </div>
+          )}
+          {(storageMessage ||
+            (data?.storage &&
+              !data.storage.saved &&
+              data.forecasts.length > 0)) && (
+            <div className="offline-banner" role="status">
+              <Info size={17} />
+              <div>
+                <strong>Device storage needs attention</strong>
+                <p>{storageMessage || data?.storage?.message}</p>
+              </div>
+              <button
+                className="button secondary"
+                onClick={() => setSettings(true)}
+              >
+                Backups
+              </button>
+            </div>
+          )}
           {error && (
             <div className="error-banner" role="alert">
               <Info size={18} />
@@ -1019,7 +1328,7 @@ export default function Pitwall() {
                 <strong>Forecast unavailable</strong>
                 <p>{error}</p>
               </div>
-              <button onClick={() => setRefresh((v) => v + 1)}>
+              <button onClick={refreshWeather} disabled={loading}>
                 Try again <RefreshCw size={13} />
               </button>
             </div>
@@ -1110,7 +1419,7 @@ export default function Pitwall() {
                   <div className="metric-bottom">
                     <span>
                       {wetHour
-                        ? `${wetHour.wetCount}/${wetHour.count} model families`
+                        ? `${wetSignalSources.length} source${wetSignalSources.length === 1 ? "" : "s"} · ${wetHour.wetCount}/${wetHour.count} families`
                         : "Next 24 forecast hours"}
                     </span>
                     <span className={wetHour ? "text-blue" : ""}>
@@ -1231,14 +1540,14 @@ export default function Pitwall() {
                       <span>WET VOTE</span>
                     </div>
                     {upcoming.length ? (
-                      upcoming.map((h, i) => (
+                      upcoming.map((h) => (
                         <div
-                          className={`hour-row ${i === 0 ? "now" : ""}`}
+                          className={`hour-row ${h.time <= now ? "now" : ""}`}
                           key={h.time}
                         >
                           <span className="hour-time">
                             {time(h.time, track.timezone)}
-                            {i === 0 && <small>NOW*</small>}
+                            {h.time <= now && <small>NOW*</small>}
                           </span>
                           <span className="hour-temperature">
                             <WeatherIcon
@@ -1631,7 +1940,9 @@ export default function Pitwall() {
               <div className="planner-grid">
                 <section className="panel session-form">
                   <div className="panel-head">
-                    <h2>Plan a session</h2>
+                    <h2>
+                      {editingSessionId ? "Edit session" : "Plan a session"}
+                    </h2>
                     <CalendarDays size={18} className="muted" />
                   </div>
                   <div className="form-body">
@@ -1649,7 +1960,8 @@ export default function Pitwall() {
                         DATE
                         <input
                           type="date"
-                          value={sessionDate || shownDay}
+                          aria-label="Session date"
+                          value={sessionDate}
                           onChange={(e) => setSessionDate(e.target.value)}
                         />
                       </label>
@@ -1657,6 +1969,7 @@ export default function Pitwall() {
                         START · LOCAL TIME
                         <input
                           type="time"
+                          aria-label="Session start time"
                           value={sessionTime}
                           onChange={(e) => setSessionTime(e.target.value)}
                         />
@@ -1669,6 +1982,7 @@ export default function Pitwall() {
                           value={duration}
                           onChange={(e) => setDuration(+e.target.value)}
                         >
+                          <option value={15}>15 minutes</option>
                           <option value={20}>20 minutes</option>
                           <option value={30}>30 minutes</option>
                           <option value={45}>45 minutes</option>
@@ -1677,6 +1991,13 @@ export default function Pitwall() {
                           <option value={120}>2 hours</option>
                           <option value={180}>3 hours</option>
                           <option value={360}>6 hours</option>
+                          <option value={720}>12 hours</option>
+                          <option value={1440}>24 hours</option>
+                          {![
+                            15, 20, 30, 45, 60, 90, 120, 180, 360, 720, 1440,
+                          ].includes(duration) && (
+                            <option value={duration}>{duration} minutes</option>
+                          )}
                         </select>
                       </label>
                       <label>
@@ -1700,36 +2021,35 @@ export default function Pitwall() {
                     {sessionError && (
                       <p className="inline-warning">{sessionError}</p>
                     )}
-                    <button
-                      className="button full-width"
-                      onClick={() => {
-                        setSessionError("");
-                        if (
-                          !sessionName.trim() ||
-                          !/^\d{4}-\d{2}-\d{2}$/.test(draft.date) ||
-                          !/^\d{2}:\d{2}$/.test(draft.time) ||
-                          !Number.isFinite(
-                            localEpoch(draft.date, draft.time, track.timezone),
-                          )
-                        ) {
-                          setSessionError(
-                            "Enter a valid name, date, and local time. Skipped or repeated daylight-saving times cannot be used; choose an unambiguous local hour.",
-                          );
-                          return;
-                        }
-                        setSessions((s) => [
-                          ...s,
-                          {
-                            ...draft,
-                            id: `session-${Date.now()}`,
-                            name: sessionName.trim(),
-                          },
-                        ]);
-                      }}
-                    >
-                      <Plus size={15} />
-                      Save session on this device
+                    <button className="button full-width" onClick={saveSession}>
+                      {editingSessionId ? (
+                        <Check size={15} />
+                      ) : (
+                        <Plus size={15} />
+                      )}
+                      {editingSessionId
+                        ? "Update saved session"
+                        : "Save session on this device"}
                     </button>
+                    {editingSessionId && (
+                      <button
+                        className="button secondary full-width"
+                        onClick={() => {
+                          setEditingSessionId(null);
+                          setSessionName("Practice");
+                          setSessionError("");
+                          setSessionFeedback("");
+                        }}
+                      >
+                        <Plus size={15} />
+                        Plan another session
+                      </button>
+                    )}
+                    {sessionFeedback && (
+                      <p className="session-feedback" role="status">
+                        {sessionFeedback}
+                      </p>
+                    )}
                   </div>
                 </section>
                 <section className="panel session-summary">
@@ -1747,8 +2067,8 @@ export default function Pitwall() {
                       className={`status-pill ${stats.complete ? "" : "amber"}`}
                     >
                       {stats.complete
-                        ? "Forecast available"
-                        : "Outside full coverage"}
+                        ? "Rain coverage complete"
+                        : "Incomplete rain coverage"}
                     </span>
                   </div>
                   {stats.hs.length ? (
@@ -1771,7 +2091,9 @@ export default function Pitwall() {
                           <p>
                             {stats.gust !== null && stats.gust >= gustLimit
                               ? "Above your review threshold"
-                              : "Compared with your threshold"}
+                              : stats.partialGusts
+                                ? "Some sources do not report gusts"
+                                : "Compared with your threshold"}
                           </p>
                         </div>
                         <div>
@@ -1794,7 +2116,7 @@ export default function Pitwall() {
                         </div>
                       </div>
                       <div
-                        className={`session-assessment ${stats.share && stats.share > 0 ? "review" : ""}`}
+                        className={`session-assessment ${stats.anyWet || (stats.gust !== null && stats.gust >= gustLimit) ? "review" : ""}`}
                       >
                         <Activity size={20} />
                         <div>
@@ -1803,16 +2125,21 @@ export default function Pitwall() {
                               ? "Incomplete forecast coverage"
                               : stats.split
                                 ? "Models disagree during this window"
-                                : stats.share && stats.share > 0
+                                : stats.anyWet
                                   ? "Rain appears in this window"
-                                  : "No wet signal above your threshold"}
+                                  : stats.gust !== null &&
+                                      stats.gust >= gustLimit
+                                    ? "Gusts exceed your review threshold"
+                                    : "No wet signal above your threshold"}
                           </strong>
                           <p>
-                            {stats.split
-                              ? "Inspect each source and radar before the session."
-                              : stats.share && stats.share > 0
-                                ? `At least one family reaches ${threshold} mm/h. Hourly forecasts cannot resolve exact shower onset.`
-                                : "This describes forecast rainfall, not grip, standing water, or whether the surface has dried."}
+                            {!stats.complete
+                              ? "Some enabled sources or hourly rain intervals are missing. Inspect the source coverage below; unavailable rain is not dry weather."
+                              : stats.split
+                                ? "Inspect each source and radar before the session."
+                                : stats.anyWet
+                                  ? `At least one source reaches ${threshold} mm/h. Hourly forecasts cannot resolve exact shower onset.`
+                                  : "This describes forecast rainfall, not grip, standing water, or whether the surface has dried."}
                           </p>
                         </div>
                       </div>
@@ -1831,6 +2158,136 @@ export default function Pitwall() {
                   )}
                 </section>
               </div>
+              <section className="panel session-source-panel">
+                <div className="panel-head">
+                  <div>
+                    <div className="eyebrow">
+                      EVERY SOURCE DURING YOUR SESSION
+                    </div>
+                    <h2>What each forecast says</h2>
+                  </div>
+                  <span className="subtle-chip">
+                    {duration} min · {track.timezone}
+                  </span>
+                </div>
+                {stats.sources.length ? (
+                  <div
+                    className="session-table-scroll"
+                    tabIndex={0}
+                    role="region"
+                    aria-label="Per-source session forecasts, scroll horizontally"
+                  >
+                    <table className="session-source-table">
+                      <caption className="sr-only">
+                        Forecast evidence for {sessionName},{" "}
+                        {niceDate(draft.date)} at {draft.time}, {duration}{" "}
+                        minutes.
+                      </caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">Source · fetched</th>
+                          <th scope="col">
+                            Peak hourly rain
+                            <br />
+                            mm/h
+                          </th>
+                          <th scope="col">
+                            Session rain estimate
+                            <br />
+                            mm
+                          </th>
+                          <th scope="col">
+                            Peak gust
+                            <br />
+                            km/h
+                          </th>
+                          <th scope="col">
+                            Air range
+                            <br />
+                            °C
+                          </th>
+                          <th scope="col">Rain coverage</th>
+                          <th scope="col">Gust coverage</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stats.sources.map((source) => (
+                          <tr key={source.id}>
+                            <th scope="row">
+                              <span
+                                className="tiny-dot"
+                                style={{ background: source.color }}
+                              />
+                              {source.name}
+                              <small>
+                                {time(
+                                  Date.parse(source.fetchedAt) / 1000,
+                                  track.timezone,
+                                  true,
+                                )}
+                              </small>
+                            </th>
+                            <td
+                              className={
+                                source.wetIntervals ? "text-amber" : ""
+                              }
+                            >
+                              {n(source.peakRain, 2)}
+                            </td>
+                            <td>
+                              {n(source.rainEstimate, 2)}
+                              {source.rainCoverage > 0 &&
+                              source.rainCoverage < 1
+                                ? "*"
+                                : ""}
+                            </td>
+                            <td
+                              className={
+                                source.peakGust !== null &&
+                                source.peakGust >= gustLimit
+                                  ? "text-amber"
+                                  : ""
+                              }
+                            >
+                              {n(source.peakGust)}
+                            </td>
+                            <td>
+                              {n(source.minTemperature, 1)}–
+                              {n(source.maxTemperature, 1)}
+                            </td>
+                            <td>
+                              <span
+                                className={`status-pill ${source.rainCoverage === 1 ? "" : "amber"}`}
+                              >
+                                {Math.round(source.rainCoverage * 100)}%
+                              </span>
+                            </td>
+                            <td>
+                              <span
+                                className={`status-pill ${source.gustCoverage === 1 ? "" : "amber"}`}
+                              >
+                                {Math.round(source.gustCoverage * 100)}%
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <Empty
+                    title="No enabled forecasts"
+                    detail="Enable a source or refresh to inspect the session."
+                  />
+                )}
+                <p className="chart-note">
+                  Session rain is a rough estimate: hourly amounts are prorated
+                  over the session’s overlap. It does not resolve shower timing.
+                  * Partial coverage totals include reported intervals only.
+                  Coverage is the fraction of your session with that field
+                  available; related feeds remain visible separately.
+                </p>
+              </section>
               <div className="two-charts">
                 <section className="panel">
                   <div className="panel-head">
@@ -1849,37 +2306,57 @@ export default function Pitwall() {
                           </span>
                           <div>
                             <strong>
-                              {time(w[0].time, track.timezone)} –{" "}
-                              {time(
-                                w[w.length - 1].time + 3600,
-                                track.timezone,
-                              )}
+                              {time(w.start, track.timezone)} –{" "}
+                              {time(w.end, track.timezone)}
                             </strong>
                             <span>
-                              {niceDate(day(w[0].time, track.timezone))}
-                              {day(w[0].time, track.timezone) !==
-                              day(w[w.length - 1].time + 3600, track.timezone)
-                                ? ` → ${niceDate(day(w[w.length - 1].time + 3600, track.timezone))}`
+                              {niceDate(day(w.start, track.timezone))}
+                              {day(w.start, track.timezone) !==
+                              day(w.end, track.timezone)
+                                ? ` → ${niceDate(day(w.end, track.timezone))}`
                                 : ""}{" "}
-                              · {w.length} hourly intervals
+                              · {n((w.end - w.start) / 3600, 1)}h available
+                              <br />
+                              {w.sourceCount} rain sources · gusts from ≥
+                              {w.minGustSources}/{w.sourceCount} sources
                             </span>
                           </div>
                           <span className="status-pill">
-                            {n(max(w.map((h) => h.gust)))} km/h gust
+                            {n(w.peakGust)} km/h gust
                           </span>
+                          <button
+                            className="button secondary window-use"
+                            onClick={() => {
+                              setSessionDate(day(w.start, track.timezone));
+                              setSessionTime(time(w.start, track.timezone));
+                              setEditingSessionId(null);
+                              setSessionError("");
+                              setSessionFeedback(
+                                `Selected a window for your ${duration}-minute session.`,
+                              );
+                              document
+                                .querySelector(".session-form")
+                                ?.scrollIntoView({ block: "center" });
+                            }}
+                          >
+                            Use window <ArrowRight size={12} />
+                          </button>
                         </div>
                       ))
                     ) : (
                       <Empty
                         title="No qualifying window"
-                        detail={`Requires at least two families, all below ${threshold} mm/h, and reported gusts below ${gustLimit} km/h.`}
+                        detail={`Needs ${duration} contiguous minutes, rain below ${threshold} mm/h from every enabled source, and gusts from at least two families below ${gustLimit} km/h.`}
                       />
                     )}
                   </div>
                   <p className="chart-note">
-                    All available family votes below {threshold} mm/h and max
-                    gust below {gustLimit} km/h. Missing families reduce the
-                    evidence. This does not establish a dry racing surface.
+                    Every enabled source must report rain below {threshold} mm/h
+                    throughout a window that fits your {duration}-minute
+                    session. Highest reported gust stays below {gustLimit} km/h,
+                    with at least two gust-reporting families. Missing gust
+                    sources are counted above. This does not establish a dry
+                    racing surface.
                   </p>
                 </section>
                 <section className="panel">
@@ -1895,6 +2372,33 @@ export default function Pitwall() {
                     </div>
                     <Flag size={18} className="muted" />
                   </div>
+                  <div className="session-list-actions">
+                    <button
+                      className="button secondary"
+                      disabled={!localSessions.length}
+                      onClick={exportCalendar}
+                    >
+                      <ArrowDownToLine size={14} />
+                      Export calendar (.ics)
+                    </button>
+                  </div>
+                  {deletedSession && (
+                    <div className="undo-session" role="status">
+                      <span>Removed {deletedSession.name}.</span>
+                      <button
+                        onClick={() => {
+                          setSessions((saved) =>
+                            saved.some((s) => s.id === deletedSession.id)
+                              ? saved
+                              : [...saved, deletedSession],
+                          );
+                          setDeletedSession(null);
+                        }}
+                      >
+                        Undo
+                      </button>
+                    </div>
+                  )}
                   <div className="saved-sessions">
                     {localSessions.length ? (
                       localSessions.map((s) => {
@@ -1907,6 +2411,12 @@ export default function Pitwall() {
                                 setSessionDate(s.date);
                                 setSessionTime(s.time);
                                 setDuration(s.duration);
+                                setEditingSessionId(s.id);
+                                setSessionError("");
+                                setSessionFeedback("");
+                                document
+                                  .querySelector(".session-form")
+                                  ?.scrollIntoView({ block: "center" });
                               }}
                             >
                               <strong>
@@ -1924,11 +2434,14 @@ export default function Pitwall() {
                             </button>
                             <button
                               className="icon-button delete-session"
-                              onClick={() =>
+                              onClick={() => {
+                                setDeletedSession(s);
                                 setSessions((a) =>
                                   a.filter((x) => x.id !== s.id),
-                                )
-                              }
+                                );
+                                if (editingSessionId === s.id)
+                                  setEditingSessionId(null);
+                              }}
                               aria-label={`Delete ${s.name}`}
                             >
                               <Trash2 size={14} />
@@ -1963,6 +2476,7 @@ export default function Pitwall() {
                 <button
                   className="button secondary"
                   onClick={() => setHistoryRefresh((v) => v + 1)}
+                  disabled={historyLoading}
                 >
                   <RefreshCw size={14} />
                   Reload history
@@ -1979,20 +2493,50 @@ export default function Pitwall() {
                       </span>
                     </h2>
                   </div>
-                  <label className="history-hour-select">
-                    FORECAST VALID HOUR
-                    <select
-                      aria-label="Forecast valid hour"
-                      value={selectedHistoryHour}
-                      onChange={(e) => setHistoryValidHour(+e.target.value)}
-                    >
-                      {validHistoryHours.map((t) => (
-                        <option key={t} value={t}>
-                          {time(t, track.timezone, true)}
+                  <div className="history-controls">
+                    <label className="history-hour-select">
+                      METRIC
+                      <select
+                        aria-label="Forecast evolution metric"
+                        value={historyMetric}
+                        onChange={(e) =>
+                          setHistoryMetric(
+                            e.target.value as typeof historyMetric,
+                          )
+                        }
+                      >
+                        <option value="temperature">
+                          Air temperature · °C
                         </option>
-                      ))}
-                    </select>
-                  </label>
+                        <option value="precipitation">
+                          Hourly rainfall · mm/h
+                        </option>
+                        <option value="wind">Wind speed · km/h</option>
+                      </select>
+                    </label>
+                    <label className="history-hour-select">
+                      FORECAST VALID HOUR
+                      <select
+                        aria-label="Forecast valid hour"
+                        value={selectedHistoryHour}
+                        onChange={(e) => setHistoryValidHour(+e.target.value)}
+                      >
+                        {validHistoryHours.map((t) => (
+                          <option key={t} value={t}>
+                            {time(t, track.timezone, true)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      className="button secondary"
+                      disabled={!history.length || historyLoading}
+                      onClick={exportHistory}
+                    >
+                      <ArrowDownToLine size={14} />
+                      Export history
+                    </button>
+                  </div>
                 </div>
                 {historyLoading ? (
                   <div className="empty-state">
@@ -2002,7 +2546,11 @@ export default function Pitwall() {
                 ) : hasHistoryEvolution ? (
                   <>
                     <div className="history-chart">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer
+                        width="100%"
+                        height="100%"
+                        initialDimension={{ width: 320, height: 185 }}
+                      >
                         <LineChart
                           data={historyByFetch}
                           margin={{ top: 15, right: 20, left: 0, bottom: 0 }}
@@ -2022,7 +2570,7 @@ export default function Pitwall() {
                           <YAxis
                             stroke="#58616b"
                             fontSize={10}
-                            unit="°C"
+                            unit={historyUnit}
                             tickLine={false}
                             axisLine={false}
                           />
@@ -2031,8 +2579,8 @@ export default function Pitwall() {
                             <Line
                               key={id}
                               data={points}
-                              dataKey="temperature"
-                              name={`${data?.forecasts.find((f) => f.id === id)?.name || id} · °C`}
+                              dataKey="value"
+                              name={`${data?.forecasts.find((f) => f.id === id)?.name || id} · ${historyUnit}`}
                               stroke={
                                 data?.forecasts.find((f) => f.id === id)
                                   ?.color ||
@@ -2051,9 +2599,9 @@ export default function Pitwall() {
                     <p className="chart-note">
                       Each point is a real fetched prediction for the same
                       selected valid hour. Lines show how each source changed
-                      its air-temperature forecast (°C). The horizontal axis is
-                      fetch time; this is not observed temperature or an
-                      accuracy score.
+                      its {historyLabel} forecast ({historyUnit}). The
+                      horizontal axis is fetch time; this is not observed
+                      weather or an accuracy score.
                     </p>
                   </>
                 ) : (
@@ -2063,10 +2611,7 @@ export default function Pitwall() {
                         ? "Your history is beginning."
                         : "No logged history yet."
                     }
-                    detail={
-                      historyMessage ||
-                      "Forecast snapshots accumulate from real fetches. Forecast evolution needs at least two fetch timestamps for this same valid hour."
-                    }
+                    detail={`Forecast evolution needs at least two fetched ${historyLabel} values from the same source for this valid hour. ${historyMessage || "Snapshots accumulate from real fetches on this device."}`}
                   />
                 )}
               </section>
@@ -2090,9 +2635,11 @@ export default function Pitwall() {
                     >
                       {s.status === "ok"
                         ? "Available"
-                        : s.status === "unconfigured"
-                          ? "Optional · not configured"
-                          : "Unavailable"}
+                        : s.status === "cached"
+                          ? "Saved forecast"
+                          : s.status === "unconfigured"
+                            ? "Optional · not configured"
+                            : "Unavailable"}
                     </span>
                   </div>
                 ))}
@@ -2477,6 +3024,58 @@ export default function Pitwall() {
                   </button>
                 </div>
               ))}
+              <div className="settings-section-label">DEVICE BACKUP</div>
+              <p className="field-note">
+                Export your circuits, weather preferences and {sessions.length}{" "}
+                saved session{sessions.length === 1 ? "" : "s"}. Import adds
+                missing circuits and sessions, keeps existing plans, and applies
+                the backup’s preferences. Forecast history and provider caches
+                are separate; export forecast history as CSV from History &amp;
+                sources.
+              </p>
+              <div className="backup-actions">
+                <button
+                  className="button secondary"
+                  onClick={() => {
+                    download(
+                      `pitwall-backup-${day(now, "UTC")}.json`,
+                      JSON.stringify(
+                        createBackup(preferences, sessions),
+                        null,
+                        2,
+                      ),
+                      "application/json",
+                    );
+                    setBackupMessage(
+                      "Device backup downloaded. Keep the file somewhere you can recover it.",
+                    );
+                  }}
+                >
+                  <ArrowDownToLine size={14} />
+                  Export backup
+                </button>
+                <button
+                  className="button secondary"
+                  onClick={() => backupInput.current?.click()}
+                >
+                  <Upload size={14} />
+                  Import backup
+                </button>
+                <input
+                  ref={backupInput}
+                  type="file"
+                  accept="application/json,.json"
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-label="Import Pitwall device backup"
+                  onChange={(e) => void importBackup(e.target.files?.[0])}
+                />
+              </div>
+              {backupMessage && (
+                <p className="backup-feedback" role="status">
+                  {backupMessage}
+                </p>
+              )}
               <button
                 className="button full-width"
                 onClick={() => setSettings(false)}
@@ -2484,7 +3083,9 @@ export default function Pitwall() {
                 Done <Check size={14} />
               </button>
               <p className="field-note">
-                Preferences and sessions are stored on this device. Forecast snapshots are recorded in this browser’s local database when storage is available. They do not sync between devices.
+                Preferences and sessions are stored on this device. Forecast
+                snapshots are recorded in this browser’s local database when
+                storage is available. They do not sync between devices.
               </p>
             </div>
           </section>

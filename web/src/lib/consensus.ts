@@ -150,10 +150,23 @@ export function summarizeSession(
   start: number,
   end: number,
 ) {
-  const selected = hours.filter((h) => h.time < end && h.time + 3600 > start);
-  const coveredSeconds = selected.reduce(
-    (s, h) =>
-      s + Math.max(0, Math.min(end, h.time + 3600) - Math.max(start, h.time)),
+  const selected = [...new Map(hours.map((h) => [h.time, h])).values()]
+    .filter((h) => finite(h.time) && h.time < end && h.time + 3600 > start)
+    .sort((a, b) => a.time - b.time);
+  let coveredSeconds = 0,
+    until = start;
+  for (const hour of selected) {
+    const from = Math.max(start, until, hour.time),
+      to = Math.min(end, hour.time + 3600);
+    if (to > from) {
+      coveredSeconds += to - from;
+      until = to;
+    }
+  }
+  const wetVotes = selected.filter((h) => finite(h.wetShare));
+  const voteSeconds = wetVotes.reduce(
+    (sum, h) =>
+      sum + Math.max(0, Math.min(end, h.time + 3600) - Math.max(start, h.time)),
     0,
   );
   const validRain = selected.filter((h) => finite(h.rainMedian));
@@ -173,7 +186,18 @@ export function summarizeSession(
   return {
     hours: selected,
     coverage: end > start ? Math.min(1, coveredSeconds / (end - start)) : 0,
-    meanWetShare: median(selected.map((h) => h.wetShare)),
+    meanWetShare: voteSeconds
+      ? wetVotes.reduce(
+          (sum, h) =>
+            sum +
+            h.wetShare! *
+              Math.max(
+                0,
+                Math.min(end, h.time + 3600) - Math.max(start, h.time),
+              ),
+          0,
+        ) / voteSeconds
+      : null,
     peakRain: range(selected.map((h) => h.rainMax))[1],
     rainAmount,
     temperature: median(selected.map((h) => h.temperature)),

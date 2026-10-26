@@ -10,11 +10,10 @@ Requires Node.js 22.13 or newer and npm. From this repository's folder:
 
 ```sh
 npm ci
-npm run build
 npm start -- --open
 ```
 
-The last command starts the local application and opens it in your browser. Keep its terminal open while using the app; press **Ctrl+C** there to stop the local server. On later launches, run `npm start -- --open` again. On macOS, the included **Start Pitwall.command** launcher is a convenient alternative after setup.
+The last command builds the app, starts the local application and opens it in your browser. Keep its terminal open while using the app; press **Ctrl+C** there to stop the local server. On later launches, run `npm start -- --open` again. **Start Pitwall.cmd** is the Windows launcher; **Start Pitwall.command** is available for macOS. In PowerShell, use `npm.cmd` if script execution policy blocks `npm.ps1`.
 
 No weather API key or account is needed for the main application. Fresh forecasts, location search, radar and map tiles need an internet connection. The application and its saved data remain local; weather requests go directly to the respective providers.
 
@@ -27,7 +26,10 @@ See the [local run guide](docs/RUN_LOCALLY.md) for updating, development mode an
 - Inspect per-source precipitation charts, family-weighted summaries, air temperature, wind and gusts.
 - Play recent RainViewer radar, inspect its coverage mask and overlay real mapped circuit outlines where available.
 - Plan practice, qualifying and race windows in the circuit's timezone; review rain, gusts and model disagreement over overlapping hours.
-- Export actual forecast rows as CSV and inspect how each source changes a prediction for the same valid hour.
+- Inspect each source’s session rain/gust coverage and approximate rainfall total. Find windows that fit your session duration, with rain reported below threshold by every enabled source.
+- Update saved sessions, undo a removal, and download their times as a calendar file (`.ics`).
+- Back up or restore circuits, preferences and plans as local JSON; import merges plans and retains existing sessions.
+- Export actual forecast/history rows as CSV and inspect how each source changes temperature, rainfall or wind for the same valid hour.
 
 These are five forecast feeds through **two weather API transports**, not five independent forecasts. MET Norway shares ECMWF ancestry outside its regional coverage and is grouped with IFS when counting families. Other models also share observations and methods. A wet vote is the fraction of reporting families exceeding your chosen hourly amount; it is not a calibrated precipitation probability.
 
@@ -35,7 +37,9 @@ Precipitation is normalized to the hourly interval beginning at the displayed ti
 
 ## Saved data and privacy
 
-Circuits, preferences and session plans live in this browser's local storage. Real forecast snapshots are stored in **IndexedDB on this device**, under `http://localhost:4173`. They are not uploaded to GitHub, saved to a cloud database or synchronized between devices. Browser storage can be cleared or evicted; export important data. A different browser profile, hostname or port has a separate store—use the same localhost address for daily use.
+Circuits, preferences and session plans live in this browser's local storage. Real forecast snapshots are stored in **IndexedDB on this device**, under `http://localhost:4173`. They are not uploaded to GitHub, saved to a cloud database or synchronized between devices. Browser storage can be cleared or evicted; use **Weather preferences → Export backup** for plans and settings, and **History & sources → Export history** for recorded weather rows. A different browser profile, hostname or port has a separate store—use the same localhost address for daily use.
+
+Refresh requests an update while respecting provider cooldowns. If an individual feed fails, Pitwall can retain its last successful forecast for up to 24 hours with an explicit saved-data warning and the original fetch time. It never presents that fallback as a fresh fetch. Remaining forecast hours and missing fields stay visible. The bundled map library also loads locally; fresh weather and map/radar tiles still need a connection.
 
 Weather and mapping providers receive the requested coordinates or map area and normal connection metadata. No automatic GPS access is needed. There is no browser API-key field, login backend or secret embedded in the application. Keep credentials out of `VITE_` environment variables, whose values become part of the browser code.
 

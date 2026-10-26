@@ -15,8 +15,12 @@ concurrency:
 
 jobs:
   web:
-    name: Web tests, types and production build
-    runs-on: ubuntu-latest
+    name: Web tests, types and production build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - name: Check out source
@@ -39,8 +43,12 @@ jobs:
         run: npm run build
 
   python:
-    name: Python package and unit tests
-    runs-on: ubuntu-latest
+    name: Python package and unit tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
       - name: Check out source

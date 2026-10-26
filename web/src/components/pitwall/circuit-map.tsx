@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import * as L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import {
   Layers,
   Maximize,
@@ -11,34 +13,6 @@ import {
 import type { GeometryResponse, RadarResponse, Track } from "@/lib/contracts";
 import { apiFetch } from "@/lib/browser-api";
 
-declare global {
-  interface Window {
-    L: any;
-  }
-}
-let leafletPromise: Promise<void> | null = null;
-function loadLeaflet() {
-  if (window.L) return Promise.resolve();
-  if (!leafletPromise)
-    leafletPromise = new Promise<void>((resolve, reject) => {
-      if (!document.getElementById("leaflet-css")) {
-        const css = document.createElement("link");
-        css.id = "leaflet-css";
-        css.rel = "stylesheet";
-        css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-        document.head.appendChild(css);
-      }
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      script.onload = () => resolve();
-      script.onerror = () => {
-        leafletPromise = null;
-        reject(new Error("Map library could not load. Check the connection."));
-      };
-      document.head.appendChild(script);
-    });
-  return leafletPromise;
-}
 function localTime(t: number, tz: string) {
   return new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
@@ -48,10 +22,10 @@ function localTime(t: number, tz: string) {
 }
 export default function CircuitMap({ track }: { track: Track }) {
   const node = useRef<HTMLDivElement>(null),
-    map = useRef<any>(null),
-    radarLayer = useRef<any>(null),
-    geometryLayer = useRef<any>(null),
-    coverageLayer = useRef<any>(null);
+    map = useRef<L.Map | null>(null),
+    radarLayer = useRef<L.TileLayer | null>(null),
+    geometryLayer = useRef<L.FeatureGroup | null>(null),
+    coverageLayer = useRef<L.TileLayer | null>(null);
   const [radar, setRadar] = useState<RadarResponse | null>(null),
     [geometry, setGeometry] = useState<GeometryResponse | null>(null),
     [frame, setFrame] = useState(0),
@@ -67,32 +41,34 @@ export default function CircuitMap({ track }: { track: Track }) {
     [radarVersion, setRadarVersion] = useState(0),
     [clock, setClock] = useState(Date.now());
   useEffect(() => {
-    let cancelled = false;
-    loadLeaflet()
-      .then(() => {
-        if (cancelled || !node.current) return;
-        const L = window.L;
-        const m = L.map(node.current, {
-          zoomControl: false,
-          scrollWheelZoom: false,
-          attributionControl: true,
-        }).setView([track.lat, track.lon], 10);
-        L.control.zoom({ position: "bottomleft" }).addTo(m);
-        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          maxZoom: 19,
-          className: "base-map-tiles",
-          attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
-        })
-          .on("tileerror", () => setTileError("Some map tiles could not load."))
-          .addTo(m);
-        map.current = m;
-        setMapReady(true);
-        setTimeout(() => m.invalidateSize(), 100);
+    if (!node.current) return;
+    let resize: ResizeObserver | undefined;
+    try {
+      const m = L.map(node.current, {
+        zoomControl: false,
+        scrollWheelZoom: false,
+        attributionControl: true,
+      }).setView([track.lat, track.lon], 10);
+      L.control.zoom({ position: "bottomleft" }).addTo(m);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        className: "base-map-tiles",
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
       })
-      .catch((e) => setError(e.message));
+        .on("tileerror", () => setTileError("Some map tiles could not load."))
+        .addTo(m);
+      map.current = m;
+      setMapReady(true);
+      resize = new ResizeObserver(() => m.invalidateSize());
+      resize.observe(node.current);
+    } catch {
+      setError(
+        "The map could not be initialized. Reload Pitwall to try again.",
+      );
+    }
     return () => {
-      cancelled = true;
+      resize?.disconnect();
       map.current?.remove();
       map.current = null;
       setMapReady(false);
@@ -150,7 +126,6 @@ export default function CircuitMap({ track }: { track: Track }) {
   }, [track.id, track.lat, track.lon]);
   useEffect(() => {
     if (!mapReady || !map.current) return;
-    const L = window.L;
     if (geometryLayer.current) map.current.removeLayer(geometryLayer.current);
     const group = L.featureGroup().addTo(map.current);
     const tooltip = document.createElement("span");
@@ -183,7 +158,7 @@ export default function CircuitMap({ track }: { track: Track }) {
     if (!radar || !radarOn) return;
     const f = radar.frames[frame];
     if (!f) return;
-    const layer = window.L.tileLayer(
+    const layer = L.tileLayer(
       `${radar.host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`,
       {
         opacity: opacity / 100,
@@ -214,7 +189,7 @@ export default function CircuitMap({ track }: { track: Track }) {
     const url =
       radar.coverageUrl ||
       `${radar.host}/v2/coverage/0/256/{z}/{x}/{y}/0/0_0.png`;
-    const layer = window.L.tileLayer(url, {
+    const layer = L.tileLayer(url, {
       opacity: 0.6,
       maxNativeZoom: 7,
       maxZoom: 19,
