@@ -79,9 +79,11 @@ def show_typed_city_box():
     """For a city that is not in the dropdown. Looking one up needs the API key."""
     if not API_KEY:
         return
-    with st.sidebar.form("typed_city_form", border=False):
-        st.text_input("Not listed? Type a city", key="typed_city")
-        st.form_submit_button("Add", on_click=add_typed_city)
+    with st.sidebar.expander("Not listed?"):
+        with st.form("typed_city_form", border=False):
+            st.text_input("Type a city", key="typed_city")
+            st.form_submit_button("Add", on_click=add_typed_city)
+    # Outside the expander, so the message shows whether it is open or closed.
     if "typed_city_error" in st.session_state:
         st.sidebar.error(st.session_state.pop("typed_city_error"))
 

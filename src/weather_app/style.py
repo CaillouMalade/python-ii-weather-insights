@@ -11,6 +11,8 @@ CSS = """
 [data-testid="stSidebar"] { background: rgba(30, 36, 44, 0.92); }
 [data-testid="stMainBlockContainer"] { container-type: inline-size; padding-top: 1.5rem; max-width: 1400px; }
 @media (max-width: 768px) { [data-testid="stMainBlockContainer"] { padding: 3.2rem 1rem 2rem; } }
+/* On a phone, a solid bar behind the sidebar arrow, so page content scrolls under it rather than behind the arrow */
+@media (max-width: 768px) { [data-testid="stHeader"] { background: #1e242c; } }
 .stApp, .stApp button { font-family: -apple-system, "SF Pro Display", "Segoe UI", Roboto, sans-serif; }
 
 /* One card style everywhere: plain HTML cards and Streamlit containers holding widgets */
@@ -43,7 +45,7 @@ CSS = """
 .strip-small { font-size: 0.72rem; color: #7fd0f5; min-height: 1rem; white-space: nowrap; }
 
 /* Daily forecast: the rows share the card's height, to match the map beside it */
-.days { min-height: 488px; display: flex; flex-direction: column; }
+.days { min-height: 510px; display: flex; flex-direction: column; }
 .day { flex: 1; display: grid; grid-template-columns: 3.2rem 3rem 2.4rem 1fr 2.4rem; gap: 8px; align-items: center; border-top: 1px solid rgba(255,255,255,.15); }
 .day-pop { font-size: 0.7rem; color: #7fd0f5; }
 .day-icon { text-align: center; font-size: 1.25rem; line-height: 1.1; }
@@ -59,6 +61,7 @@ CSS = """
 
 /* Map notes: the same height for the legend and the radar line, so the two cards stay level */
 .map-note { min-height: 2.6rem; font-size: 0.85rem; }
+.st-key-map-card [data-testid="stCaptionContainer"] { min-height: 2.6rem; }
 .legend-bar { height: 10px; border-radius: 5px; }
 .legend-labels { display: flex; justify-content: space-between; font-size: 0.72rem; margin-top: 3px; }
 
