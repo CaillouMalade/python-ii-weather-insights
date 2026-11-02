@@ -11,6 +11,7 @@ from .display import (
     high_low_text,
     is_night,
     range_bar,
+    split_name,
     uv_label,
     weather_emoji,
 )
@@ -24,24 +25,29 @@ BAND_COLORS = {"Good": "#3ec6a8", "Fair": "#8fd14f", "Moderate": "#f2d13c", "Poo
 def city_card(name, reading, high, low, note, selected, now):
     """A sidebar entry: name, local time, temperature, conditions and high/low when available."""
     outline = " selected" if selected else ""
+    city, place = split_name(name)
     if reading is None:
+        place_line = f'<div class="city-small">{escape(place)}</div>' if place else ""
         return (
             f'<div class="city{outline}" style="background:rgba(255,255,255,.08)">'
-            f'<div><div class="city-name">{escape(name)}</div>'
-            f'<div class="city-small">{escape(note)}</div></div></div>'
+            f'<div class="city-name">{escape(city)}</div>{place_line}'
+            f'<div class="city-small city-note">{escape(note)}</div></div>'
         )
 
     background = background_for(reading.weather_id, is_night(now, reading.sunrise, reading.sunset))
     high_low = ""
     if high is not None:
         high_low = high_low_text(high, low)
+    time_text = format_local_time(now, reading.timezone_offset or 0)
+    if place:
+        time_text = f"{time_text} · {escape(place)}"
     return (
         f'<div class="city{outline}" style="background:{background}">'
-        f'<div><div class="city-name">{escape(name)}</div>'
-        f'<div class="city-small">{format_local_time(now, reading.timezone_offset or 0)}</div></div>'
-        f'<div class="city-temp">{round(reading.temperature)}°</div>'
-        f'<div class="city-small">{escape(reading.conditions.capitalize())}</div>'
-        f'<div class="city-small high-low">{high_low}</div></div>'
+        f'<div class="city-row"><div class="city-main"><div class="city-name">{escape(city)}</div>'
+        f'<div class="city-small">{time_text}</div></div>'
+        f'<div class="city-temp">{round(reading.temperature)}°</div></div>'
+        f'<div class="city-row"><div class="city-small">{escape(reading.conditions.capitalize())}</div>'
+        f'<div class="city-small high-low">{high_low}</div></div></div>'
     )
 
 

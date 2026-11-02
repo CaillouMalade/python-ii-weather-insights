@@ -108,6 +108,28 @@ def display_names(locations):
     return names
 
 
+def rain_axis_ticks(highest_mm):
+    """Round tick values for a rain axis, starting at 0, with no more than five ticks."""
+    highest = max(highest_mm, 1)
+    step = 100
+    for candidate in [0.5, 1, 2, 5, 10, 20, 50]:
+        if highest / candidate <= 4:
+            step = candidate
+            break
+    ticks = [0]
+    while ticks[-1] < highest:
+        ticks.append(ticks[-1] + step)
+    return ticks
+
+
+def split_name(name):
+    """Split a shown name into the city and the rest: "London, Canada" gives London and Canada."""
+    parts = name.split(", ", 1)
+    if len(parts) == 1:
+        return name, ""
+    return parts[0], parts[1]
+
+
 def aqi_label(aqi):
     return AQI_LABELS.get(aqi, "Unknown")
 

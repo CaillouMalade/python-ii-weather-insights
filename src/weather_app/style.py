@@ -92,11 +92,16 @@ CSS = """
 /* Sidebar city cards: the invisible button is stretched over the whole card */
 [class*="st-key-city-"] { position: relative; }
 [class*="st-key-city-"] [data-testid="stElementContainer"] { position: static; }
-.city { border-radius: 14px; padding: 10px 40px 10px 14px; display: grid; grid-template-columns: 1fr auto; column-gap: 8px; line-height: 1.25; }
+.city { border-radius: 14px; padding: 10px 40px 10px 14px; height: 78px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; line-height: 1.25; }
+.city-row { display: flex; justify-content: space-between; gap: 6px; min-width: 0; }
+.city-row + .city-row .city-small { font-size: 0.73rem; }
+.city-main { min-width: 0; }
 .city.selected { outline: 2px solid rgba(255,255,255,.75); }
-.city-name { font-weight: 600; font-size: 1.05rem; }
+.city-name { font-weight: 600; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .city-temp { font-size: 1.7rem; font-weight: 300; text-align: right; }
-.city-small { font-size: 0.76rem; }
+.city-small { font-size: 0.76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.city-small.high-low { white-space: pre; flex-shrink: 0; overflow: visible; }
+.city-small.city-note { white-space: normal; }
 [class*="st-key-city-"] [class*="st-key-open-"] { position: absolute; inset: 0; z-index: 1; }
 [class*="st-key-open-"] button { width: 100%; height: 100%; opacity: 0; }
 [class*="st-key-city-"] [class*="st-key-remove-"] { position: absolute; top: 50%; right: 8px; z-index: 2; width: auto; transform: translateY(-50%); }
