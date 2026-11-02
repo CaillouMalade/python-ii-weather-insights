@@ -1,0 +1,202 @@
+{
+  "locations": [
+    {
+      "id": "portimao",
+      "name": "Portimão",
+      "country": "Portugal",
+      "timezone": "Europe/Lisbon",
+      "lengthKm": 4.653,
+      "latitude": 37.2319,
+      "longitude": -8.6267,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "nogaro",
+      "name": "Nogaro",
+      "country": "France",
+      "timezone": "Europe/Paris",
+      "lengthKm": 3.636,
+      "latitude": 43.77006,
+      "longitude": -0.04033,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "spa",
+      "name": "Spa-Francorchamps",
+      "country": "Belgium",
+      "timezone": "Europe/Brussels",
+      "lengthKm": 7.004,
+      "latitude": 50.4372,
+      "longitude": 5.9714,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "paul-ricard",
+      "name": "Paul Ricard",
+      "country": "France",
+      "timezone": "Europe/Paris",
+      "lengthKm": 5.842,
+      "latitude": 43.2506,
+      "longitude": 5.7917,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "nurburgring",
+      "name": "Nürburgring GP",
+      "country": "Germany",
+      "timezone": "Europe/Berlin",
+      "lengthKm": 5.148,
+      "latitude": 50.3356,
+      "longitude": 6.9475,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "nordschleife",
+      "name": "Nürburgring Nordschleife",
+      "country": "Germany",
+      "timezone": "Europe/Berlin",
+      "lengthKm": 20.832,
+      "latitude": 50.3566,
+      "longitude": 6.9689,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "lemans",
+      "name": "Le Mans · La Sarthe",
+      "country": "France",
+      "timezone": "Europe/Paris",
+      "lengthKm": 13.626,
+      "latitude": 47.9497,
+      "longitude": 0.2192,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "lemans-bugatti",
+      "name": "Le Mans · Bugatti",
+      "country": "France",
+      "timezone": "Europe/Paris",
+      "lengthKm": 4.185,
+      "latitude": 47.953,
+      "longitude": 0.212,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "barcelona",
+      "name": "Barcelona-Catalunya",
+      "country": "Spain",
+      "timezone": "Europe/Madrid",
+      "lengthKm": 4.657,
+      "latitude": 41.57,
+      "longitude": 2.2611,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "silverstone",
+      "name": "Silverstone",
+      "country": "United Kingdom",
+      "timezone": "Europe/London",
+      "lengthKm": 5.891,
+      "latitude": 52.0733,
+      "longitude": -1.0147,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "monza",
+      "name": "Monza",
+      "country": "Italy",
+      "timezone": "Europe/Rome",
+      "lengthKm": 5.793,
+      "latitude": 45.6191,
+      "longitude": 9.2822,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "imola",
+      "name": "Imola",
+      "country": "Italy",
+      "timezone": "Europe/Rome",
+      "lengthKm": 4.909,
+      "latitude": 44.3439,
+      "longitude": 11.7167,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "magny-cours",
+      "name": "Magny-Cours",
+      "country": "France",
+      "timezone": "Europe/Paris",
+      "lengthKm": 4.411,
+      "latitude": 46.8642,
+      "longitude": 3.1636,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "alcaniz",
+      "name": "MotorLand Aragón",
+      "country": "Spain",
+      "timezone": "Europe/Madrid",
+      "lengthKm": 5.344,
+      "latitude": 41.0786,
+      "longitude": -0.2033,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "jarama",
+      "name": "Jarama",
+      "country": "Spain",
+      "timezone": "Europe/Madrid",
+      "lengthKm": 3.85,
+      "latitude": 40.617,
+      "longitude": -3.5855,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "dijon-prenois",
+      "name": "Dijon-Prenois",
+      "country": "France",
+      "timezone": "Europe/Paris",
+      "lengthKm": 3.801,
+      "latitude": 47.3625,
+      "longitude": 4.8992,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "jerez",
+      "name": "Jerez",
+      "country": "Spain",
+      "timezone": "Europe/Madrid",
+      "lengthKm": 4.428,
+      "latitude": 36.7083,
+      "longitude": -6.0342,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    },
+    {
+      "id": "estoril",
+      "name": "Estoril",
+      "country": "Portugal",
+      "timezone": "Europe/Lisbon",
+      "lengthKm": 4.182,
+      "latitude": 38.7509,
+      "longitude": -9.3947,
+      "coordinate_source": "Pitwall web/src/lib/tracks.ts at commit 3e5ca1ed400605594abef711c5c2b07e3a2eb08f",
+      "coordinate_verification": "verified catalogue point, not independently surveyed/verified circuit position"
+    }
+  ]
+}
