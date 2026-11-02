@@ -14,6 +14,11 @@ from .display import (
     uv_label,
     weather_emoji,
 )
+from .findings import POLLUTANTS, pollutant_text
+from .maps import LEGENDS
+
+RATING_COLORS = {"Great": "#3ec6a8", "Good": "#8fd14f", "OK": "#f2d13c", "Poor": "#ef8a3a"}
+BAND_COLORS = {"Good": "#3ec6a8", "Fair": "#8fd14f", "Moderate": "#f2d13c", "Poor": "#ef8a3a", "Very poor": "#d8324a"}
 
 
 def city_card(name, reading, high, low, note, selected, now):
@@ -34,7 +39,7 @@ def city_card(name, reading, high, low, note, selected, now):
         f'<div class="city{outline}" style="background:{background}">'
         f'<div><div class="city-name">{escape(name)}</div>'
         f'<div class="city-small">{format_local_time(now, reading.timezone_offset or 0)}</div></div>'
-        f'<div class="city-temp">{reading.temperature:.0f}°</div>'
+        f'<div class="city-temp">{round(reading.temperature)}°</div>'
         f'<div class="city-small">{escape(reading.conditions.capitalize())}</div>'
         f'<div class="city-small high-low">{high_low}</div></div>'
     )
@@ -45,7 +50,7 @@ def feels_small(delta):
     if abs(delta) < 1:
         return "About the actual temperature"
     direction = "warmer" if delta > 0 else "colder"
-    return f"{abs(delta):.0f}° {direction} than actual"
+    return f"{round(abs(delta))}° {direction} than actual"
 
 
 def stat(label, value, small=""):
@@ -65,7 +70,7 @@ def header(city, reading, high, low, rain_chance, now):
 
     rain_value = "No data" if rain_chance is None else f"{rain_chance * 100:.0f} %"
     stats = (
-        stat("Feels like", f"{reading.feels_like:.0f}°", feels_small(reading.feels_like_delta))
+        stat("Feels like", f"{round(reading.feels_like)}°", feels_small(reading.feels_like_delta))
         + stat("Wind", f"{reading.wind_speed * 3.6:.0f} km/h", wind_small)
         + stat("Humidity", f"{reading.humidity} %")
         + stat("Chance of rain", rain_value, "Next few hours")
@@ -75,7 +80,7 @@ def header(city, reading, high, low, rain_chance, now):
         '<div class="header-main">'
         f'<div class="header-city">{escape(city)}</div>'
         f'<div class="small">{time_text} local time</div>'
-        f'<div class="header-temp">{reading.temperature:.0f}°</div>'
+        f'<div class="header-temp">{round(reading.temperature)}°</div>'
         f'<div class="header-line">{escape(reading.conditions.capitalize())}</div>'
         f'<div class="header-line high-low">{high_low_text(high, low)}</div>'
         "</div>"
@@ -104,7 +109,7 @@ def strip_item(top, icon, value, small=""):
 
 def next_hours_strip(steps, timezone_offset, measure, reading):
     """The current reading and the next steps for one measure: Temperature, Precipitation or Wind."""
-    now_value = f"{reading.temperature:.0f}°"
+    now_value = f"{round(reading.temperature)}°"
     if measure == "Precipitation":
         now_value = format_precipitation((reading.rain_1h or 0) + (reading.snow_1h or 0))
     elif measure == "Wind":
@@ -113,7 +118,7 @@ def next_hours_strip(steps, timezone_offset, measure, reading):
     items = [strip_item("Now", weather_emoji(reading.icon), now_value)]
     for _, row in steps.iterrows():
         small = ""
-        value = f'{row["temperature"]:.0f}°'
+        value = f'{round(row["temperature"])}°'
         if measure == "Precipitation":
             value = format_precipitation(row["rain_3h"] + row["snow_3h"])
             small = f'{row["pop"] * 100:.0f} % chance'
@@ -139,9 +144,9 @@ def daily_card(days, today, day_names, current_temperature):
             '<div class="day">'
             f"<b>{name}</b>"
             f'<div class="day-icon">{weather_emoji(row["icon"])}{pop_text}</div>'
-            f'<div class="day-low">{row["low"]:.0f}°</div>'
+            f'<div class="day-low">{round(row["low"])}°</div>'
             f'<div class="bar"><div class="bar-fill" style="left:{left}%;width:{width}%"></div>{dot}</div>'
-            f'<b>{row["high"]:.0f}°</b></div>'
+            f'<b>{round(row["high"])}°</b></div>'
         )
     return f'<div class="card-title">{len(rows)}-day forecast</div><div class="days">' + "".join(rows) + "</div>"
 
@@ -175,7 +180,7 @@ def detail_tiles(reading, air_row, uv_value, dew_point, tendency):
     if reading.sunset is not None:
         tiles.append(tile("Sunset", format_local_time(reading.sunset, offset)))
     if dew_point is not None:
-        tiles.append(tile("Dew point", f"{dew_point:.0f}°"))
+        tiles.append(tile("Dew point", f"{round(dew_point)}°"))
     if reading.visibility is not None:
         tiles.append(tile("Visibility", f"{reading.visibility / 1000:.0f} km"))
     if reading.pressure is not None:
@@ -183,3 +188,97 @@ def detail_tiles(reading, air_row, uv_value, dew_point, tendency):
     if reading.clouds is not None:
         tiles.append(tile("Cloud cover", f"{reading.clouds} %"))
     return '<div class="grid-4">' + "".join(tiles) + "</div>"
+
+
+def map_legend(layer):
+    """A small colour scale for a weather layer, from OpenWeatherMap's published scale."""
+    unit, stops = LEGENDS[layer]
+    colors = ", ".join([color for _, color in stops])
+    labels = "".join([f"<span>{label}</span>" for label, _ in stops])
+    return f'<div class="map-note"><div class="legend-bar" style="background:linear-gradient(90deg, {colors})"></div><div class="legend-labels">{labels}<span>{unit}</span></div></div>'
+
+
+def radar_note(radar_time, timezone_offset, covered, name):
+    """When the radar image was made, and an honest note if radar does not reach this city."""
+    time_text = ""
+    if radar_time is not None:
+        time_text = f"Radar at {format_local_time(radar_time, timezone_offset)}"
+    coverage_text = ""
+    if covered is False:
+        coverage_text = f'<div class="small">No radar reaches {escape(name)}, so rain there will not show. Shaded areas have no radar.</div>'
+    return f'<div class="map-note"><b>{time_text}</b>{coverage_text}</div>'
+
+
+def plan_day(name, icon, high, low, summary, parts):
+    """One day of Plan the week: name, icon, high and low, a sentence, and each part of the day rated."""
+    by_part = {}
+    for part in parts:
+        by_part[part["part"]] = part
+
+    chips = ""
+    for part_name in ["Morning", "Afternoon", "Evening"]:
+        if part_name in by_part:
+            part = by_part[part_name]
+            chips = chips + (
+                f'<div class="part" style="border-top-color:{RATING_COLORS[part["rating"]]}"><div class="part-name">{part_name}</div>'
+                f'<div class="part-rating" style="color:{RATING_COLORS[part["rating"]]}">{part["rating"]}</div><div class="part-reason">{escape(part["reason"])}</div></div>'
+            )
+        else:
+            chips = chips + f'<div class="part part-past"><div class="part-name">{part_name}</div></div>'
+
+    return (
+        '<div class="card">'
+        f'<div class="plan-head"><b>{escape(name)}</b><span class="plan-icon">{weather_emoji(icon)}</span><span class="high-low">{high_low_text(high, low)}</span></div>'
+        f'<div class="plan-summary">{escape(summary)}</div>'
+        f'<div class="parts">{chips}</div></div>'
+    )
+
+
+def air_share_bar(shares):
+    """One stacked bar of the share of days per band, with the words below it. Empty bands are left out."""
+    segments = ""
+    labels = ""
+    for row in shares:
+        if row["days"] == 0:
+            continue
+        color = BAND_COLORS[row["band"]]
+        segments = segments + f'<div style="width:{row["share"]}%;background:{color}"></div>'
+        labels = labels + f'<span><i style="background:{color}"></i>{row["band"]}: {row["days"]} days</span>'
+    return f'<div class="share-bar">{segments}</div><div class="share-labels">{labels}</div>'
+
+
+def pollutant_rows(guidelines):
+    """One plain row per pollutant: name, what it is, and how often it went over its guideline."""
+    rows = ""
+    for row in guidelines:
+        pollutant = POLLUTANTS[row["pollutant"]]
+        share = 0
+        if row["days"] > 0:
+            share = row["days_over"] / row["days"] * 100
+        color = BAND_COLORS["Poor"] if row["days_over"] > 0 else BAND_COLORS["Good"]
+        rows = rows + (
+            f'<div class="pollutant"><b>{pollutant["name"]}</b><div class="small">{pollutant["about"]}</div>'
+            f'<div class="days-bar"><div style="width:{share:.0f}%"></div></div>'
+            f'<div class="small" style="color:{color}">{pollutant_text(row["days_over"], row["days"])}</div></div>'
+        )
+    return rows
+
+
+def air_outlook(days):
+    """The next days in words. days is a list of (day, band) pairs."""
+    items = ""
+    for day, band in days:
+        items = items + f'<div class="card"><div class="card-title">{day}</div><div style="color:{BAND_COLORS.get(band, "#fff")}">{band}</div></div>'
+    return f'<div class="card-title outlook-title">Coming days</div><div class="grid-4">{items}</div>'
+
+
+def city_table(rows):
+    """One row per city. Every column says its unit, and air is in words."""
+    body = ""
+    for row in rows:
+        week = "No forecast" if row["high"] is None else f'{round(row["low"])}° to {round(row["high"])}°'
+        rain = "" if row["high"] is None else f'{row["rain_mm"]:.0f} mm'
+        wind = "" if row["high"] is None else f'{row["wind_kmh"]:.0f} km/h'
+        air = "" if row["aqi"] is None else aqi_label(row["aqi"])
+        body = body + f'<tr><td><b>{escape(row["name"])}</b></td><td>{round(row["now"])}°</td><td>{week}</td><td>{rain}</td><td>{wind}</td><td>{air}</td></tr>'
+    return f'<table class="cities"><tr><th>City</th><th>Now</th><th>Low, high</th><th>Rain</th><th>Wind</th><th>Air</th></tr>{body}</table>'

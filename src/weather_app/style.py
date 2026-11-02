@@ -22,7 +22,6 @@ CSS = """
 .small { font-size: 0.85rem; opacity: 0.85; margin-top: 4px; }
 .high-low { white-space: pre; }
 .finding { font-size: 1.05rem; font-weight: 600; margin-bottom: 4px; }
-.window { padding: 8px 0; border-top: 1px solid rgba(255,255,255,.15); }
 
 /* One grid: four across, two across when the main column is narrow */
 .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 14px; }
@@ -58,10 +57,42 @@ CSS = """
   background: linear-gradient(90deg, #3ec6a8, #8fd14f, #f2d13c, #ef8a3a, #d8324a, #8d2bd6); }
 .scale-dot { position: absolute; top: -2px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: #fff; border: 1px solid #333; }
 
+/* Map notes: the same height for the legend and the radar line, so the two cards stay level */
+.map-note { min-height: 2.6rem; font-size: 0.85rem; }
+.legend-bar { height: 10px; border-radius: 5px; }
+.legend-labels { display: flex; justify-content: space-between; font-size: 0.72rem; margin-top: 3px; }
+
+/* Plan the week: one card per day, with three rated parts */
+.plan { display: grid; gap: 14px; }
+.plan-head { display: flex; align-items: center; gap: 10px; font-size: 1.05rem; }
+.plan-icon { font-size: 1.3rem; }
+.plan-head .high-low { margin-left: auto; font-size: 0.9rem; }
+.plan-summary { margin: 2px 0 10px; }
+.parts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.part { border-top: 3px solid; padding-top: 6px; font-size: 0.85rem; }
+.part-past { border-top-color: rgba(255,255,255,.15); opacity: 0.5; }
+.part-name { font-size: 0.72rem; opacity: 0.75; }
+.part-rating { font-weight: 700; font-size: 1.05rem; }
+
+/* Air: one stacked bar of days, then a row per pollutant */
+.share-bar { display: flex; height: 18px; border-radius: 9px; overflow: hidden; margin: 6px 0 8px; }
+.share-labels { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.85rem; }
+.share-labels i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+.pollutant { padding: 10px 0; border-top: 1px solid rgba(255,255,255,.15); }
+.days-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.15); margin-top: 6px; overflow: hidden; }
+.days-bar div { height: 100%; background: #ef8a3a; }
+.outlook-title { margin: 6px 0 8px; }
+
+/* Compare table: wraps instead of scrolling sideways */
+.cities { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.cities th { text-align: left; font-size: 0.72rem; font-weight: 600; opacity: 0.7; padding: 4px 6px 4px 0; }
+.cities td { padding: 8px 6px 8px 0; border-top: 1px solid rgba(255,255,255,.15); vertical-align: top; white-space: nowrap; }
+.cities td:first-child { white-space: normal; }
+
 /* Sidebar city cards: the invisible button is stretched over the whole card */
 [class*="st-key-city-"] { position: relative; }
 [class*="st-key-city-"] [data-testid="stElementContainer"] { position: static; }
-.city { border-radius: 14px; padding: 10px 40px 10px 14px; display: grid; grid-template-columns: 1fr auto; line-height: 1.25; }
+.city { border-radius: 14px; padding: 10px 40px 10px 14px; display: grid; grid-template-columns: 1fr auto; column-gap: 8px; line-height: 1.25; }
 .city.selected { outline: 2px solid rgba(255,255,255,.75); }
 .city-name { font-weight: 600; font-size: 1.05rem; }
 .city-temp { font-size: 1.7rem; font-weight: 300; text-align: right; }
@@ -80,6 +111,7 @@ CSS = """
   .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .days { min-height: 0; }
+  .cities { font-size: 0.78rem; }
   .day { padding: 9px 0; }
   .st-key-week-row [data-testid="stHorizontalBlock"] { flex-direction: column; }
   .st-key-week-row [data-testid="stColumn"] { width: 100%; flex: 1 1 100%; }

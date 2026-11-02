@@ -7,14 +7,15 @@ import pandas as pd
 import pytest
 from PIL import Image
 
-from weather_app.cards import air_tile, city_card, detail_tiles, feels_small, format_precipitation, header, next_hours_strip
-from weather_app.client import WeatherClient, validate_location
+from weather_app.cards import air_share_bar, air_tile, city_card, city_table, detail_tiles, feels_small, format_precipitation, header, map_legend, next_hours_strip, plan_day, pollutant_rows, radar_note
+from weather_app.client import APIClient, RainViewerClient, WeatherClient, validate_location
 from weather_app.display import (
     aqi_label,
     aqi_position,
     background_for,
     BACKGROUNDS,
     compass_direction,
+    display_names,
     high_low_text,
     format_local_time,
     is_night,
@@ -23,7 +24,7 @@ from weather_app.display import (
     uv_label,
     weather_emoji,
 )
-from weather_app.maps import image_to_data_uri, lat_lon_to_tile, stitch_tiles, tile_grid, tile_to_lat_lon
+from weather_app.maps import boost_opacity, has_radar_coverage, image_to_data_uri, lat_lon_to_tile, radar_over_coverage, stitch_tiles, tile_grid, tile_to_lat_lon
 from weather_app.models import WeatherReading
 
 MONDAY = 1767571200  # 2026-01-05 00:00 UTC
@@ -55,6 +56,28 @@ def test_to_dict_has_optional_fields_as_none():
     assert values["location"] == "Madrid, ES"
     assert values["feels_like"] == 19.0
     assert values["wind_gust"] is None
+
+
+# Providers with and without a key
+
+
+def test_a_provider_without_a_key_sends_no_key_parameter():
+    assert APIClient("https://example.com")._with_key({"a": 1}) == {"a": 1}
+    assert RainViewerClient()._with_key({}) == {}
+
+
+def test_a_provider_with_a_key_sends_it_under_its_own_name():
+    assert WeatherClient("not-a-real-key")._with_key({"a": 1}) == {"a": 1, "appid": "not-a-real-key"}
+
+
+def test_rainviewer_takes_the_newest_frame():
+    data = {"host": "https://h", "radar": {"past": [{"path": "/old", "time": 1}, {"path": "/new", "time": 2}]}}
+    assert RainViewerClient()._parse_latest_frame(data) == {"host": "https://h", "path": "/new", "time": 2}
+
+
+def test_rainviewer_with_no_frames_gives_a_clear_error():
+    with pytest.raises(ValueError, match="unexpected format"):
+        RainViewerClient()._parse_latest_frame({"host": "https://h", "radar": {"past": []}})
 
 
 # Input validation
@@ -228,6 +251,86 @@ def test_high_low_text():
     assert high_low_text(15.4, 11.6) == "High 15°  Low 12°"
 
 
+def test_high_low_text_hides_a_misleading_equal_pair():
+    # Mumbai in the evening: nothing left in the forecast, and the reading's own range is one value.
+    assert high_low_text(31.2, 30.9) == ""
+
+
+def test_display_names_add_the_country_only_when_needed():
+    locations = [
+        {"location": "London, GB", "label": "London, United Kingdom", "city": "London"},
+        {"location": "London, CA", "label": "London, Canada", "city": "London"},
+        {"location": "Oslo, NO", "label": "Oslo, Norway", "city": "Oslo"},
+    ]
+    assert display_names(locations) == ["London, United Kingdom", "London, Canada", "Oslo"]
+
+
+def test_display_names_use_the_region_for_two_cities_in_one_country():
+    locations = [
+        {"location": "Springfield, Missouri, US", "label": "Springfield, Missouri, United States", "city": "Springfield"},
+        {"location": "Springfield, Illinois, US", "label": "Springfield, Illinois, United States", "city": "Springfield"},
+    ]
+    assert display_names(locations) == ["Springfield, Missouri, US", "Springfield, Illinois, US"]
+
+
+def test_temperatures_just_below_zero_show_no_minus_sign():
+    rows = [{"name": "Oslo", "now": -0.3, "high": 1.0, "low": -0.4, "rain_mm": 0, "wind_kmh": 5, "aqi": 1}]
+    html = city_table(rows)
+    assert "-0" not in html
+    assert "0° to 1°" in html
+
+
+def test_plan_day_escapes_and_marks_a_part_already_gone():
+    parts = [{"part": "Evening", "rating": "Good", "reason": "windy"}]
+    html = plan_day("Today", "01d", 20.0, 10.0, "<b>Dry</b>", parts)
+    assert "&lt;b&gt;Dry" in html
+    assert "High 20°  Low 10°" in html
+    assert "Good" in html
+    assert "part-past" in html
+
+
+def test_air_share_bar_leaves_out_empty_bands():
+    shares = [{"band": "Good", "days": 45, "share": 50.0}, {"band": "Fair", "days": 45, "share": 50.0}, {"band": "Poor", "days": 0, "share": 0.0}]
+    html = air_share_bar(shares)
+    assert "Good: 45 days" in html
+    assert "Poor" not in html
+
+
+def test_pollutant_rows_use_names_not_codes():
+    html = pollutant_rows([{"pollutant": "o3", "guideline": 100, "days": 90, "days_over": 35}])
+    assert "Ozone" in html
+    assert "O3" not in html
+    assert "Above the guideline on 35 of 90 days" in html
+
+
+def test_city_table_shows_units_and_words():
+    rows = [{"name": "<i>Oslo</i>", "now": 3.4, "high": 8.0, "low": 1.0, "rain_mm": 9.6, "wind_kmh": 12.2, "aqi": 2}]
+    html = city_table(rows)
+    assert "&lt;i&gt;Oslo" in html
+    assert "1° to 8°" in html
+    assert "10 mm" in html
+    assert "12 km/h" in html
+    assert "Fair" in html
+
+
+def test_city_table_without_a_forecast_or_air_data():
+    rows = [{"name": "Oslo", "now": 3.0, "high": None, "low": None, "rain_mm": 0, "wind_kmh": 0, "aqi": None}]
+    assert "No forecast" in city_table(rows)
+
+
+def test_map_legend_has_documented_labels_and_unit():
+    html = map_legend("Temperature")
+    assert "-30" in html
+    assert "°C" in html
+
+
+def test_radar_note_gives_local_time_and_says_when_there_is_no_radar():
+    assert "Radar at 01:00" in radar_note(MONDAY, 3600, True, "Oslo")
+    assert "No radar" not in radar_note(MONDAY, 3600, True, "Oslo")
+    assert "No radar reaches Oslo" in radar_note(MONDAY, 3600, False, "Oslo")
+    assert "No radar" not in radar_note(MONDAY, 3600, None, "Oslo")
+
+
 def test_format_precipitation():
     assert format_precipitation(0) == "0 mm"
     assert format_precipitation(0.42) == "0.4 mm"
@@ -329,6 +432,33 @@ def test_stitch_tiles_places_tiles_and_leaves_gaps_clear():
     assert image.getpixel((300, 10)) == (0, 0, 0, 0)
     assert image.getpixel((10, 300)) == (0, 0, 0, 0)
     assert image.getpixel((300, 300)) == (0, 0, 255, 255)
+
+
+def test_boost_opacity_multiplies_and_keeps_colours():
+    image = Image.new("RGBA", (2, 1), (10, 20, 30, 50))
+    image.putpixel((1, 0), (10, 20, 30, 0))
+    boosted = boost_opacity(image, 3)
+    assert boosted.getpixel((0, 0)) == (10, 20, 30, 150)
+    # Fully see-through stays see-through, and opacity stops at solid.
+    assert boosted.getpixel((1, 0))[3] == 0
+    assert boost_opacity(image, 10).getpixel((0, 0))[3] == 255
+
+
+def test_has_radar_coverage_reads_the_right_pixel():
+    grid = tile_grid(0.1, 0.1, 4)
+    image = Image.new("RGBA", (5 * 256, 3 * 256), (0, 0, 0, 0))
+    assert has_radar_coverage(image, 0.1, 0.1, 4, grid) is True
+    black = Image.new("RGBA", (5 * 256, 3 * 256), (0, 0, 0, 255))
+    assert has_radar_coverage(black, 0.1, 0.1, 4, grid) is False
+
+
+def test_radar_over_coverage_shades_lightly_and_keeps_radar_on_top():
+    coverage = Image.new("RGBA", (2, 1), (0, 0, 0, 255))
+    coverage.putpixel((1, 0), (0, 0, 0, 0))
+    radar = Image.new("RGBA", (2, 1), (0, 0, 0, 0))
+    result = radar_over_coverage(radar, coverage)
+    assert 0 < result.getpixel((0, 0))[3] < 255
+    assert result.getpixel((1, 0))[3] == 0
 
 
 def test_image_to_data_uri():
