@@ -2,12 +2,16 @@
 
 import pandas as pd
 
+from .findings import capped_comfort, part_reason, rate_comfort
+
 METRES_PER_SECOND_TO_KMH = 3.6
 
 # WHO global air quality guidelines 2021 (ISBN 978-92-4-003422-8), in µg/m³.
 # PM2.5, PM10 and NO2 are 24-hour levels; O3 is a peak 8-hour level.
 WHO_GUIDELINES = {"pm2_5": 15, "pm10": 45, "no2": 25, "o3": 100}
-POLLUTANT_NAMES = {"pm2_5": "PM2.5", "pm10": "PM10", "no2": "NO2", "o3": "O3"}
+
+AQI_BANDS = [(1, "Good"), (2, "Fair"), (3, "Moderate"), (4, "Poor"), (5, "Very poor")]
+PART_ORDER = {"Morning": 0, "Afternoon": 1, "Evening": 2}
 
 
 # Time
@@ -50,9 +54,8 @@ def history_series(log, location):
     if len(offsets) > 0:
         times = times + pd.to_timedelta(offsets[-1], unit="s")
     out["time"] = times
-    out["feels_delta"] = (out["feels_like"] - out["temperature"]).round(1)
     out["wind_kmh"] = (out["wind_speed"] * METRES_PER_SECOND_TO_KMH).round(1)
-    return out[["time", "is_local", "temperature", "feels_like", "feels_delta", "humidity", "wind_kmh"]]
+    return out[["time", "is_local", "temperature", "feels_like", "humidity", "wind_kmh"]]
 
 
 def daily_log_stats(series):
@@ -108,50 +111,44 @@ def comfort_score(steps):
 
 
 def forecast_measures(steps):
-    """Add everything Analytics shows: comfort, km/h, percent, millimetres, day and time labels."""
+    """Add what Analytics needs: comfort, km/h and millimetres."""
     out = comfort_score(steps)
     out = out.sort_values("dt")
     out["wind_kmh"] = out["wind_speed"] * METRES_PER_SECOND_TO_KMH
     out["gust_kmh"] = out["wind_gust"] * METRES_PER_SECOND_TO_KMH
-    out["pop_percent"] = out["pop"] * 100
     out["precipitation_mm"] = out["rain_3h"] + out["snow_3h"]
-    out["time_of_day"] = out["local_time"].dt.strftime("%H:%M")
     return out
 
 
-def week_grid(measures, column):
-    """A table for the Plan the week heatmap: one row per local date, one column per time of day."""
-    out = measures.pivot(index="local_date", columns="time_of_day", values=column)
-    return out.round(0)
+def part_of_day(hour):
+    """Morning runs from 06:00 to 12:00, afternoon to 18:00, evening to midnight. Night has no name."""
+    if hour < 6:
+        return None
+    if hour < 12:
+        return "Morning"
+    if hour < 18:
+        return "Afternoon"
+    return "Evening"
 
 
-def ranked_windows(measures, count=3):
-    """The most comfortable six-hour daytime windows (two steps in a row) that do not overlap.
-
-    measures comes from forecast_measures. Each row has the window's start and end,
-    its mean comfort score and the reasons: mean feels-like, highest chance of rain, strongest wind.
-    """
+def day_parts(measures):
+    """One row per day and part of day, in time order, rated in words with a short reason."""
     out = measures.copy()
-    out["score"] = ((out["comfort"] + out["comfort"].shift(-1)) / 2).round(0)
-    out["end_time"] = out["local_time"].shift(-1) + pd.to_timedelta(3, unit="h")
-    out["feels"] = (out["feels_like"] + out["feels_like"].shift(-1)) / 2
-    out["rain_chance"] = pd.concat([out["pop_percent"], out["pop_percent"].shift(-1)], axis=1).max(axis=1)
-    out["wind"] = pd.concat([out["wind_kmh"], out["wind_kmh"].shift(-1)], axis=1).max(axis=1)
-    out = out[(out["pod"] == "d") & (out["pod"].shift(-1) == "d")]
-    out = out.sort_values("score", ascending=False)
-
-    # Take the best window, then the next best that does not overlap one already taken.
-    kept = []
-    for _, row in out.iterrows():
-        overlaps = False
-        for taken in kept:
-            if row["local_time"] < taken["end_time"] and taken["local_time"] < row["end_time"]:
-                overlaps = True
-        if not overlaps and len(kept) < count:
-            kept.append(row)
-
-    columns = ["local_time", "end_time", "score", "feels", "rain_chance", "wind"]
-    return pd.DataFrame(kept, columns=columns)
+    out["part"] = [part_of_day(hour) for hour in out["local_time"].dt.hour]
+    out = out.dropna(subset=["part"])
+    out = out.groupby(["local_date", "part"]).agg(
+        comfort=("comfort", "mean"),
+        pop=("pop", "max"),
+        snow=("snow_3h", "sum"),
+        wind=("wind_kmh", "max"),
+        feels=("feels_like", "mean"),
+    ).reset_index()
+    out["comfort"] = [capped_comfort(score, pop, wind) for score, pop, wind in zip(out["comfort"], out["pop"], out["wind"])]
+    out["order"] = [PART_ORDER[part] for part in out["part"]]
+    out = out.sort_values(["local_date", "order"])
+    out["rating"] = [rate_comfort(score) for score in out["comfort"]]
+    out["reason"] = [part_reason(pop, snow, wind, feels) for pop, snow, wind, feels in zip(out["pop"], out["snow"], out["wind"], out["feels"])]
+    return out[["local_date", "part", "comfort", "pop", "snow", "wind", "feels", "rating", "reason"]]
 
 
 def next_rain(measures):
@@ -184,6 +181,14 @@ def pressure_tendency(steps):
 # Air quality
 
 
+def complete_days(air):
+    """Keep only local days with at least 20 hours of data, so part-days do not skew the counts."""
+    out = air.copy()
+    counts = out.groupby("local_date").agg(hours=("dt", "count")).reset_index()
+    full = counts[counts["hours"] >= 20]["local_date"].to_list()
+    return out[out["local_date"].isin(full)]
+
+
 def daily_guideline_levels(air):
     """Each local day's level for comparing with the WHO guidelines.
 
@@ -197,20 +202,13 @@ def daily_guideline_levels(air):
 
 
 def who_comparison(air):
-    """One row per pollutant: guideline, average level, and days over it, in whole numbers."""
+    """One row per pollutant, most often over its guideline first: days over and days measured."""
     daily = daily_guideline_levels(air)
     rows = []
     for pollutant, guideline in WHO_GUIDELINES.items():
         levels = daily[pollutant].dropna()
-        days = len(levels)
-        days_over = int((levels > guideline).sum())
-        average = None
-        share = 0
-        if days > 0:
-            average = round(float(levels.mean()))
-            share = round(days_over / days * 100)
-        rows.append({"pollutant": POLLUTANT_NAMES[pollutant], "guideline": guideline, "average_level": average, "days": days, "days_over": days_over, "share_over": share})
-    return pd.DataFrame(rows)
+        rows.append({"pollutant": pollutant, "guideline": guideline, "days": len(levels), "days_over": int((levels > guideline).sum())})
+    return pd.DataFrame(rows).sort_values("days_over", ascending=False)
 
 
 def days_over_any_guideline(air):
@@ -228,16 +226,18 @@ def daily_worst_aqi(air):
     return out.groupby("local_date").agg(aqi=("aqi", "max")).reset_index()
 
 
-def air_calendar(air):
-    """A calendar table of daily worst AQI: one row per weekday (0 is Monday), one column per week.
+def aqi_day_shares(air):
+    """Share of days per air quality band, judging each day by its worst hour. All five bands appear."""
+    daily = daily_worst_aqi(air)
+    counts = daily.groupby("aqi").agg(days=("aqi", "count")).reset_index()
 
-    Column names are the date of that week's Monday.
-    """
-    out = daily_worst_aqi(air)
-    dates = pd.to_datetime(out["local_date"])
-    out["weekday"] = dates.dt.day_of_week
-    out["week"] = (dates - pd.to_timedelta(out["weekday"], unit="D")).dt.strftime("%Y-%m-%d")
-    return out.pivot(index="weekday", columns="week", values="aqi")
+    out = pd.DataFrame(AQI_BANDS, columns=["aqi", "band"])
+    out = out.merge(counts, on="aqi", how="left")
+    out["days"] = out["days"].fillna(0).astype(int)
+    out["share"] = 0.0
+    if len(daily) > 0:
+        out["share"] = (out["days"] / len(daily) * 100).round(1)
+    return out
 
 
 def air_by_hour(air, pollutant):
@@ -250,26 +250,13 @@ def air_by_hour(air, pollutant):
 # City comparison
 
 
-def city_day_values(df, column, per_day):
-    """One value per location and local date. per_day says how to combine a day: "max" or "sum"."""
-    out = df.copy()
-    out = out.groupby(["location", "local_date"]).agg(value=(column, per_day)).reset_index()
-    out["value"] = out["value"].round(1)
-    return out
-
-
-def rank_cities(city_days, overall):
-    """Rank locations, highest first, by combining their days. overall is "mean", "sum" or "max"."""
-    out = city_days.copy()
-    out = out.groupby("location").agg(value=("value", overall)).reset_index()
-    out = out.sort_values("value", ascending=False)
-    out["value"] = out["value"].round(1)
-    out.insert(0, "rank", list(range(1, len(out) + 1)))
-    return out
-
-
-def city_day_grid(city_days, order):
-    """A table for the Compare heatmap: one row per location, in the given order, one column per date."""
-    out = city_days.pivot(index="location", columns="local_date", values="value")
-    keep = [name for name in order if name in out.index]
-    return out.loc[keep]
+def city_week_summary(measures):
+    """One row per location from combined forecasts: high, low, total rain and average wind."""
+    out = measures.copy()
+    out = out.groupby("location").agg(
+        high=("temperature", "max"),
+        low=("temperature", "min"),
+        rain_mm=("precipitation_mm", "sum"),
+        wind_kmh=("wind_kmh", "mean"),
+    ).reset_index()
+    return out.round(1)

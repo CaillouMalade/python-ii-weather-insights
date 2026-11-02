@@ -5,23 +5,22 @@ import pandas as pd
 from weather_app.analytics import (
     add_local_time,
     air_by_hour,
-    air_calendar,
-    city_day_grid,
-    city_day_values,
+    aqi_day_shares,
+    city_week_summary,
     comfort_score,
+    complete_days,
     daily_log_stats,
     daily_summary,
     daily_worst_aqi,
+    day_parts,
     days_over_any_guideline,
     forecast_measures,
     history_series,
     log_coverage,
     next_rain,
     next_steps,
+    part_of_day,
     pressure_tendency,
-    rank_cities,
-    ranked_windows,
-    week_grid,
     who_comparison,
     windiest_moment,
 )
@@ -67,7 +66,6 @@ def make_steps():
             "wind_speed": [1.0, 10.0, 2.0],
             "wind_gust": [2.0, 20.0, 3.0],
             "humidity": [50, 50, 50],
-            "pod": ["d", "d", "d"],
         }
     )
     return add_local_time(steps, 0)
@@ -108,12 +106,6 @@ def test_history_series_stays_utc_without_any_offset():
     series = history_series(make_log(), "Oslo, NO")
     assert series["is_local"].to_list() == [False, False]
     assert series["time"].to_list()[0] == pd.Timestamp("2026-01-01 09:00:00")
-
-
-def test_history_series_measures():
-    series = history_series(make_log(), "Madrid, ES")
-    assert series["feels_delta"].to_list() == [0.5, -1.0]
-    assert series["wind_kmh"].to_list() == [18.0, 36.0]
 
 
 def test_history_series_of_unknown_location_is_empty():
@@ -189,75 +181,6 @@ def test_comfort_score_known_answers():
     assert comfort_score(steps)["comfort"].to_list() == [100.0, 55.0, 81.0, 0.0]
 
 
-def test_forecast_measures_units_and_labels():
-    measures = forecast_measures(make_steps())
-    assert measures["wind_kmh"].to_list() == [3.6, 36.0, 7.2]
-    assert measures["pop_percent"].to_list() == [0.0, 50.0, 20.0]
-    assert measures["precipitation_mm"].to_list() == [0.0, 2.0, 1.5]
-    assert measures["time_of_day"].to_list() == ["09:00", "12:00", "15:00"]
-
-
-def test_week_grid_has_one_row_per_date_and_one_column_per_time():
-    measures = pd.DataFrame(
-        {
-            "local_date": ["2026-01-05", "2026-01-05", "2026-01-06"],
-            "time_of_day": ["09:00", "12:00", "09:00"],
-            "temperature": [10.4, 16.0, 7.6],
-        }
-    )
-    grid = week_grid(measures, "temperature")
-    assert grid.index.to_list() == ["2026-01-05", "2026-01-06"]
-    assert grid.columns.to_list() == ["09:00", "12:00"]
-    assert grid.loc["2026-01-05", "09:00"] == 10.0
-    assert grid.loc["2026-01-06", "09:00"] == 8.0
-    # Nothing was forecast for that cell, and it must stay empty rather than become zero.
-    assert pd.isna(grid.loc["2026-01-06", "12:00"])
-
-
-def make_window_measures():
-    """Five daytime steps then a night step. Scores peak at 12:00-15:00."""
-    return pd.DataFrame(
-        {
-            "dt": [1, 2, 3, 4, 5, 6],
-            "local_time": pd.to_datetime(
-                ["2026-01-05 06:00", "2026-01-05 09:00", "2026-01-05 12:00", "2026-01-05 15:00", "2026-01-05 18:00", "2026-01-05 21:00"]
-            ),
-            "pod": ["d", "d", "d", "d", "d", "n"],
-            "comfort": [10.0, 50.0, 90.0, 70.0, 30.0, 100.0],
-            "feels_like": [10.0, 14.0, 20.0, 22.0, 16.0, 21.0],
-            "pop_percent": [0.0, 10.0, 20.0, 40.0, 0.0, 0.0],
-            "wind_kmh": [5.0, 6.0, 7.0, 12.0, 8.0, 3.0],
-        }
-    )
-
-
-def test_ranked_windows_are_best_first_and_do_not_overlap():
-    windows = ranked_windows(make_window_measures())
-    # 12:00-18:00 (mean 80) wins. 09:00-15:00 and 15:00-21:00 overlap it, so 06:00-12:00 (mean 30) is next.
-    assert windows["score"].to_list() == [80.0, 30.0]
-    assert windows["local_time"].to_list() == [pd.Timestamp("2026-01-05 12:00"), pd.Timestamp("2026-01-05 06:00")]
-    assert windows["end_time"].to_list()[0] == pd.Timestamp("2026-01-05 18:00")
-
-
-def test_ranked_windows_give_the_reasons():
-    best = ranked_windows(make_window_measures()).to_dict("records")[0]
-    assert best["feels"] == 21.0
-    assert best["rain_chance"] == 40.0
-    assert best["wind"] == 12.0
-
-
-def test_ranked_windows_skip_night_and_can_be_empty():
-    measures = make_window_measures()
-    measures["pod"] = ["n", "n", "d", "n", "n", "n"]
-    assert len(ranked_windows(measures)) == 0
-
-
-def test_next_rain_and_windiest_moment():
-    measures = forecast_measures(make_steps())
-    assert next_rain(measures)["time_of_day"].to_list() == ["12:00"]
-    assert windiest_moment(measures)["time_of_day"].to_list() == ["12:00"]
-
-
 def test_next_rain_empty_when_dry():
     measures = pd.DataFrame({"precipitation_mm": [0.0, 0.0]})
     assert len(next_rain(measures)) == 0
@@ -294,38 +217,19 @@ def make_air():
     return add_local_time(air, 0)
 
 
-def test_who_comparison_counts_days_over_each_guideline():
-    rows = who_comparison(make_air()).to_dict("records")
-    assert rows[0] == {"pollutant": "PM2.5", "guideline": 15, "average_level": 15, "days": 2, "days_over": 1, "share_over": 50}
-    assert rows[1]["days_over"] == 0
-
-
-def test_who_comparison_uses_the_8_hour_mean_for_ozone():
-    ozone = who_comparison(make_air()).to_dict("records")[3]
-    # Day one's 8-hour means are all 50, day two's reach 120.
-    assert ozone["pollutant"] == "O3"
-    assert ozone["days_over"] == 1
-    assert ozone["average_level"] == 85
-
-
 def test_days_over_any_guideline():
     assert days_over_any_guideline(make_air()).to_dict("records") == [{"days": 2, "days_over": 1}]
 
 
+def test_complete_days_drop_part_days():
+    hours = [MONDAY + 12 * HOUR + hour * HOUR for hour in range(36)]
+    air = add_local_time(pd.DataFrame({"dt": hours}), 0)
+    # 12 hours on Monday, then all 24 on Tuesday.
+    assert complete_days(air)["local_date"].unique().tolist() == ["2026-01-06"]
+
+
 def test_daily_worst_aqi():
     assert daily_worst_aqi(make_air())["aqi"].to_list() == [1, 4]
-
-
-def test_air_calendar_places_days_by_week_and_weekday():
-    # Monday 5 and Tuesday 6 January, then Monday 12 January in the next week.
-    air = pd.DataFrame({"local_date": ["2026-01-05", "2026-01-06", "2026-01-12"], "aqi": [1, 2, 5]})
-    calendar = air_calendar(air)
-    assert calendar.columns.to_list() == ["2026-01-05", "2026-01-12"]
-    assert calendar.index.to_list() == [0, 1]
-    assert calendar.loc[0, "2026-01-05"] == 1
-    assert calendar.loc[1, "2026-01-05"] == 2
-    assert calendar.loc[0, "2026-01-12"] == 5
-    assert pd.isna(calendar.loc[1, "2026-01-12"])
 
 
 def test_air_by_hour_uses_local_hours():
@@ -337,36 +241,98 @@ def test_air_by_hour_uses_local_hours():
 # City comparison
 
 
-def make_combined():
-    return pd.DataFrame(
+def test_forecast_measures_units():
+    measures = forecast_measures(make_steps())
+    assert measures["wind_kmh"].to_list() == [3.6, 36.0, 7.2]
+    assert measures["gust_kmh"].to_list() == [7.2, 72.0, 10.8]
+    assert measures["precipitation_mm"].to_list() == [0.0, 2.0, 1.5]
+
+
+def test_next_rain_and_windiest_moment():
+    measures = forecast_measures(make_steps())
+    assert next_rain(measures)["dt"].to_list() == [MONDAY + 12 * HOUR]
+    assert windiest_moment(measures)["dt"].to_list() == [MONDAY + 12 * HOUR]
+
+
+def test_part_of_day_boundaries():
+    assert part_of_day(5) is None
+    assert part_of_day(6) == "Morning"
+    assert part_of_day(12) == "Afternoon"
+    assert part_of_day(18) == "Evening"
+
+
+def test_day_parts_groups_rates_and_gives_reasons():
+    # 03:00 is night and left out. 09:00 is morning. 12:00 and 15:00 are afternoon.
+    steps = pd.DataFrame(
         {
-            "location": ["Oslo, NO", "Oslo, NO", "Oslo, NO", "Madrid, ES", "Madrid, ES"],
-            "local_date": ["2026-01-05", "2026-01-05", "2026-01-06", "2026-01-05", "2026-01-05"],
-            "temperature": [0.0, 2.0, 4.0, 10.0, 20.0],
-            "precipitation_mm": [1.0, 2.0, 0.0, 0.0, 0.5],
+            "dt": [MONDAY + 3 * HOUR, MONDAY + 9 * HOUR, MONDAY + 12 * HOUR, MONDAY + 15 * HOUR],
+            "temperature": [5.0, 18.0, 20.0, 20.0],
+            "feels_like": [5.0, 21.0, 21.0, 21.0],
+            "pop": [0.0, 0.0, 0.8, 0.2],
+            "rain_3h": [0.0, 0.0, 2.0, 0.0],
+            "snow_3h": [0.0, 0.0, 0.0, 0.0],
+            "wind_speed": [1.0, 1.0, 1.0, 1.0],
+            "wind_gust": [1.0, 1.0, 1.0, 1.0],
+            "humidity": [50, 50, 50, 50],
         }
     )
+    parts = day_parts(forecast_measures(add_local_time(steps, 0))).to_dict("records")
+    assert [row["part"] for row in parts] == ["Morning", "Afternoon"]
+    assert parts[0]["rating"] == "Great"
+    assert parts[0]["reason"] == "pleasant"
+    # Afternoon's mean score is 85, but rain likely limits it to 59, so the word cannot contradict the weather.
+    assert parts[1]["comfort"] == 59
+    assert parts[1]["rating"] == "OK"
+    assert parts[1]["reason"] == "rain likely"
 
 
-def test_city_day_values_max_and_sum():
-    highs = city_day_values(make_combined(), "temperature", "max").to_dict("records")
-    assert highs[0] == {"location": "Madrid, ES", "local_date": "2026-01-05", "value": 20.0}
-    assert highs[1] == {"location": "Oslo, NO", "local_date": "2026-01-05", "value": 2.0}
-    rain = city_day_values(make_combined(), "precipitation_mm", "sum").to_dict("records")
-    assert rain[1]["value"] == 3.0
+def test_day_parts_keep_time_order_across_days():
+    steps = make_steps()
+    later = steps.copy()
+    later["dt"] = later["dt"] + 24 * HOUR
+    both = add_local_time(pd.concat([later, steps], ignore_index=True)[["dt", "temperature", "feels_like", "pop", "rain_3h", "snow_3h", "wind_speed", "wind_gust", "humidity"]], 0)
+    parts = day_parts(forecast_measures(both)).to_dict("records")
+    assert [(row["local_date"], row["part"]) for row in parts] == [
+        ("2026-01-05", "Morning"),
+        ("2026-01-05", "Afternoon"),
+        ("2026-01-06", "Morning"),
+        ("2026-01-06", "Afternoon"),
+    ]
 
 
-def test_rank_cities_highest_first():
-    highs = city_day_values(make_combined(), "temperature", "max")
-    ranking = rank_cities(highs, "mean")
-    assert ranking["location"].to_list() == ["Madrid, ES", "Oslo, NO"]
-    assert ranking["value"].to_list() == [20.0, 3.0]
-    assert ranking["rank"].to_list() == [1, 2]
+def test_who_comparison_counts_days_and_puts_the_worst_first():
+    rows = who_comparison(make_air()).to_dict("records")
+    # PM2.5 and ozone are each over on the polluted day. PM10 and NO2 never are.
+    assert rows[0] == {"pollutant": "pm2_5", "guideline": 15, "days": 2, "days_over": 1}
+    assert rows[1] == {"pollutant": "o3", "guideline": 100, "days": 2, "days_over": 1}
+    assert rows[2]["days_over"] == 0
 
 
-def test_city_day_grid_follows_the_given_order_and_leaves_gaps_empty():
-    highs = city_day_values(make_combined(), "temperature", "max")
-    grid = city_day_grid(highs, ["Oslo, NO", "Madrid, ES", "Lima, PE"])
-    assert grid.index.to_list() == ["Oslo, NO", "Madrid, ES"]
-    assert grid.columns.to_list() == ["2026-01-05", "2026-01-06"]
-    assert pd.isna(grid.loc["Madrid, ES", "2026-01-06"])
+def test_who_comparison_uses_the_8_hour_mean_for_ozone():
+    # 150 for only three hours, then 50: the 8-hour mean stays under 100 although single hours do not.
+    air = make_air()
+    air["o3"] = [50.0] * 21 + [150.0] * 3 + [50.0] * 24
+    ozone = who_comparison(air).to_dict("records")
+    days_over = [row["days_over"] for row in ozone if row["pollutant"] == "o3"]
+    assert days_over == [0]
+
+
+def test_aqi_day_shares_counts_all_five_bands_by_each_days_worst_hour():
+    shares = aqi_day_shares(make_air()).to_dict("records")
+    assert [row["band"] for row in shares] == ["Good", "Fair", "Moderate", "Poor", "Very poor"]
+    assert [row["days"] for row in shares] == [1, 0, 0, 1, 0]
+    assert [row["share"] for row in shares] == [50.0, 0.0, 0.0, 50.0, 0.0]
+
+
+def test_city_week_summary():
+    measures = pd.DataFrame(
+        {
+            "location": ["Oslo, NO", "Oslo, NO", "Madrid, ES"],
+            "temperature": [0.0, 2.0, 20.0],
+            "precipitation_mm": [1.0, 2.0, 0.0],
+            "wind_kmh": [10.0, 20.0, 5.0],
+        }
+    )
+    rows = city_week_summary(measures).to_dict("records")
+    assert rows[0] == {"location": "Madrid, ES", "high": 20.0, "low": 20.0, "rain_mm": 0.0, "wind_kmh": 5.0}
+    assert rows[1] == {"location": "Oslo, NO", "high": 2.0, "low": 0.0, "rain_mm": 3.0, "wind_kmh": 15.0}

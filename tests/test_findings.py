@@ -1,17 +1,206 @@
-# The sentences on the Analytics tab, with known answers.
+# The words on the Analytics tab, with known answers and the awkward edge cases.
 
 from weather_app.findings import (
-    comparison_finding,
-    coverage_text,
-    feels_text,
+    air_headline,
+    best_and_worst_parts,
+    capped_comfort,
+    coverage_sentence,
+    daily_range_sentence,
+    day_summary,
     format_duration,
-    peak_hour_finding,
-    plan_finding,
+    guideline_days_text,
+    join_words,
+    lowest_names,
+    part_name,
+    part_reason,
+    pollutant_text,
+    rain_amount_text,
+    rate_comfort,
+    sort_city_rows,
+    temperature_word,
+    time_of_day_text,
     too_little_history_text,
     trend_finding,
-    who_finding,
-    window_reason,
+    week_headline,
+    winner_names,
 )
+
+
+def part(name, comfort=90.0, pop=0.0, snow=0.0, wind=10.0, date="2026-01-09", rating="Great"):
+    # 2026-01-09 is a Friday.
+    return {"local_date": date, "part": name, "comfort": comfort, "pop": pop, "snow": snow, "wind": wind, "rating": rating}
+
+
+def test_rate_comfort_boundaries():
+    assert rate_comfort(80) == "Great"
+    assert rate_comfort(79.9) == "Good"
+    assert rate_comfort(60) == "Good"
+    assert rate_comfort(40) == "OK"
+    assert rate_comfort(39) == "Poor"
+
+
+def test_capped_comfort_stops_words_contradicting_the_weather():
+    assert capped_comfort(95, 0.0, 10) == 95
+    assert capped_comfort(95, 0.6, 10) == 59
+    assert capped_comfort(95, 0.0, 45) == 59
+    assert capped_comfort(95, 0.4, 10) == 79
+    assert capped_comfort(95, 0.0, 30) == 79
+    assert capped_comfort(30, 0.6, 10) == 30
+
+
+def test_part_reason_puts_the_plan_spoilers_first():
+    assert part_reason(0.6, 0, 50, 20) == "rain likely"
+    assert part_reason(0.4, 0, 50, 20) == "chance of rain"
+    assert part_reason(0.4, 1.0, 10, -2) == "snow likely"
+    assert part_reason(0.0, 0, 45, 20) == "very windy"
+    assert part_reason(0.0, 0, 30, 20) == "windy"
+    assert part_reason(0.0, 0, 10, -1) == "freezing"
+    assert part_reason(0.0, 0, 10, 4) == "cold"
+    assert part_reason(0.0, 0, 10, 8) == "chilly"
+    assert part_reason(0.0, 0, 10, 14) == "cool"
+    assert part_reason(0.0, 0, 10, 20) == "pleasant"
+    assert part_reason(0.0, 0, 10, 28) == "warm"
+    assert part_reason(0.0, 0, 10, 31) == "hot"
+    assert part_reason(0.0, 0, 10, 36) == "very hot"
+
+
+def test_temperature_word():
+    assert temperature_word(-1) == "freezing"
+    assert temperature_word(20) == "mild"
+    assert temperature_word(35) == "hot"
+
+
+def test_join_words():
+    assert join_words(["a"]) == "a"
+    assert join_words(["a", "b"]) == "a and b"
+    assert join_words(["a", "b", "c"]) == "a, b and c"
+
+
+def test_day_summary_dry_and_mild_windy_by_evening():
+    parts = [part("Morning"), part("Afternoon"), part("Evening", wind=30)]
+    assert day_summary(parts, 20) == "Dry and mild, windy by evening"
+
+
+def test_day_summary_rain_in_one_part():
+    parts = [part("Morning", pop=0.8), part("Afternoon"), part("Evening")]
+    assert day_summary(parts, 12) == "Cool with rain likely in the morning"
+
+
+def test_day_summary_rain_all_day_and_windy_throughout():
+    parts = [part("Morning", pop=0.6, wind=30), part("Afternoon", pop=0.9, wind=30)]
+    assert day_summary(parts, 25) == "Warm with rain likely all day, windy throughout"
+
+
+def test_day_summary_chance_of_snow():
+    parts = [part("Morning", pop=0.4, snow=0.5), part("Afternoon")]
+    assert day_summary(parts, -2) == "Freezing with a chance of snow in the morning"
+
+
+def test_day_summary_says_rain_and_wind_together_when_they_share_a_part():
+    parts = [part("Morning", pop=0.8, wind=30), part("Afternoon")]
+    assert day_summary(parts, 12) == "Cool with rain and wind in the morning"
+
+
+def test_day_summary_calls_it_snow_below_freezing():
+    assert day_summary([part("Morning", pop=0.4), part("Afternoon")], -1) == "Freezing with a chance of snow in the morning"
+
+
+def test_day_summary_one_part_is_not_all_day():
+    assert day_summary([part("Evening", pop=0.9)], 20) == "Mild with rain likely in the evening"
+
+
+def test_part_name_says_this_for_today():
+    assert part_name(part("Afternoon"), "2026-01-09") == "this afternoon"
+    assert part_name(part("Afternoon"), "2026-01-05") == "Friday afternoon"
+
+
+def test_best_and_worst_parts_prefer_the_earliest_on_a_tie():
+    first = part("Morning", comfort=70)
+    second = part("Afternoon", comfort=70)
+    assert best_and_worst_parts([first, second]) == (first, first)
+
+
+def test_week_headline_names_best_and_worst():
+    parts = [part("Morning", comfort=30, rating="Poor", date="2026-01-08"), part("Afternoon", comfort=90, rating="Great")]
+    assert week_headline(parts, "2026-01-05") == "Friday afternoon is your best bet; avoid Thursday morning."
+
+
+def test_week_headline_uses_this_for_today():
+    parts = [part("Evening", comfort=90, rating="Great", date="2026-01-05"), part("Morning", comfort=30, rating="Poor")]
+    assert week_headline(parts, "2026-01-05") == "This evening is your best bet; avoid Friday morning."
+
+
+def test_week_headline_when_everything_is_good():
+    parts = [part("Morning", comfort=70, rating="Good"), part("Afternoon", comfort=95, rating="Great")]
+    assert week_headline(parts, "2026-01-05") == "Friday afternoon is your best bet, and the whole week looks good."
+
+
+def test_week_headline_when_everything_is_poor():
+    parts = [part("Morning", comfort=10, rating="Poor"), part("Afternoon", comfort=30, rating="Poor")]
+    assert week_headline(parts, "2026-01-05") == "A tough week to be outside: Friday afternoon is the least bad."
+
+
+def test_week_headline_without_a_forecast():
+    assert week_headline([], "2026-01-05") == "There is not enough forecast to plan with yet."
+
+
+def test_rain_amount_text():
+    assert rain_amount_text(0) == "No rain"
+    assert rain_amount_text(0.4) == "Less than 1 mm"
+    assert rain_amount_text(9.6) == "About 10 mm"
+
+
+def test_guideline_days_text():
+    assert guideline_days_text(37, 90) == "Above health guidelines on 37 of the last 90 days"
+    assert guideline_days_text(0, 90) == "Within health guidelines on all of the last 90 days"
+    assert guideline_days_text(0, 0) == ""
+
+
+def test_pollutant_text():
+    assert pollutant_text(35, 90) == "Above the guideline on 35 of 90 days"
+    assert pollutant_text(0, 90) == "Within the guideline on all 90 days"
+    assert pollutant_text(90, 90) == "Above the guideline on all 90 days"
+    assert pollutant_text(0, 0) == "No data"
+
+
+def test_air_headline_says_names_not_codes():
+    assert air_headline("Tokyo", "Fair", "o3", 35) == "Air in Tokyo is usually fair. Ozone is the main concern."
+    assert air_headline("Tokyo", "Moderate", "pm2_5", 3) == "Air in Tokyo is usually moderate. Fine particles (PM2.5) are the main concern."
+
+
+def test_air_headline_with_nothing_over_a_guideline():
+    assert air_headline("Oslo", "Good", "o3", 0) == "Air in Oslo is usually good, and stays within health guidelines."
+
+
+def test_time_of_day_text():
+    assert time_of_day_text("o3", 4, 40.0, 15, 90.0) == "Best and worst time of day: Ozone tends to be lowest around 04:00 and highest around 15:00."
+    assert time_of_day_text("pm10", 4, 30.0, 15, 30.0) == "Coarse particles (PM10) tend to stay about the same all day."
+
+
+def test_lowest_names_includes_ties_and_skips_missing_values():
+    rows = [{"name": "A", "aqi": 2}, {"name": "B", "aqi": 1}, {"name": "C", "aqi": 1}, {"name": "D", "aqi": None}]
+    assert lowest_names(rows, "aqi") == ["B", "C"]
+    assert lowest_names([{"name": "A", "aqi": None}], "aqi") == []
+
+
+def test_winner_names():
+    assert winner_names(["Oslo"], 3) == "Oslo"
+    assert winner_names(["Oslo", "Lima"], 3) == "Oslo and Lima"
+    assert winner_names(["Oslo", "Lima"], 2) == "All your cities"
+    assert winner_names(["A", "B", "C"], 5) == "3 cities tie"
+
+
+def test_sort_city_rows():
+    rows = [
+        {"name": "Warm", "rain_mm": 9.0, "wind_kmh": 5.0, "aqi": None},
+        {"name": "Dry", "rain_mm": 0.0, "wind_kmh": 20.0, "aqi": 3},
+        {"name": "Clean", "rain_mm": 4.0, "wind_kmh": 10.0, "aqi": 1},
+    ]
+    names = lambda ordered: [row["name"] for row in ordered]
+    assert names(sort_city_rows(rows, "Warmest")) == ["Warm", "Dry", "Clean"]
+    assert names(sort_city_rows(rows, "Driest")) == ["Dry", "Clean", "Warm"]
+    assert names(sort_city_rows(rows, "Calmest")) == ["Warm", "Clean", "Dry"]
+    assert names(sort_city_rows(rows, "Cleanest air")) == ["Clean", "Dry", "Warm"]
 
 
 def test_format_duration_picks_a_natural_unit():
@@ -21,68 +210,22 @@ def test_format_duration_picks_a_natural_unit():
     assert format_duration(72) == "3 days"
 
 
-def test_coverage_text():
-    assert coverage_text("Madrid, ES", 3, 0.3) == "Madrid, ES: 3 readings over 18 minutes"
-    assert coverage_text("Oslo, NO", 1, 0) == "Oslo, NO: 1 reading"
+def test_coverage_sentence():
+    rows = [{"name": "Madrid", "readings": 7, "span_hours": 2.0}, {"name": "Oslo", "readings": 1, "span_hours": 0.0}]
+    assert coverage_sentence(rows) == "Your log has 7 readings for Madrid over 2 hours and 1 reading for Oslo."
+    assert coverage_sentence(list(reversed(rows))) == coverage_sentence(rows)
 
 
 def test_too_little_history_text():
-    assert too_little_history_text("Oslo, NO", 1, 0) == "Too little history for a trend yet. Oslo, NO: 1 reading. Readings build up as the app is used."
-
-
-def test_feels_text_uses_signed_wording():
-    assert feels_text(-0.2) == "felt 0.2 °C colder than the actual temperature"
-    assert feels_text(1.5) == "felt 1.5 °C warmer than the actual temperature"
-    assert feels_text(0.0) == "felt the same as the actual temperature"
+    assert too_little_history_text("Oslo", 2, 0.25) == "Not enough for a trend yet: 2 readings for Oslo over 15 minutes. A line appears at 3 readings over at least an hour."
 
 
 def test_trend_finding():
-    assert trend_finding([10.4, 18.0, 15.0], "Temperature", "°C") == "Logged temperature has ranged from 10 °C to 18 °C, and the latest reading is 15 °C."
-    assert trend_finding([0.5, -0.2], "Feels-like difference", "°C") == "The latest reading felt 0.2 °C colder than the actual temperature."
+    assert trend_finding([10.4, 18.0, 15.0], "Temperature", "°C") == "Temperature has ranged from 10 °C to 18 °C, and the latest reading is 15 °C."
+    assert trend_finding([9.0, 11.0], "Feels like", "°C") == "The feels-like temperature has ranged from 9 °C to 11 °C, and the latest reading is 11 °C."
+    assert trend_finding([50, 50], "Humidity", "%") == "Humidity has stayed at about 50 %."
 
 
-def test_plan_finding_for_each_measure():
-    assert plan_finding("Comfort", "Tuesday at 12:00", 84.0) == "The most comfortable moment is Tuesday at 12:00, scoring 84 out of 100."
-    assert plan_finding("Temperature", "Tuesday at 15:00", 21.6) == "The warmest moment is Tuesday at 15:00, at 22 °C."
-    assert plan_finding("Wind", "Friday at 03:00", 40.0) == "The windiest moment is Friday at 03:00, at 40 km/h."
-    assert plan_finding("Chance of rain", "Friday at 03:00", 60.0) == "Rain is most likely Friday at 03:00, with a 60 % chance."
-
-
-def test_plan_finding_makes_no_rain_claim_when_dry():
-    assert plan_finding("Chance of rain", "Monday at 00:00", 0.0) == "No rain is expected in the forecast."
-
-
-def test_window_reason():
-    assert window_reason(20.6, 10.0, 14.2) == "Feels like 21 °C, 10 % chance of rain, wind up to 14 km/h"
-
-
-def test_who_finding_names_the_worst_pollutant():
-    rows = [{"pollutant": "PM2.5", "days_over": 3, "days": 90}, {"pollutant": "O3", "days_over": 10, "days": 90}]
-    assert who_finding(rows) == "O3 went over its WHO guideline most often: on 10 of 90 days."
-
-
-def test_who_finding_claims_nothing_when_all_are_within():
-    rows = [{"pollutant": "PM2.5", "days_over": 0, "days": 90}, {"pollutant": "O3", "days_over": 0, "days": 90}]
-    assert who_finding(rows) == "All four pollutants stayed within their WHO guidelines over these 90 days."
-
-
-def test_peak_hour_finding():
-    assert peak_hour_finding("PM2.5", 8, 13.6) == "PM2.5 is highest around 08:00 local time, at 14 µg/m³ on average."
-
-
-def test_comparison_finding_names_each_city_once():
-    text = comparison_finding("Temperature", "Madrid, ES", 20.0, "Oslo, NO", 3.0)
-    assert text == "Madrid, ES looks warmest, with highs averaging 20 °C, against 3 °C in Oslo, NO, the coolest."
-    assert text.count("Madrid, ES") == 1
-
-
-def test_comparison_finding_rain_wind_and_air():
-    assert comparison_finding("Rain", "A", 9.6, "B", 1.0) == "A expects the most rain, 9.6 mm, against 1.0 mm in B, the driest."
-    assert comparison_finding("Wind", "A", 40.0, "B", 20.0) == "A gets the strongest wind, up to 40 km/h, against 20 km/h in B, the calmest."
-    # A high AQI is bad, so the city at the bottom of the ranking is the cleanest.
-    assert comparison_finding("Air quality", "A", 3.5, "B", 1.5) == "B looks cleanest, with an average worst AQI of 1.5, against 3.5 in A."
-
-
-def test_comparison_finding_handles_no_rain_and_ties():
-    assert comparison_finding("Rain", "A", 0.0, "B", 0.0) == "No rain is expected in any of your cities."
-    assert comparison_finding("Wind", "A", 20.0, "B", 20.0) == "Your cities look the same on this measure."
+def test_daily_range_sentence():
+    assert daily_range_sentence(["Mon 3", "Tue 4"], [4.0, 8.0]) == "The temperature usually moves about 6 °C within a day; the biggest swing was 8 °C on Tue 4."
+    assert daily_range_sentence(["Mon 3"], [4.0]) == ""
