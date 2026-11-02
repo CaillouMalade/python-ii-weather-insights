@@ -53,6 +53,9 @@ def show_city_search(where):
         key="city_search",
         on_change=add_chosen_city,
         label_visibility="collapsed",
+        # The default, "fuzzy", re-sorts by match score, so "London" picked London, Canada.
+        # "contains" keeps the file's order, which is largest city first.
+        filter_mode="contains",
     )
 
 
@@ -66,8 +69,8 @@ def show_sidebar(weather_by_city, selected, now):
         name = location["location"]
         # An invisible button lies over the card (see style.py), so the whole card is tappable.
         with st.sidebar.container(key=f"city-{number}"):
-            st.html(city_card(location["city"], weather["reading"], weather["high"], weather["low"], weather["note"], name == selected, now))
-            st.button(f"Open {location['city']}", key=f"open-{number}", on_click=select_city, args=(name,))
+            st.html(city_card(weather["name"], weather["reading"], weather["high"], weather["low"], weather["note"], name == selected, now))
+            st.button(f"Open {weather['name']}", key=f"open-{number}", on_click=select_city, args=(name,))
             st.button("✕", key=f"remove-{number}", on_click=remove_city, args=(name,))
 
 

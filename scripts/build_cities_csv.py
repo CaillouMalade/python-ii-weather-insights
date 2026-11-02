@@ -18,8 +18,8 @@ OUTPUT_PATH = Path(__file__).resolve().parents[1] / "data" / "cities.csv"
 folder = Path(sys.argv[1])
 
 # These files have no header row; the column positions come from the GeoNames readme.
-cities = pd.read_csv(folder / "cities15000.txt", sep="\t", header=None, keep_default_na=False, usecols=[1, 2, 4, 5, 8, 10, 14])
-cities.columns = ["city", "ascii_name", "latitude", "longitude", "country_code", "admin_code", "population"]
+cities = pd.read_csv(folder / "cities15000.txt", sep="\t", header=None, keep_default_na=False, usecols=[1, 2, 4, 5, 7, 8, 10, 14])
+cities.columns = ["city", "ascii_name", "latitude", "longitude", "feature_code", "country_code", "admin_code", "population"]
 
 admins = pd.read_csv(folder / "admin1CodesASCII.txt", sep="\t", header=None, keep_default_na=False, usecols=[0, 1])
 admins.columns = ["admin_key", "admin"]
@@ -28,7 +28,9 @@ admins.columns = ["admin_key", "admin"]
 countries = pd.read_csv(folder / "countryInfo.txt", sep="\t", comment="#", header=None, keep_default_na=False, usecols=[0, 4])
 countries.columns = ["country_code", "country"]
 
-cities = cities.sort_values("population", ascending=False).head(CITY_COUNT)
+# The largest cities, plus every national capital however small (feature code PPLC).
+cities = cities.sort_values("population", ascending=False).reset_index(drop=True)
+cities = cities[(cities.index < CITY_COUNT) | (cities["feature_code"] == "PPLC")].copy()
 cities["admin_key"] = cities["country_code"] + "." + cities["admin_code"]
 cities = cities.merge(admins, on="admin_key", how="left").merge(countries, on="country_code", how="left")
 cities["admin"] = cities["admin"].fillna("")

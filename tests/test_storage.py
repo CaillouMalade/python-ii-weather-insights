@@ -104,3 +104,12 @@ def test_city_file_is_usable():
     assert cities["location"].is_unique
     # Namibia's code "NA" must not be read as a missing value.
     assert "NA" in cities["country_code"].to_list()
+
+
+def test_city_file_has_small_capitals_and_is_largest_first():
+    cities = load_city_list()
+    assert "Reykjavík, IS" in cities["location"].to_list()
+    populations = cities["population"].to_list()
+    assert populations == sorted(populations, reverse=True)
+    locations = cities["location"].to_list()
+    assert locations.index("London, GB") < locations.index("London, CA")

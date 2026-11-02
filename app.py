@@ -2,7 +2,7 @@
 
 import streamlit as st
 
-from weather_app.display import background_for, is_night
+from weather_app.display import background_for, display_names, is_night
 from weather_app.fetching import load_city_weather, now_seconds
 from weather_app.sidebar import show_phone_city_picker, show_sidebar
 from weather_app.storage import load_saved_cities
@@ -17,6 +17,9 @@ if "locations" not in st.session_state:
 
 # Every saved city is fetched here, because the sidebar shows them all. One failure stays with its city.
 weather_by_city = [load_city_weather(location) for location in st.session_state["locations"]]
+shown_names = display_names(st.session_state["locations"])
+for number in range(len(weather_by_city)):
+    weather_by_city[number]["name"] = shown_names[number]
 names = [weather["location"]["location"] for weather in weather_by_city]
 
 # The selection can point to a city that was just removed.

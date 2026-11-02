@@ -4992,3 +4992,84 @@ location,label,city,admin,country_code,country,latitude,longitude,population
 "Yuanlin, TW","Yuanlin, Taiwan",Yuanlin,Taiwan,TW,Taiwan,23.95671,120.57608,124725
 "Santa Tecla, SV","Santa Tecla, El Salvador",Santa Tecla,La Libertad Department,SV,El Salvador,13.67741,-89.28335,124694
 "Sorriso, BR","Sorriso, Brazil",Sorriso,Mato Grosso,BR,Brazil,-12.54528,-55.71139,124665
+"Bern, CH","Bern, Switzerland",Bern,Bern,CH,Switzerland,46.94809,7.44744,121631
+"Reykjavík, IS","Reykjavík (Reykjavik), Iceland",Reykjavík,Capital Region,IS,Iceland,64.13548,-21.89541,118918
+"Male, MV","Male, Maldives",Male,Kaafu Atoll,MV,Maldives,4.17521,73.50916,103693
+"Thimphu, BT","Thimphu, Bhutan",Thimphu,Thimphu District,BT,Bhutan,27.46609,89.64191,98676
+"Bridgetown, BB","Bridgetown, Barbados",Bridgetown,Saint Michael,BB,Barbados,13.10732,-59.62021,98511
+"Nouméa, NC","Nouméa (Noumea), New Caledonia",Nouméa,South Province,NC,New Caledonia,-22.27407,166.44884,93060
+"Fort-de-France, MQ","Fort-de-France, Martinique",Fort-de-France,Martinique,MQ,Martinique,14.60365,-61.07418,89995
+"Suva, FJ","Suva, Fiji",Suva,Central,FJ,Fiji,-18.13683,178.42531,77366
+"Luxembourg, LU","Luxembourg, Luxembourg",Luxembourg,Luxembourg,LU,Luxembourg,49.60982,6.13268,76684
+"Mbabane, SZ","Mbabane, Eswatini",Mbabane,Hhohho Region,SZ,Eswatini,-26.31667,31.13333,76218
+"Moroni, KM","Moroni, Comoros",Moroni,Grande Comore,KM,Comoros,-11.70216,43.25506,74749
+"Gitega, BI","Gitega, Burundi",Gitega,Gitega,BI,Burundi,-3.42708,29.92463,64904
+"Bandar Seri Begawan, BN","Bandar Seri Begawan, Brunei",Bandar Seri Begawan,Brunei-Muara District,BN,Brunei,4.89035,114.94006,64409
+"Cayenne, GF","Cayenne, French Guiana",Cayenne,Guyane,GF,French Guiana,4.9381,-52.33455,61550
+"Kuwait City, KW","Kuwait City, Kuwait",Kuwait City,Al Asimah,KW,Kuwait,29.367,47.97429,60064
+"Honiara, SB","Honiara, Solomon Islands",Honiara,Honiara,SB,Solomon Islands,-9.43333,159.95,56298
+"Mamoudzou, YT","Mamoudzou, Mayotte",Mamoudzou,Mamoudzou,YT,Mayotte,-12.78234,45.22878,54831
+"São Tomé, ST","São Tomé (Sao Tome), Sao Tome and Principe",São Tomé,São Tomé Island,ST,Sao Tome and Principe,0.33756,6.7299,53300
+"Saint John’s, AG","Saint John’s (Saint John's), Antigua and Barbuda",Saint John’s,Saint John Parish,AG,Antigua and Barbuda,17.12096,-61.84329,51737
+"Port of Spain, TT","Port of Spain, Trinidad and Tobago",Port of Spain,Port of Spain,TT,Trinidad and Tobago,10.66668,-61.51889,49031
+"Saipan, MP","Saipan, Northern Mariana Islands",Saipan,Saipan,MP,Northern Mariana Islands,15.21233,145.7545,48220
+"Apia, WS","Apia, Samoa",Apia,Tuamasaga,WS,Samoa,-13.83333,-171.76666,40407
+"Tarawa, KI","Tarawa, Kiribati",Tarawa,Gilbert Islands,KI,Kiribati,1.3278,172.97696,40311
+"Banjul, GM","Banjul, Gambia",Banjul,Banjul,GM,Gambia,13.45274,-16.57803,37274
+"Port-Vila, VU","Port-Vila, Vanuatu",Port-Vila,Shefa,VU,Vanuatu,-17.73648,168.31366,35901
+"Monaco, MC","Monaco, Monaco",Monaco,Municipality of Monaco,MC,Monaco,43.73718,7.42145,32965
+"Oranjestad, AW","Oranjestad, Aruba",Oranjestad,,AW,Aruba,12.52398,-70.02703,29998
+"George Town, KY","George Town, Cayman Islands",George Town,George Town,KY,Cayman Islands,19.2866,-81.37436,29370
+"Saint Helier, JE","Saint Helier, Jersey",Saint Helier,St Helier,JE,Jersey,49.18804,-2.10491,28000
+"Gibraltar, GI","Gibraltar, Gibraltar",Gibraltar,,GI,Gibraltar,36.14474,-5.35257,26544
+"Papeete, PF","Papeete, French Polynesia",Papeete,Îles du Vent,PF,French Polynesia,-17.5347,-149.56843,26357
+"Douglas, IM","Douglas, Isle of Man",Douglas,Douglas,IM,Isle of Man,54.15,-4.48333,26218
+"Majuro, MH","Majuro, Marshall Islands",Majuro,Majuro Atoll,MH,Marshall Islands,7.08971,171.38027,25400
+"Kingstown, VC","Kingstown, Saint Vincent and the Grenadines",Kingstown,Saint George Parish,VC,Saint Vincent and the Grenadines,13.15527,-61.22742,24518
+"Victoria, SC","Victoria, Seychelles",Victoria,La Rivière Anglaise,SC,Seychelles,-4.62001,55.45501,22881
+"Nuku‘alofa, TO","Nuku‘alofa (Nuku'alofa), Tonga",Nuku‘alofa,Tongatapu,TO,Tonga,-21.13683,-175.20114,22400
+"Andorra la Vella, AD","Andorra la Vella, Andorra",Andorra la Vella,Andorra la Vella,AD,Andorra,42.50779,1.52109,20430
+"Castries, LC","Castries, Saint Lucia",Castries,Castries,LC,Saint Lucia,13.9957,-61.00614,20000
+"Charlotte Amalie, VI","Charlotte Amalie, U.S. Virgin Islands",Charlotte Amalie,Saint Thomas Island,VI,U.S. Virgin Islands,18.3419,-64.9307,20000
+"Roseau, DM","Roseau, Dominica",Roseau,Saint George Parish,DM,Dominica,15.30174,-61.38808,16571
+"Saint Peter Port, GG","Saint Peter Port, Guernsey",Saint Peter Port,St Peter Port,GG,Guernsey,49.45981,-2.53527,16488
+"Nuuk, GL","Nuuk, Greenland",Nuuk,Sermersooq,GL,Greenland,64.18347,-51.72157,14798
+"Belmopan, BZ","Belmopan, Belize",Belmopan,Cayo District,BZ,Belize,17.25376,-88.76401,13381
+"Avarua, CK","Avarua, Cook Islands",Avarua,Rarotonga,CK,Cook Islands,-21.2075,-159.77546,13373
+"Tórshavn, FO","Tórshavn (Torshavn), Faroe Islands",Tórshavn,Streymoy,FO,Faroe Islands,62.00973,-6.77164,13200
+"Basseterre, KN","Basseterre, Saint Kitts and Nevis",Basseterre,Saint George Basseterre,KN,Saint Kitts and Nevis,17.2955,-62.72499,12920
+"Pago Pago, AS","Pago Pago, American Samoa",Pago Pago,Eastern District,AS,American Samoa,-14.27806,-170.7025,11500
+"Basse-Terre, GP","Basse-Terre, Guadeloupe",Basse-Terre,Guadeloupe,GP,Guadeloupe,15.99714,-61.73214,11472
+"Mariehamn, AX","Mariehamn, Aland Islands",Mariehamn,Mariehamn,AX,Aland Islands,60.09726,19.93481,10682
+"Kralendijk, BQ","Kralendijk, Bonaire, Saint Eustatius and Saba ",Kralendijk,Bonaire,BQ,"Bonaire, Saint Eustatius and Saba ",12.15,-68.26667,10620
+"Road Town, VG","Road Town, British Virgin Islands",Road Town,,VG,British Virgin Islands,18.42693,-64.62079,8449
+"Saint George's, GD","Saint George's, Grenada",Saint George's,Saint George Parish,GD,Grenada,12.05288,-61.75226,7500
+"Palikir, FM","Palikir, Micronesia",Palikir,Pohnpei State,FM,Micronesia,6.92477,158.16109,6942
+"Valletta, MT","Valletta, Malta",Valletta,Valletta,MT,Malta,35.89968,14.5148,6794
+"Funafuti, TV","Funafuti, Tuvalu",Funafuti,Funafuti,TV,Tuvalu,-8.52425,179.19417,6320
+"Saint-Pierre, PM","Saint-Pierre, Saint Pierre and Miquelon",Saint-Pierre,Saint-Pierre,PM,Saint Pierre and Miquelon,46.77914,-56.1773,6200
+"Gustavia, BL","Gustavia, Saint Barthelemy",Gustavia,,BL,Saint Barthelemy,17.89618,-62.84978,5988
+"Marigot, MF","Marigot, Saint Martin",Marigot,,MF,Saint Martin,18.06819,-63.08302,5700
+"Vaduz, LI","Vaduz, Liechtenstein",Vaduz,Vaduz,LI,Liechtenstein,47.14151,9.52154,5197
+"San Marino, SM","San Marino, San Marino",San Marino,San Marino,SM,San Marino,43.93667,12.44639,4500
+"Cockburn Town, TC","Cockburn Town, Turks and Caicos Islands",Cockburn Town,,TC,Turks and Caicos Islands,21.46122,-71.14188,3720
+"Longyearbyen, SJ","Longyearbyen, Svalbard and Jan Mayen",Longyearbyen,Svalbard,SJ,Svalbard and Jan Mayen,78.22334,15.64689,2368
+"Stanley, FK","Stanley, Falkland Islands",Stanley,,FK,Falkland Islands,-51.69382,-57.85701,2213
+"The Valley, AI","The Valley, Anguilla",The Valley,The Valley,AI,Anguilla,18.21704,-63.05783,2035
+"Ciudad de la Paz, GQ","Ciudad de la Paz, Equatorial Guinea",Ciudad de la Paz,Djibloho,GQ,Equatorial Guinea,1.5925,10.82361,2000
+"Philipsburg, SX","Philipsburg, Sint Maarten",Philipsburg,,SX,Sint Maarten,18.026,-63.04582,1400
+"Flying Fish Cove, CX","Flying Fish Cove, Christmas Island",Flying Fish Cove,,CX,Christmas Island,-10.42172,105.67912,1355
+"Mata-Utu, WF","Mata-Utu, Wallis and Futuna",Mata-Utu,Uvea,WF,Wallis and Futuna,-13.28163,-176.17453,1200
+"Yaren, NR","Yaren, Nauru",Yaren,Yaren District,NR,Nauru,-0.55085,166.9252,1100
+"Hagåtña, GU","Hagåtña (Hagatna), Guam",Hagåtña,Hagatna,GU,Guam,13.47567,144.74886,1051
+"Hamilton, BM","Hamilton, Bermuda",Hamilton,Hamilton city,BM,Bermuda,32.2949,-64.78303,902
+"Kingston, NF","Kingston, Norfolk Island",Kingston,,NF,Norfolk Island,-29.05459,167.96628,880
+"Vatican City, VA","Vatican City, Vatican",Vatican City,,VA,Vatican,41.90268,12.45414,829
+"Jamestown, SH","Jamestown, Saint Helena",Jamestown,Saint Helena,SH,Saint Helena,-15.92488,-5.71816,637
+"Alofi, NU","Alofi, Niue",Alofi,,NU,Niue,-19.05294,-169.91957,624
+"West Island, CC","West Island, Cocos Islands",West Island,,CC,Cocos Islands,-12.15681,96.82251,120
+"Adamstown, PN","Adamstown, Pitcairn",Adamstown,,PN,Pitcairn,-25.06597,-130.10147,46
+"Port-aux-Français, TF","Port-aux-Français (Port-aux-Francais), French Southern Territories",Port-aux-Français,Kerguelen,TF,French Southern Territories,-49.34916,70.21937,45
+"Grytviken, GS","Grytviken, South Georgia and the South Sandwich Islands",Grytviken,,GS,South Georgia and the South Sandwich Islands,-54.28111,-36.5092,2
+"Plymouth, MS","Plymouth, Montserrat",Plymouth,Saint Anthony,MS,Montserrat,16.70555,-62.21292,0
+"Ngerulmud, PW","Ngerulmud, Palau",Ngerulmud,Melekeok,PW,Palau,7.50077,134.6238,0

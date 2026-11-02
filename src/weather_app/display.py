@@ -76,8 +76,36 @@ def background_for(weather_id, night):
 
 
 def high_low_text(high, low):
-    """The same wording everywhere. The page keeps the two spaces (see .high-low in style.py)."""
-    return f"High {high:.0f}°  Low {low:.0f}°"
+    """The same wording everywhere. The page keeps the two spaces (see .high-low in style.py).
+
+    Late in the day the forecast can have nothing left, and the current reading's own range
+    can be a single value. "High 31° Low 31°" would mislead, so an equal pair shows nothing.
+    """
+    if round(high) == round(low):
+        return ""
+    return f"High {round(high)}°  Low {round(low)}°"
+
+
+def display_names(locations):
+    """Return the name to show for each location: just the city, unless that would be ambiguous.
+
+    Same city name: add the country, which is the last part of the label. Still the same
+    (two Springfields in one country): use the location, which includes the region.
+    """
+    city_names = [location["city"] for location in locations]
+    with_country = []
+    for location in locations:
+        with_country.append(f"{location['city']}, {location['label'].split(', ')[-1]}")
+
+    names = []
+    for number in range(len(locations)):
+        if city_names.count(city_names[number]) == 1:
+            names.append(city_names[number])
+        elif with_country.count(with_country[number]) == 1:
+            names.append(with_country[number])
+        else:
+            names.append(locations[number]["location"])
+    return names
 
 
 def aqi_label(aqi):
