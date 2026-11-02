@@ -54,3 +54,19 @@ Known limits:
 - Removing a city lasts until the page is refreshed, because the list is reseeded from the log and log rows are never deleted.
 - Cities are identified by "Name, CC", so two places with the same name in one country count as one.
 - Team members remain unknown. The brief requires commits from every member.
+
+## 2 November 2026 — v0.1 rework (branch release/v0.1, not merged)
+
+Arthur's feedback turned v0.1 into a stock-style weather app: top tabs, saved-city cards in the sidebar, a searchable city dropdown from `data/cities.csv` (GeoNames, CC BY 4.0), a server-side stitched weather map, and four analytics sections. Saved cities now live in `data/saved_cities.csv` (ignored by Git), not in the log. The earlier note that a removed city returns after a refresh no longer applies.
+
+The log schema grew from 9 to 24 columns. `migrate_log` upgrades older files automatically; the 6 real rows in this worktree were migrated with every old value unchanged and the new columns blank. `data/weather_log.csv` is still uncommitted, by decision.
+
+Verified without a real key or live API call: 74 tests pass; real Chrome against a throwaway fake server at 1280, 390 and 844 px wide; no test key or `appid` found in page HTML, network requests or WebSocket frames; no-key mode opens, and log analytics work on a copy of the real log.
+
+Not verified yet: the real API (including field names, the UV endpoint and real tile appearance); the 90-day history size; a real phone (only narrow desktop Chrome windows).
+
+Known limits:
+- The free-text "bad city name" path is gone because the dropdown replaced it, which needs explaining against the brief.
+- Only the roughly 5,000 largest cities can be added.
+- On wide windows, or when panning, the map's weather layer ends at its fixed 5-by-3 tile area.
+- Team members remain unknown, and the brief requires commits from every member.
