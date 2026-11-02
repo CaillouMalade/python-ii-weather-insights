@@ -26,7 +26,7 @@ from .analytics import (
     windiest_moment,
 )
 from .config import API_KEY, SETUP_MESSAGE
-from .display import aqi_label, format_local_time
+from .display import aqi_label, format_local_time, rain_axis_ticks
 from .fetching import fetch_air_forecast, fetch_air_history, fetch_air_now, now_seconds
 from .findings import (
     air_headline,
@@ -171,7 +171,9 @@ def show_outlook_chart(measures):
     fig = go.Figure()
     fig.add_bar(x=measures["local_time"], y=measures["precipitation_mm"], name="Rain", marker_color=RAIN_COLOR, yaxis="y2", opacity=0.45)
     fig.add_scatter(x=measures["local_time"], y=measures["temperature"], name="Temperature", mode="lines", line=dict(color=TEMPERATURE_COLOR, width=2.5))
-    fig.update_layout(yaxis2=dict(title="Rain (mm)", overlaying="y", side="right", rangemode="tozero", showgrid=False, tickformat=".1f", nticks=3))
+    # Set by hand: left alone, this axis lines up with the temperature gridlines and gets odd values.
+    ticks = rain_axis_ticks(measures["precipitation_mm"].max())
+    fig.update_layout(yaxis2=dict(title="Rain (mm)", overlaying="y", side="right", range=[0, ticks[-1]], tickmode="array", tickvals=ticks, showgrid=False))
     style_chart(fig, "Local time", "Temperature (°C)", 260, legend=True)
 
 
@@ -218,7 +220,7 @@ def show_air(weather):
     show_finding(air_headline(weather["name"], usual["band"], worst["pollutant"], worst["days_over"]))
 
     with st.container(key="panel-air-days"):
-        st.html(f'<div class="card-title">How the last {len(daily_worst_aqi(air))} days looked</div>' + cards.air_share_bar(shares.to_dict("records")))
+        st.html('<div class="card-title">How the last 3 months looked</div>' + cards.air_share_bar(shares.to_dict("records")))
 
     with st.container(key="panel-air-pollutants"):
         st.html('<div class="card-title">What is in the air</div>' + cards.pollutant_rows(guidelines))
@@ -228,7 +230,7 @@ def show_air(weather):
             st.write(time_of_day_text(worst["pollutant"], int(rows[0]["hour"]), rows[0]["level"], int(rows[-1]["hour"]), rows[-1]["level"]))
 
     show_air_outlook(weather)
-    st.caption("Modelled by OpenWeatherMap, not measured at a local station. A day counts by its worst hour. Health guidelines: WHO, 2021.")
+    st.caption("Modelled by OpenWeatherMap, not measured at a local station. A day counts by its worst hour, and only days with full data count. Health guidelines: WHO, 2021.")
 
 
 def show_air_outlook(weather):

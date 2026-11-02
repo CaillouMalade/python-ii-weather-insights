@@ -151,8 +151,9 @@ def test_rain_amount_text():
 
 
 def test_guideline_days_text():
-    assert guideline_days_text(37, 90) == "Above health guidelines on 37 of the last 90 days"
-    assert guideline_days_text(0, 90) == "Within health guidelines on all of the last 90 days"
+    assert guideline_days_text(37, 82) == "Above health guidelines on 37 days in the last 3 months"
+    assert guideline_days_text(1, 84) == "Above health guidelines on 1 day in the last 3 months"
+    assert guideline_days_text(0, 90) == "Within health guidelines over the last 3 months"
     assert guideline_days_text(0, 0) == ""
 
 

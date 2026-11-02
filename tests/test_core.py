@@ -8,7 +8,7 @@ import pytest
 from PIL import Image
 
 from weather_app.cards import air_share_bar, air_tile, city_card, city_table, detail_tiles, feels_small, format_precipitation, header, map_legend, next_hours_strip, plan_day, pollutant_rows, radar_note
-from weather_app.client import APIClient, RainViewerClient, WeatherClient, validate_location
+from weather_app.client import APIClient, RainViewerClient, WeatherClient, validate_city, validate_location
 from weather_app.display import (
     aqi_label,
     aqi_position,
@@ -19,7 +19,9 @@ from weather_app.display import (
     high_low_text,
     format_local_time,
     is_night,
+    rain_axis_ticks,
     range_bar,
+    split_name,
     today_high_low,
     uv_label,
     weather_emoji,
@@ -81,6 +83,47 @@ def test_rainviewer_with_no_frames_gives_a_clear_error():
 
 
 # Input validation
+
+
+def test_validate_city_strips_spaces_and_accepts_accents():
+    assert validate_city("  São Paulo ") == "São Paulo"
+
+
+def test_validate_city_has_a_message_for_each_problem():
+    with pytest.raises(ValueError, match="Please enter a city name"):
+        validate_city("   ")
+    with pytest.raises(ValueError, match="contains no letters"):
+        validate_city("12345")
+    with pytest.raises(ValueError, match="too long"):
+        validate_city("a" * 101)
+    with pytest.raises(ValueError, match="must be text"):
+        validate_city(None)
+
+
+def test_find_city_rejects_bad_input_before_any_call():
+    with pytest.raises(ValueError, match="Please enter a city name"):
+        WeatherClient("not-a-real-key").find_city("")
+
+
+def test_parse_city_makes_a_location_like_the_dropdown_ones():
+    data = [{"name": "Bergen", "country": "NO", "lat": 60.39, "lon": 5.32}]
+    assert WeatherClient("not-a-real-key")._parse_city(data, "bergen") == {
+        "location": "Bergen, NO",
+        "label": "Bergen, NO",
+        "city": "Bergen",
+        "latitude": 60.39,
+        "longitude": 5.32,
+    }
+
+
+def test_parse_city_says_when_a_city_is_not_found():
+    with pytest.raises(ValueError, match="City 'Atlantis' was not found"):
+        WeatherClient("not-a-real-key")._parse_city([], "Atlantis")
+
+
+def test_parse_city_with_a_missing_field_gives_a_clear_error():
+    with pytest.raises(ValueError, match="unexpected format"):
+        WeatherClient("not-a-real-key")._parse_city([{"name": "Bergen"}], "Bergen")
 
 
 def test_validate_location_accepts_a_good_location():
@@ -245,6 +288,29 @@ def test_feels_small_uses_the_delta():
     assert feels_small(-2.0) == "2° colder than actual"
     assert feels_small(3.0) == "3° warmer than actual"
     assert feels_small(0.2) == "About the actual temperature"
+
+
+def test_rain_axis_ticks_are_round_and_start_at_zero():
+    assert rain_axis_ticks(0) == [0, 0.5, 1]
+    assert rain_axis_ticks(1.2) == [0, 0.5, 1.0, 1.5]
+    assert rain_axis_ticks(4.6) == [0, 2, 4, 6]
+    assert rain_axis_ticks(15.3) == [0, 5, 10, 15, 20]
+    assert rain_axis_ticks(29.1) == [0, 10, 20, 30]
+    assert rain_axis_ticks(400) == [0, 100, 200, 300, 400]
+
+
+def test_split_name():
+    assert split_name("Oslo") == ("Oslo", "")
+    assert split_name("London, Canada") == ("London", "Canada")
+    assert split_name("Springfield, Missouri, US") == ("Springfield", "Missouri, US")
+
+
+def test_city_card_keeps_the_city_apart_from_its_country():
+    reading = make_reading(temperature=12.0)
+    reading.timezone_offset = 0
+    html = city_card("London, Canada", reading, 13.0, 9.0, "", False, MONDAY)
+    assert '<div class="city-name">London</div>' in html
+    assert "00:00 · Canada" in html
 
 
 def test_high_low_text():

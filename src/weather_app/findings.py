@@ -174,8 +174,9 @@ def guideline_days_text(days_over, days):
     if days == 0:
         return ""
     if days_over == 0:
-        return f"Within health guidelines on all of the last {days} days"
-    return f"Above health guidelines on {days_over} of the last {days} days"
+        return "Within health guidelines over the last 3 months"
+    day_word = "day" if days_over == 1 else "days"
+    return f"Above health guidelines on {days_over} {day_word} in the last 3 months"
 
 
 def pollutant_text(days_over, days):
