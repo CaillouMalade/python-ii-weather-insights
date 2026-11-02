@@ -2,6 +2,7 @@
 # card escaping and map maths. Hand-made values only: no API call and no key.
 
 import io
+import traceback
 
 import pandas as pd
 import pytest
@@ -26,8 +27,9 @@ from weather_app.display import (
     uv_label,
     weather_emoji,
 )
-from weather_app.maps import boost_opacity, has_radar_coverage, image_to_data_uri, lat_lon_to_tile, radar_over_coverage, stitch_tiles, tile_grid, tile_to_lat_lon
+from weather_app.maps import WEATHER_LAYER_BOOST, boost_opacity, build_map_figure, has_radar_coverage, image_to_data_uri, lat_lon_to_tile, radar_over_coverage, stitch_tiles, tile_grid, tile_to_lat_lon
 from weather_app.models import WeatherReading
+from weather_app.views_analytics import compare_tiles
 
 MONDAY = 1767571200  # 2026-01-05 00:00 UTC
 
@@ -80,6 +82,20 @@ def test_rainviewer_takes_the_newest_frame():
 def test_rainviewer_with_no_frames_gives_a_clear_error():
     with pytest.raises(ValueError, match="unexpected format"):
         RainViewerClient()._parse_latest_frame({"host": "https://h", "radar": {"past": []}})
+
+
+# The key must not stay attached to a network error
+
+
+def test_network_errors_do_not_keep_the_url_with_the_key():
+    # An invalid address fails at once, with no network call. Port 9 on this machine refuses the connection.
+    for url in ["notaprotocol://example", "http://127.0.0.1:9"]:
+        client = APIClient(url, "secret-key", "appid", timeout=5)
+        with pytest.raises(ValueError) as caught:
+            client._get("path", {})
+        assert caught.value.__cause__ is None
+        assert caught.value.__suppress_context__ is True
+        assert "secret-key" not in "".join(traceback.format_exception(caught.value))
 
 
 # Input validation
@@ -379,9 +395,41 @@ def test_city_table_shows_units_and_words():
     assert "Fair" in html
 
 
-def test_city_table_without_a_forecast_or_air_data():
-    rows = [{"name": "Oslo", "now": 3.0, "high": None, "low": None, "rain_mm": 0, "wind_kmh": 0, "aqi": None}]
-    assert "No forecast" in city_table(rows)
+def test_city_table_shows_a_dash_without_a_forecast_or_air_data():
+    rows = [{"name": "Oslo", "now": 3.0, "high": None, "low": None, "rain_mm": None, "wind_kmh": None, "aqi": None}]
+    html = city_table(rows)
+    assert html.count("<td>–</td>") == 4
+    assert "0 mm" not in html
+
+
+def test_a_failed_forecast_cannot_win_driest_or_calmest():
+    rows = [
+        {"name": "Failed", "now": 30.0, "high": None, "low": None, "rain_mm": None, "wind_kmh": None, "aqi": None},
+        {"name": "Oslo", "now": 3.0, "high": 8.0, "low": 1.0, "rain_mm": 9.6, "wind_kmh": 12.0, "aqi": 2},
+        {"name": "Lima", "now": 2.0, "high": 9.0, "low": 2.0, "rain_mm": 20.0, "wind_kmh": 20.0, "aqi": 3},
+    ]
+    html = compare_tiles(rows)
+    assert "Failed" not in html.split("Warmest")[1].split("</div></div>")[1]
+    assert "About 10 mm this week" in html
+    assert "Wind around 12 km/h" in html
+    assert "Fair air right now" in html
+    # It can still be the warmest, because that comes from its current reading.
+    assert "30° right now" in html
+
+
+def test_compare_tiles_when_no_city_has_a_forecast():
+    rows = [
+        {"name": "Oslo", "now": 3.0, "high": None, "low": None, "rain_mm": None, "wind_kmh": None, "aqi": None},
+        {"name": "Lima", "now": 2.0, "high": None, "low": None, "rain_mm": None, "wind_kmh": None, "aqi": None},
+    ]
+    assert compare_tiles(rows).count("Not available") == 3
+
+
+def test_sorted_with_a_key_compares_readings_with_lt():
+    cold = {"name": "Oslo", "reading": make_reading("Oslo, NO", -2.0, -6.0)}
+    warm = {"name": "Madrid", "reading": make_reading("Madrid, ES", 20.0, 19.0)}
+    ordered = sorted([cold, warm], key=lambda weather: weather["reading"], reverse=True)
+    assert ordered == [warm, cold]
 
 
 def test_map_legend_has_documented_labels_and_unit():
@@ -498,6 +546,18 @@ def test_stitch_tiles_places_tiles_and_leaves_gaps_clear():
     assert image.getpixel((300, 10)) == (0, 0, 0, 0)
     assert image.getpixel((10, 300)) == (0, 0, 0, 0)
     assert image.getpixel((300, 300)) == (0, 0, 255, 255)
+
+
+def test_weather_layers_keep_the_map_readable():
+    # A tile at alpha 76 reached 228 at the old boost, which hid coasts and labels.
+    image = Image.new("RGBA", (1, 1), (10, 20, 30, 76))
+    assert boost_opacity(image, WEATHER_LAYER_BOOST).getpixel((0, 0))[3] == 114
+
+
+def test_only_a_named_map_layer_goes_below_the_labels():
+    grid = tile_grid(0.1, 0.1, 4)
+    assert build_map_figure("data:,", grid["bounds"], 0.1, 0.1, "labels").layout.map.layers[0].below == "labels"
+    assert build_map_figure("data:,", grid["bounds"], 0.1, 0.1).layout.map.layers[0].below is None
 
 
 def test_boost_opacity_multiplies_and_keeps_colours():

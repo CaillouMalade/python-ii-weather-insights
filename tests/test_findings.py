@@ -13,6 +13,7 @@ from weather_app.findings import (
     lowest_names,
     part_name,
     part_reason,
+    plural,
     pollutant_text,
     rain_amount_text,
     rate_comfort,
@@ -22,6 +23,7 @@ from weather_app.findings import (
     too_little_history_text,
     trend_finding,
     week_headline,
+    wind_text,
     winner_names,
 )
 
@@ -198,10 +200,16 @@ def test_sort_city_rows():
         {"name": "Clean", "rain_mm": 4.0, "wind_kmh": 10.0, "aqi": 1},
     ]
     names = lambda ordered: [row["name"] for row in ordered]
-    assert names(sort_city_rows(rows, "Warmest")) == ["Warm", "Dry", "Clean"]
-    assert names(sort_city_rows(rows, "Driest")) == ["Dry", "Clean", "Warm"]
-    assert names(sort_city_rows(rows, "Calmest")) == ["Warm", "Clean", "Dry"]
-    assert names(sort_city_rows(rows, "Cleanest air")) == ["Clean", "Dry", "Warm"]
+    assert names(sort_city_rows(rows, "Temperature")) == ["Warm", "Dry", "Clean"]
+    assert names(sort_city_rows(rows, "Rain")) == ["Dry", "Clean", "Warm"]
+    assert names(sort_city_rows(rows, "Wind")) == ["Warm", "Clean", "Dry"]
+    assert names(sort_city_rows(rows, "Air quality")) == ["Clean", "Dry", "Warm"]
+
+
+def test_sort_city_rows_puts_a_failed_forecast_last():
+    rows = [{"name": "Failed", "rain_mm": None, "wind_kmh": None, "aqi": 1}, {"name": "Wet", "rain_mm": 9.0, "wind_kmh": 30.0, "aqi": 1}]
+    assert sort_city_rows(rows, "Rain")[0]["name"] == "Wet"
+    assert sort_city_rows(rows, "Wind")[0]["name"] == "Wet"
 
 
 def test_format_duration_picks_a_natural_unit():
@@ -235,5 +243,23 @@ def test_trend_finding():
 
 
 def test_daily_range_sentence():
-    assert daily_range_sentence(["Mon 3", "Tue 4"], [4.0, 8.0]) == "The temperature usually moves about 6 °C within a day; the biggest swing was 8 °C on Tue 4."
-    assert daily_range_sentence(["Mon 3"], [4.0]) == ""
+    assert daily_range_sentence(["Mon 3", "Tue 4", "Wed 5"], [4.0, 8.0, 6.0]) == "The temperature usually moves about 6 °C within a day; the biggest swing was 8 °C on Tue 4."
+
+
+def test_daily_range_sentence_needs_three_days():
+    assert daily_range_sentence(["Mon 2"], [1.0]) == ""
+    assert daily_range_sentence(["Mon 2", "Tue 3"], [1.0, 2.0]) == ""
+
+
+def test_plural():
+    assert plural(1, "reading") == "1 reading"
+    assert plural(3, "reading") == "3 readings"
+    assert plural(1, "city", "cities") == "1 city"
+    assert plural(2, "city", "cities") == "2 cities"
+    assert plural(0, "day") == "0 days"
+
+
+def test_wind_text_leaves_out_a_missing_gust():
+    assert wind_text(25.4, 36.0) == "25 km/h, gusts up to 36 km/h"
+    assert wind_text(25.4, float("nan")) == "25 km/h"
+    assert wind_text(25.4, None) == "25 km/h"

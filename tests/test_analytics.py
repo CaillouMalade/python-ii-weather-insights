@@ -2,6 +2,7 @@
 
 import pandas as pd
 
+from weather_app.display import today_high_low
 from weather_app.analytics import (
     add_local_time,
     air_by_hour,
@@ -23,6 +24,7 @@ from weather_app.analytics import (
     pressure_tendency,
     who_comparison,
     windiest_moment,
+    with_today_range,
 )
 
 # 2026-01-05 is a Monday. This is 00:00 UTC that day, in Unix seconds.
@@ -251,6 +253,24 @@ def test_forecast_measures_units():
     assert measures["wind_kmh"].to_list() == [3.6, 36.0, 7.2]
     assert measures["gust_kmh"].to_list() == [7.2, 72.0, 10.8]
     assert measures["precipitation_mm"].to_list() == [0.0, 2.0, 1.5]
+
+
+def test_forecast_measures_with_no_gusts_at_all():
+    steps = make_steps()
+    steps["wind_gust"] = [None, None, None]
+    measures = forecast_measures(steps)
+    assert measures["gust_kmh"].isna().to_list() == [True, True, True]
+
+
+def test_today_row_agrees_with_the_header_figures():
+    # Rio: the current reading says 33°, while the forecast's rest of today only reaches 32°.
+    days = pd.DataFrame({"local_date": ["2026-01-05", "2026-01-06"], "high": [32.0, 30.0], "low": [24.0, 22.0]})
+    high, low = today_high_low(days, "2026-01-05", 33.0, 25.0)
+    out = with_today_range(days, "2026-01-05", high, low).to_dict("records")
+    assert (out[0]["high"], out[0]["low"]) == (high, low) == (33.0, 24.0)
+    # Other days and the original table stay as they were.
+    assert (out[1]["high"], out[1]["low"]) == (30.0, 22.0)
+    assert days["high"].to_list() == [32.0, 30.0]
 
 
 def test_next_rain_and_windiest_moment():

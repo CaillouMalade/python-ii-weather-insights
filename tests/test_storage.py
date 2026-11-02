@@ -13,13 +13,8 @@ from weather_app.storage import (
     load_city_list,
     load_log,
     load_saved_cities,
-    migrate_log,
     save_cities,
 )
-
-OLD_HEADER = "timestamp_utc,location,latitude,longitude,temperature,feels_like,humidity,wind_speed,conditions\n"
-OLD_ROW = '2026-11-02T13:35:12.002708+00:00,"Madrid, ES",40.4167047,-3.7035825,17.53,16.38,40,1.54,clear sky\n'
-
 
 def make_reading():
     return WeatherReading("Madrid, ES", 40.4, -3.7, 20.0, 19.0, 50, 2.0, "clear sky", wind_gust=5.0)
@@ -43,40 +38,6 @@ def test_load_missing_log_is_empty_with_columns():
         log = load_log(Path(folder) / "none.csv")
         assert len(log) == 0
         assert log.columns.to_list() == LOG_COLUMNS
-
-
-def test_migrate_keeps_old_values_exactly_and_leaves_new_columns_blank():
-    with tempfile.TemporaryDirectory() as folder:
-        path = Path(folder) / "log.csv"
-        path.write_text(OLD_HEADER + OLD_ROW, encoding="utf-8")
-        migrate_log(path)
-
-        migrated = pd.read_csv(path, dtype=str, keep_default_na=False)
-        assert migrated.columns.to_list() == LOG_COLUMNS
-        assert migrated["timestamp_utc"].to_list() == ["2026-11-02T13:35:12.002708+00:00"]
-        assert migrated["longitude"].to_list() == ["-3.7035825"]
-        assert migrated["wind_gust"].to_list() == [""]
-        assert not Path(str(path) + ".tmp").exists()
-
-
-def test_migrate_twice_changes_nothing():
-    with tempfile.TemporaryDirectory() as folder:
-        path = Path(folder) / "log.csv"
-        path.write_text(OLD_HEADER + OLD_ROW, encoding="utf-8")
-        migrate_log(path)
-        first = path.read_text(encoding="utf-8")
-        migrate_log(path)
-        assert path.read_text(encoding="utf-8") == first
-
-
-def test_append_to_an_old_log_migrates_it_first():
-    with tempfile.TemporaryDirectory() as folder:
-        path = Path(folder) / "log.csv"
-        path.write_text(OLD_HEADER + OLD_ROW, encoding="utf-8")
-        append_reading(make_reading(), path)
-        log = load_log(path)
-        assert log["temperature"].to_list() == [17.53, 20.0]
-        assert log["wind_gust"].isna().to_list() == [True, False]
 
 
 def test_fresh_clone_defaults_come_from_the_real_city_file():
@@ -113,3 +74,12 @@ def test_city_file_has_small_capitals_and_is_largest_first():
     assert populations == sorted(populations, reverse=True)
     locations = cities["location"].to_list()
     assert locations.index("London, GB") < locations.index("London, CA")
+
+
+def test_log_columns_keep_the_order_of_the_existing_log():
+    # Changing this order would misalign new rows with the rows already in data/weather_log.csv.
+    assert ",".join(LOG_COLUMNS) == (
+        "timestamp_utc,location,latitude,longitude,temperature,feels_like,humidity,wind_speed,conditions,"
+        "temp_min,temp_max,pressure,clouds,wind_deg,wind_gust,visibility,rain_1h,snow_1h,"
+        "weather_id,icon,observed_at,timezone_offset,sunrise,sunset"
+    )
