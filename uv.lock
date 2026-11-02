@@ -1235,7 +1235,7 @@ requires-dist = [
     { name = "plotly" },
     { name = "python-dotenv" },
     { name = "requests" },
-    { name = "streamlit" },
+    { name = "streamlit", specifier = ">=1.66.1" },
 ]
 
 [package.metadata.requires-dev]
