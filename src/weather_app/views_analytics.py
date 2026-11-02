@@ -1,301 +1,377 @@
-"""The Analytics tab: logged history, the next 5 days, air quality and city comparison."""
+"""The Analytics tab: an overview strip, then Plan the week, Air, Compare and History."""
+
+from html import escape
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from . import cards
 from .analytics import (
-    METRES_PER_SECOND_TO_KMH,
+    POLLUTANT_NAMES,
     add_local_time,
-    air_pattern,
-    aqi_band_share,
-    air_daily_means,
-    city_daily_highs,
-    city_forecast_summary,
-    comfort_score,
-    comfort_windows,
+    air_by_hour,
+    air_calendar,
+    city_day_grid,
+    city_day_values,
     daily_log_stats,
-    feels_like_delta,
-    history_coverage,
-    latest_ranking,
-    pressure_tendency,
-    reading_counts,
-    temperature_trend,
+    daily_worst_aqi,
+    days_over_any_guideline,
+    forecast_measures,
+    history_series,
+    log_coverage,
+    next_rain,
+    rank_cities,
+    ranked_windows,
+    week_grid,
     who_comparison,
+    windiest_moment,
 )
 from .config import API_KEY, SETUP_MESSAGE
-from .fetching import fetch_air_forecast, fetch_air_history, fetch_air_now
+from .display import aqi_label
+from .fetching import fetch_air_forecast, fetch_air_history, fetch_air_now, now_seconds
+from .findings import comparison_finding, coverage_text, peak_hour_finding, plan_finding, too_little_history_text, trend_finding, who_finding, window_reason
 from .storage import load_log
 
-# Clear on the dark background, and different enough to tell lines apart.
-px.defaults.color_discrete_sequence = ["#7fd0f5", "#ffb86b", "#b7e36b", "#f28fb1"]
-
 AIR_HISTORY_DAYS = 90
-DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+# A chart of a few minutes of readings would suggest a trend that is not there.
+MIN_TREND_READINGS = 3
+MIN_TREND_HOURS = 3
+
+WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+LINE_COLOR = "#7fd0f5"
+HEAT_COLORS = ["#25405c", "#8fc7e8", "#fbe7a1"]
+AQI_COLORS = ["#3ec6a8", "#8fd14f", "#f2d13c", "#ef8a3a", "#d8324a"]
+
+# Name on the selector: (column, chart title with its unit).
+PLAN_METRICS = {
+    "Comfort": ("comfort", "Comfort score (0-100)"),
+    "Temperature": ("temperature", "Temperature (°C)"),
+    "Chance of rain": ("pop_percent", "Chance of rain (%)"),
+    "Wind": ("wind_kmh", "Wind (km/h)"),
+}
+# Name on the selector: (how to combine a day, how to combine the days, bar axis title, heatmap title).
+COMPARE_METRICS = {
+    "Temperature": ("max", "mean", "Average daily high (°C)", "Daily high (°C)"),
+    "Rain": ("sum", "sum", "Total rain and snow (mm)", "Daily rain and snow (mm)"),
+    "Wind": ("max", "max", "Strongest wind (km/h)", "Daily strongest wind (km/h)"),
+    "Air quality": ("max", "mean", "Average worst AQI (1-5)", "Worst AQI per day (1 is good, 5 is very poor)"),
+}
+# Name on the selector: (column, unit).
+HISTORY_METRICS = {
+    "Temperature": ("temperature", "°C"),
+    "Feels-like difference": ("feels_delta", "°C"),
+    "Humidity": ("humidity", "%"),
+    "Wind": ("wind_kmh", "km/h"),
+}
 
 
-def show_chart(fig, x_title, y_title):
+def show_finding(text):
+    st.html(f'<div class="finding">{escape(text)}</div>')
+
+
+def style_chart(fig, x_title, y_title, height=320):
     """Show a Plotly figure with the same look everywhere and both axes labelled."""
     fig.update_layout(
         xaxis_title=x_title,
         yaxis_title=y_title,
-        height=340,
-        margin=dict(l=10, r=10, t=30, b=10),
-        legend=dict(orientation="h", y=-0.25, title=""),
+        height=height,
+        margin=dict(l=10, r=10, t=40, b=10),
+        showlegend=False,
+        coloraxis_showscale=False,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
     )
     st.plotly_chart(fig, config={"displayModeBar": False})
 
 
-def show_heatmap(table, title, unit, x_title, y_title):
-    """Show a table as a heatmap. Its columns and row names are used as labels, not as a date scale."""
-    fig = px.imshow(table, text_auto=True, aspect="auto", title=title, labels=dict(color=unit))
+def show_heatmap(table, title, x_title, y_title, number_format=".0f", colors=None, zmin=None, zmax=None, height=320):
+    """A heatmap with the value in each cell. The title carries the unit, so no colour bar is needed."""
+    fig = px.imshow(table, text_auto=number_format, aspect="auto", title=title, color_continuous_scale=colors or HEAT_COLORS, zmin=zmin, zmax=zmax)
     fig.update_xaxes(type="category")
     fig.update_yaxes(type="category")
-    show_chart(fig, x_title, y_title)
+    style_chart(fig, x_title, y_title, height)
 
 
-def show_history(log, location):
-    st.subheader(f"Your logged history: {location['city']}")
-    name = location["location"]
-    coverage = history_coverage(log, name).to_dict("records")[0]
-
-    if coverage["readings"] < 2:
-        st.info(f"{location['city']} has {coverage['readings']} saved reading(s). A trend needs at least 2: keep the Weather tab in use to build history.")
-    else:
-        days = coverage["span_hours"] / 24
-        if days < 3:
-            st.write(f"**{coverage['readings']} readings over {coverage['span_hours']:.1f} hours.** That is an early picture, not yet a real trend.")
-        else:
-            st.write(f"**{coverage['readings']} readings over {days:.1f} days.**")
-
-        trend = temperature_trend(log, name)
-        trend = trend.rename(columns={"temperature": "Temperature", "feels_like": "Feels like"})
-        fig = px.line(trend, x="timestamp_utc", y=["Temperature", "Feels like"], markers=True, title="Temperature and feels-like")
-        show_chart(fig, "Time logged (UTC)", "Temperature (°C)")
-
-        stats = daily_log_stats(log, name)
-        table = stats[["day", "low", "high", "range", "readings"]].copy()
-        table.columns = ["UTC day", "Low (°C)", "High (°C)", "Range (°C)", "Readings"]
-        st.dataframe(table, hide_index=True)
-
-    st.subheader("Feels-like minus actual temperature, all cities")
-    delta = feels_like_delta(log)
-    latest = delta[delta["location"] == name]["feels_like_delta"].to_list()
-    if len(latest) > 0:
-        st.write(f"**Latest for {location['city']}: it felt {latest[-1]:+.1f} °C compared with the actual temperature.**")
-    counts = reading_counts(log)
-    short_history = counts[counts["readings"] < 2]["location"].to_list()
-    if len(short_history) > 0:
-        st.info(f"Only one saved reading so far, so no line yet: {', '.join(short_history)}.")
-    fig = px.line(delta, x="timestamp_utc", y="feels_like_delta", color="location", markers=True)
-    show_chart(fig, "Time logged (UTC)", "Feels-like minus actual (°C)")
+def date_labels(dates):
+    """Turn date text such as 2026-11-03 into Tue 3."""
+    labels = []
+    for date in dates:
+        day = pd.to_datetime(date)
+        labels.append(f"{day.strftime('%a')} {day.day}")
+    return labels
 
 
-def show_forecast(weather):
-    st.subheader(f"Next 5 days: {weather['location']['city']}")
-    steps = comfort_score(weather["steps"])
-    steps["wind_kmh"] = steps["wind_speed"] * METRES_PER_SECOND_TO_KMH
-    steps["gust_kmh"] = steps["wind_gust"] * METRES_PER_SECOND_TO_KMH
-    steps["pop_percent"] = steps["pop"] * 100
-    steps["precipitation_mm"] = steps["rain_3h"] + steps["snow_3h"]
+def week_labels(dates):
+    """Turn date text such as 2026-08-03 into 3 Aug, so a long calendar shows its months."""
+    labels = []
+    for date in dates:
+        day = pd.to_datetime(date)
+        labels.append(f"{day.day} {day.strftime('%b')}")
+    return labels
 
-    warmest = steps.sort_values("temperature", ascending=False).to_dict("records")[0]
-    st.write(f"**Warmest point: {warmest['temperature']:.1f} °C on {warmest['local_time'].strftime('%a at %H:%M')}.**")
-    named = steps.rename(columns={"temperature": "Temperature", "feels_like": "Feels like", "dew_point": "Dew point", "wind_kmh": "Wind", "gust_kmh": "Gusts"})
-    fig = px.line(named, x="local_time", y=["Temperature", "Feels like", "Dew point"], title="Temperature, feels-like and dew point")
-    show_chart(fig, "Local time", "Temperature (°C)")
 
-    total = steps["precipitation_mm"].sum()
-    wettest = steps.sort_values("pop", ascending=False).to_dict("records")[0]
-    st.write(f"**{total:.1f} mm of precipitation expected in total. Highest chance: {wettest['pop_percent']:.0f} % on {wettest['local_time'].strftime('%a at %H:%M')}.**")
-    fig = px.bar(steps, x="local_time", y="pop_percent", title="Chance of precipitation")
-    show_chart(fig, "Local time", "Chance (%)")
-    fig = px.bar(steps, x="local_time", y="precipitation_mm", title="Rain and snow per 3-hour step")
-    show_chart(fig, "Local time", "Precipitation (mm)")
+def load_air_history(weather):
+    """Return the selected city's air quality history as a table, or None if it is not available."""
+    location = weather["location"]
+    try:
+        rows = fetch_air_history(location["latitude"], location["longitude"], AIR_HISTORY_DAYS)
+    except ValueError:
+        return None
+    if len(rows) == 0:
+        return None
+    return add_local_time(pd.DataFrame(rows), weather["reading"].timezone_offset or 0)
 
-    windiest = steps.sort_values("wind_kmh", ascending=False).to_dict("records")[0]
-    st.write(f"**Windiest point: {windiest['wind_kmh']:.0f} km/h on {windiest['local_time'].strftime('%a at %H:%M')}.**")
-    fig = px.line(named, x="local_time", y=["Wind", "Gusts"], title="Wind and gusts")
-    show_chart(fig, "Local time", "Speed (km/h)")
 
-    tendency = pressure_tendency(steps).to_dict("records")[0]
-    st.write(f"**Pressure is {tendency['tendency']}: {tendency['change']:+.1f} hPa over the next 24 hours.**")
-    fig = px.line(steps, x="local_time", y="pressure", title="Pressure")
-    show_chart(fig, "Local time", "Pressure (hPa)")
+# Overview strip
 
-    st.subheader("Comfort score")
-    st.caption("Our own rule of thumb, from 0 to 100: start at 100, subtract 3 per °C the feels-like temperature is away from 21 °C, 30 × the chance of precipitation, 1 per km/h of wind above 20 km/h, and 0.3 per % of humidity above 70 %.")
-    windows = comfort_windows(steps)
+
+def best_time_tile(measures):
+    windows = ranked_windows(measures, 1)
     if len(windows) == 0:
-        st.info("The forecast has no two daytime steps in a row to compare.")
-    else:
-        best = windows.to_dict("records")[0]
-        worst = windows.to_dict("records")[-1]
-        st.write(
-            f"**Best daytime window: {best['local_time'].strftime('%a %H:%M')} to {best['end_time'].strftime('%H:%M')} (score {best['score']:.0f}). "
-            f"Worst: {worst['local_time'].strftime('%a %H:%M')} to {worst['end_time'].strftime('%H:%M')} (score {worst['score']:.0f}).**"
-        )
-    fig = px.line(steps, x="local_time", y="comfort", markers=True)
-    fig.update_yaxes(range=[0, 100])
-    show_chart(fig, "Local time", "Comfort score (0-100)")
+        return cards.tile("Best time outside", "No clear window")
+    best = windows.to_dict("records")[0]
+    return cards.tile("Best time outside", f"{best['local_time'].strftime('%a %H:%M')}–{best['end_time'].strftime('%H:%M')}", f"Comfort {best['score']:.0f} out of 100")
+
+
+def next_rain_tile(measures):
+    total = measures["precipitation_mm"].sum()
+    first = next_rain(measures)
+    if len(first) == 0:
+        return cards.tile("Next rain", "None expected", "0 mm over 5 days")
+    return cards.tile("Next rain", first["local_time"].to_list()[0].strftime("%a %H:%M"), f"{total:.1f} mm over 5 days")
+
+
+def windiest_tile(measures):
+    row = windiest_moment(measures).to_dict("records")[0]
+    return cards.tile("Windiest moment", row["local_time"].strftime("%a %H:%M"), f"{row['wind_kmh']:.0f} km/h, gusts {row['gust_kmh']:.0f} km/h")
+
+
+def air_overview_tile(weather):
+    location = weather["location"]
+    value = "Unavailable"
+    small = ""
+    try:
+        rows = fetch_air_now(location["latitude"], location["longitude"])
+        if len(rows) > 0:
+            value = aqi_label(rows[0].get("aqi"))
+    except ValueError:
+        value = "Unavailable"
+    air = load_air_history(weather)
+    if air is not None:
+        counts = days_over_any_guideline(air).to_dict("records")[0]
+        small = f"Over a WHO guideline on {counts['days_over']} of the last {counts['days']} days"
+    return cards.tile("Air quality today", value, small)
+
+
+def show_overview(weather):
+    if weather is None or weather["steps"] is None:
+        return
+    measures = forecast_measures(weather["steps"])
+    st.html('<div class="grid-4">' + best_time_tile(measures) + next_rain_tile(measures) + windiest_tile(measures) + air_overview_tile(weather) + "</div>")
+
+
+# Plan the week
+
+
+def show_plan(weather):
+    measures = forecast_measures(weather["steps"])
+    with st.container(key="panel-plan"):
+        metric = st.segmented_control("Show", list(PLAN_METRICS.keys()), default="Comfort", required=True, key="plan_metric", label_visibility="collapsed")
+        column, title = PLAN_METRICS[metric]
+        peak = measures.sort_values(column, ascending=False).to_dict("records")[0]
+        show_finding(plan_finding(metric, peak["local_time"].strftime("%A at %H:%M"), peak[column]))
+        table = week_grid(measures, column)
+        table.index = date_labels(table.index)
+        show_heatmap(table, title, "Local time", "Day", height=340)
+        st.caption("Comfort starts at 100 and loses 3 per °C of feels-like away from 21 °C, 30 × the chance of rain, 1 per km/h of wind above 20, and 0.3 per % of humidity above 70.")
+
+    windows = ranked_windows(measures, 3)
+    with st.container(key="panel-windows"):
+        st.html('<div class="card-title">Best windows to be outside</div>')
+        if len(windows) == 0:
+            st.info("The forecast has no daytime window to rank.")
+        rows = ""
+        number = 1
+        for window in windows.to_dict("records"):
+            when = f"{window['local_time'].strftime('%A %H:%M')}–{window['end_time'].strftime('%H:%M')}"
+            reason = window_reason(window["feels"], window["rain_chance"], window["wind"])
+            rows = rows + f'<div class="window"><b>{number}. {when}</b>, comfort {window["score"]:.0f}<div class="small">{reason}</div></div>'
+            number = number + 1
+        st.html(rows)
+
+
+# Air
 
 
 def show_air(weather):
+    air = load_air_history(weather)
+    if air is None:
+        st.warning("Air quality history is not available for this city right now.")
+        return
+
+    with st.container(key="panel-calendar"):
+        table_rows = who_comparison(air).to_dict("records")
+        show_finding(who_finding(table_rows))
+        calendar = air_calendar(air)
+        calendar.index = [WEEKDAYS[number] for number in calendar.index]
+        calendar.columns = week_labels(calendar.columns)
+        show_heatmap(calendar, "Worst AQI each day (1 is good, 5 is very poor)", "Week starting", "Weekday", colors=AQI_COLORS, zmin=1, zmax=5, height=340)
+        st.caption("Modelled OpenWeatherMap data, not readings from a local station. Guidelines: WHO 2021.")
+
+    with st.container(key="panel-hours"):
+        names = {}
+        for key, name in POLLUTANT_NAMES.items():
+            names[name] = key
+        chosen = st.segmented_control("Pollutant", list(names.keys()), default="PM2.5", required=True, key="air_pollutant", label_visibility="collapsed")
+        by_hour = air_by_hour(air, names[chosen])
+        peak = by_hour.sort_values("level", ascending=False).to_dict("records")[0]
+        show_finding(peak_hour_finding(chosen, int(peak["hour"]), peak["level"]))
+        fig = px.line(by_hour, x="hour", y="level", markers=True, title=f"{chosen} through the day (µg/m³)", color_discrete_sequence=[LINE_COLOR])
+        style_chart(fig, "Local hour", "Average level (µg/m³)", 280)
+
+    with st.container(key="panel-who"):
+        st.html('<div class="card-title">Against the WHO guidelines</div><div class="small">Levels in µg/m³</div>')
+        table = pd.DataFrame(table_rows)[["pollutant", "guideline", "average_level", "days_over"]]
+        table.columns = ["Pollutant", "Guideline", "Average", "Days over"]
+        st.dataframe(table, hide_index=True)
+        show_air_outlook(weather)
+
+
+def show_air_outlook(weather):
     location = weather["location"]
-    offset = weather["reading"].timezone_offset or 0
-    st.subheader(f"Air quality: {location['city']}")
     try:
-        history_rows = fetch_air_history(location["latitude"], location["longitude"], AIR_HISTORY_DAYS)
-    except ValueError as e:
-        st.warning(f"Could not load air quality history: {e}")
+        rows = fetch_air_forecast(location["latitude"], location["longitude"])
+    except ValueError:
         return
-    if len(history_rows) == 0:
-        st.info("OpenWeatherMap has no air quality history for this location.")
+    if len(rows) == 0:
         return
-
-    air = add_local_time(pd.DataFrame(history_rows), offset)
-    daily = air_daily_means(air)
-    st.caption(f"{len(daily)} days of modelled OpenWeatherMap data, not measurements from a local station. Times are local.")
-
-    guidelines = who_comparison(air)
-    worst = guidelines.sort_values("share_over", ascending=False).to_dict("records")[0]
-    if worst["days_over"] == 0:
-        st.write("**No daily level exceeded a WHO guideline in this period.**")
-    else:
-        st.write(f"**{worst['pollutant']} exceeded its WHO guideline most often: on {worst['days_over']} of {worst['days']} days ({worst['share_over']:.0f} %).**")
-    table = guidelines.copy()
-    table.columns = ["Pollutant", "WHO guideline (µg/m³)", "Average level (µg/m³)", "Days", "Days over", "Share over (%)"]
-    st.dataframe(table, hide_index=True)
-    st.caption("Guidelines: WHO global air quality guidelines, 2021. PM2.5, PM10 and NO2 are compared as daily means, O3 as the day's highest 8-hour mean.")
-
-    named = daily.rename(columns={"pm2_5": "PM2.5", "pm10": "PM10", "no2": "NO2", "o3": "O3"})
-    fig = px.line(named, x="local_date", y=["PM2.5", "PM10", "NO2", "O3"], title="Daily mean levels")
-    show_chart(fig, "Date", "Concentration (µg/m³)")
-
-    fig = px.bar(daily, x="local_date", y="aqi", title="Worst AQI each day")
-    fig.update_yaxes(range=[0, 5])
-    show_chart(fig, "Date", "AQI (1 is good, 5 is very poor)")
-
-    bands = aqi_band_share(air)
-    common = bands.sort_values("days", ascending=False).to_dict("records")[0]
-    st.write(f"**The most common band is {common['band']}: {common['share']:.0f} % of days, judging each day by its worst hour.**")
-    fig = px.bar(bands, x="band", y="share", title="Share of days per AQI band")
-    show_chart(fig, "AQI band", "Share of days (%)")
-
-    pollutant_names = {"PM2.5": "pm2_5", "PM10": "pm10", "NO2": "no2", "O3": "o3"}
-    chosen = st.segmented_control("Pattern for", list(pollutant_names.keys()), default="PM2.5", required=True, key="air_pattern_pollutant")
-    pattern = air_pattern(air, pollutant_names[chosen])
-    peak = pattern.sort_values("level", ascending=False).to_dict("records")[0]
-    st.write(f"**{chosen} is highest on average on {DAY_NAMES[peak['day_of_week']]} around {peak['hour']:02d}:00 ({peak['level']:.0f} µg/m³).**")
-    table = pattern.pivot(index="day_of_week", columns="hour", values="level")
-    table.index = [DAY_NAMES[number] for number in table.index]
-    show_heatmap(table, f"{chosen} by day and hour", "µg/m³", "Local hour", "Day of week")
-
-    st.subheader("Outlook")
-    try:
-        outlook_rows = fetch_air_forecast(location["latitude"], location["longitude"])
-    except ValueError as e:
-        st.warning(f"Could not load the air quality forecast: {e}")
-        return
-    if len(outlook_rows) == 0:
-        st.info("OpenWeatherMap has no air quality forecast for this location.")
-        return
-    outlook = air_daily_means(add_local_time(pd.DataFrame(outlook_rows), offset))
-    fig = px.bar(outlook, x="local_date", y="aqi", title="Forecast worst AQI per day")
-    fig.update_yaxes(range=[0, 5])
-    show_chart(fig, "Date", "AQI (1 is good, 5 is very poor)")
+    daily = daily_worst_aqi(add_local_time(pd.DataFrame(rows), weather["reading"].timezone_offset or 0)).head(4)
+    parts = []
+    for label, aqi in zip(date_labels(daily["local_date"]), daily["aqi"]):
+        parts.append(f"{label}: {aqi_label(aqi)}")
+    st.write("**Outlook, worst of each day.** " + ", ".join(parts))
 
 
-def show_comparison(weather_by_city):
-    st.subheader("Your cities side by side")
+# Compare
+
+
+def compare_data(metric, loaded):
+    """Return one table of forecast steps or air rows from every loaded city, with a location column."""
+    frames = []
+    for weather in loaded:
+        name = weather["location"]["location"]
+        if metric == "Air quality":
+            try:
+                rows = fetch_air_forecast(weather["location"]["latitude"], weather["location"]["longitude"])
+            except ValueError:
+                continue
+            if len(rows) == 0:
+                continue
+            frame = add_local_time(pd.DataFrame(rows), weather["reading"].timezone_offset or 0)
+        elif weather["steps"] is None:
+            continue
+        else:
+            frame = forecast_measures(weather["steps"])
+        frame["location"] = name
+        frames.append(frame)
+    return frames
+
+
+def show_compare(weather_by_city):
     loaded = [weather for weather in weather_by_city if weather["reading"] is not None]
     if len(loaded) < 2:
         st.info("A comparison needs at least 2 saved cities that have loaded.")
         return
 
-    # Ranked with sorted() on the reading objects, which uses WeatherReading.__lt__.
-    ranked = sorted([weather["reading"] for weather in loaded], reverse=True)
-    rows = []
-    for reading in ranked:
-        air_text = None
-        try:
-            air_rows = fetch_air_now(reading.latitude, reading.longitude)
-            if len(air_rows) > 0:
-                air_text = air_rows[0].get("aqi")
-        except ValueError:
-            air_text = None
-        rows.append({"City": reading.location, "Now (°C)": round(reading.temperature, 1), "Feels like (°C)": round(reading.feels_like, 1), "Wind now (km/h)": round(reading.wind_speed * METRES_PER_SECOND_TO_KMH, 1), "AQI (1-5)": air_text})
-    st.write(f"**Warmest right now: {ranked[0].location} at {ranked[0].temperature:.1f} °C. Coldest: {ranked[-1].location} at {ranked[-1].temperature:.1f} °C.**")
-    st.dataframe(pd.DataFrame(rows), hide_index=True)
+    # sorted() uses WeatherReading.__lt__. This sets the row order of the heatmap: warmest now first.
+    readings = sorted([weather["reading"] for weather in loaded], reverse=True)
+    order = [reading.location for reading in readings]
 
-    frames = []
-    for weather in loaded:
-        if weather["steps"] is not None:
-            steps = weather["steps"].copy()
-            steps["location"] = weather["location"]["location"]
-            frames.append(steps)
-    if len(frames) < 2:
-        st.info("A forecast comparison needs forecasts for at least 2 cities.")
-        return
-    combined = pd.concat(frames, ignore_index=True)
+    with st.container(key="panel-compare"):
+        metric = st.segmented_control("Compare", list(COMPARE_METRICS.keys()), default="Temperature", required=True, key="compare_metric", label_visibility="collapsed")
+        frames = compare_data(metric, loaded)
+        if len(frames) < 2:
+            st.info("This comparison needs data from at least 2 cities.")
+            return
 
-    summary = city_forecast_summary(combined)
-    wettest = summary.sort_values("rain_mm", ascending=False).to_dict("records")[0]
-    windiest = summary.sort_values("wind_kmh", ascending=False).to_dict("records")[0]
-    rain_text = f"{wettest['location']} expects the most rain ({wettest['rain_mm']:.1f} mm)"
-    if wettest["rain_mm"] == 0:
-        rain_text = "no city expects rain"
-    st.write(f"**Over the next 5 days, {summary['location'].to_list()[0]} is warmest on average, {rain_text} and {windiest['location']} has the most wind ({windiest['wind_kmh']:.0f} km/h on average).**")
-    fig = px.bar(summary, x="location", y="average", title="Average forecast temperature")
-    show_chart(fig, "City", "Temperature (°C)")
+        columns = {"Temperature": "temperature", "Rain": "precipitation_mm", "Wind": "wind_kmh", "Air quality": "aqi"}
+        per_day, overall, bar_title, heat_title = COMPARE_METRICS[metric]
+        city_days = city_day_values(pd.concat(frames, ignore_index=True), columns[metric], per_day)
+        ranking = rank_cities(city_days, overall)
 
-    table = summary.copy()
-    table.columns = ["City", "Low (°C)", "High (°C)", "Average (°C)", "Rain (mm)", "Highest chance of precipitation (0-1)", "Average wind (km/h)"]
-    st.dataframe(table, hide_index=True)
-
-    daily = city_daily_highs(combined)
-    highs = daily.pivot(index="location", columns="local_date", values="high")
-    show_heatmap(highs, "Daily high", "°C", "Local date", "City")
-    rain = daily.pivot(index="location", columns="local_date", values="rain_mm")
-    show_heatmap(rain, "Daily rain", "mm", "Local date", "City")
-
-
-def show_logged_ranking(log):
-    st.subheader("From your log: cities ranked by latest temperature")
-    ranking = latest_ranking(log)
-    if len(ranking) < 2:
-        st.info("Only one city has saved readings. A comparison needs at least 2 cities.")
-    else:
         top = ranking.to_dict("records")[0]
-        st.write(f"**{top['location']} had the highest latest logged temperature: {top['temperature']:.1f} °C.**")
-    fig = px.bar(ranking, x="location", y="temperature")
-    show_chart(fig, "City", "Latest logged temperature (°C)")
+        bottom = ranking.to_dict("records")[-1]
+        show_finding(comparison_finding(metric, top["location"], top["value"], bottom["location"], bottom["value"]))
+        fig = px.bar(ranking, x="location", y="value", color_discrete_sequence=[LINE_COLOR], text_auto=".1f")
+        style_chart(fig, "City", bar_title, 280)
+
+        grid = city_day_grid(city_days, order)
+        grid.columns = date_labels(grid.columns)
+        number_format = ".1f" if metric == "Rain" else ".0f"
+        height = 120 + 60 * len(grid)
+        if metric == "Air quality":
+            show_heatmap(grid, heat_title, "Local date", "City", colors=AQI_COLORS, zmin=1, zmax=5, height=height)
+        else:
+            show_heatmap(grid, heat_title, "Local date", "City", number_format=number_format, height=height)
+
+
+# History
+
+
+def show_history(log, location):
+    with st.container(key="panel-coverage"):
+        st.html('<div class="card-title">What your log holds</div>')
+        lines = []
+        for row in log_coverage(log).to_dict("records"):
+            lines.append(escape(coverage_text(row["location"], row["readings"], row["span_hours"])))
+        st.html('<div class="small">' + "<br>".join(lines) + "</div>")
+
+    if location is None:
+        return
+
+    name = location["location"]
+    series = history_series(log, name)
+    span_hours = 0
+    if len(series) > 1:
+        span_hours = (series["time"].max() - series["time"].min()).total_seconds() / 3600
+    if len(series) < MIN_TREND_READINGS or span_hours < MIN_TREND_HOURS:
+        st.info(too_little_history_text(location["city"], len(series), span_hours))
+        return
+
+    with st.container(key="panel-trend"):
+        metric = st.segmented_control("Show", list(HISTORY_METRICS.keys()), default="Temperature", required=True, key="history_metric", label_visibility="collapsed")
+        column, unit = HISTORY_METRICS[metric]
+        show_finding(trend_finding(series[column].to_list(), metric, unit))
+        is_local = series["is_local"].to_list()[0]
+        fig = px.line(series, x="time", y=column, markers=True, title=f"{metric} ({unit})", color_discrete_sequence=[LINE_COLOR])
+        style_chart(fig, "Local time" if is_local else "UTC (local offset not logged yet)", f"{metric} ({unit})")
+
+    stats = daily_log_stats(series)
+    if len(stats) >= 2:
+        with st.container(key="panel-range"):
+            st.html('<div class="card-title">Daily range</div>')
+            table = stats[["day", "low", "high", "range"]].copy()
+            table["day"] = week_labels(table["day"])
+            table.columns = ["Day", "Low °C", "High °C", "Range °C"]
+            st.dataframe(table, hide_index=True)
 
 
 def show_analytics_tab(weather, weather_by_city):
-    log = load_log()
-    history_tab, forecast_tab, air_tab, compare_tab = st.tabs(["Your history", "Next 5 days", "Air quality", "Compare cities"], key="analytics_tab", on_change="rerun")
+    if API_KEY:
+        show_overview(weather)
+
+    plan_tab, air_tab, compare_tab, history_tab = st.tabs(["Plan the week", "Air", "Compare", "History"], key="analytics_tab", on_change="rerun")
 
     # .open is True only for the tab on screen, so the others make no API calls.
-    if history_tab.open:
-        with history_tab:
-            if len(log) == 0:
-                st.info("The weather log is empty. Open the Weather tab with an API key to start building history.")
-            elif weather is None:
-                st.info("Add a city in the sidebar to see its history.")
-            else:
-                show_history(log, weather["location"])
-
-    if forecast_tab.open:
-        with forecast_tab:
+    if plan_tab.open:
+        with plan_tab:
             if not API_KEY:
                 st.info(SETUP_MESSAGE)
             elif weather is None or weather["steps"] is None:
                 st.info("The forecast for this city is not available right now.")
             else:
-                show_forecast(weather)
+                show_plan(weather)
 
     if air_tab.open:
         with air_tab:
@@ -311,6 +387,12 @@ def show_analytics_tab(weather, weather_by_city):
             if not API_KEY:
                 st.info(SETUP_MESSAGE)
             else:
-                show_comparison(weather_by_city)
-            if len(log) > 0:
-                show_logged_ranking(log)
+                show_compare(weather_by_city)
+
+    if history_tab.open:
+        with history_tab:
+            log = load_log()
+            if len(log) == 0:
+                st.info("Your log is empty. Open the Weather tab with an API key to start building history.")
+            else:
+                show_history(log, None if weather is None else weather["location"])
