@@ -44,6 +44,7 @@ from .findings import (
     too_little_history_text,
     trend_finding,
     week_headline,
+    wind_text,
     winner_names,
 )
 from .storage import load_log
@@ -65,7 +66,7 @@ HISTORY_METRICS = {
     "Humidity": ("humidity", "%"),
     "Wind": ("wind_kmh", "km/h"),
 }
-COMPARE_ORDERS = ["Warmest", "Driest", "Calmest", "Cleanest air"]
+COMPARE_ORDERS = ["Temperature", "Rain", "Wind", "Air quality"]
 
 
 def show_finding(text):
@@ -142,7 +143,7 @@ def next_rain_tile(measures):
 
 def windiest_tile(measures):
     row = windiest_moment(measures).to_dict("records")[0]
-    return cards.tile("Windiest moment", row["local_time"].strftime("%a %H:%M"), f"{row['wind_kmh']:.0f} km/h, gusts up to {row['gust_kmh']:.0f} km/h")
+    return cards.tile("Windiest moment", row["local_time"].strftime("%a %H:%M"), wind_text(row["wind_kmh"], row["gust_kmh"]))
 
 
 def air_tile(weather):
@@ -252,9 +253,7 @@ def show_air_outlook(weather):
 
 
 def compare_rows(loaded):
-    """One row per city. The order comes from sorted() on the reading objects: warmest first."""
-    readings = sorted([weather["reading"] for weather in loaded], reverse=True)
-
+    """One row per city, warmest first. sorted() compares the readings with WeatherReading.__lt__."""
     frames = []
     for weather in loaded:
         if weather["steps"] is not None:
@@ -267,51 +266,42 @@ def compare_rows(loaded):
             summaries[row["location"]] = row
 
     rows = []
-    for reading in readings:
-        for weather in loaded:
-            if weather["reading"].location != reading.location:
-                continue
-            # A city without a forecast has no week figures, so those are left blank.
-            summary = summaries.get(reading.location)
-            rows.append(
-                {
-                    "name": weather["name"],
-                    "now": reading.temperature,
-                    "high": None if summary is None else summary["high"],
-                    "low": None if summary is None else summary["low"],
-                    "rain_mm": 0 if summary is None else summary["rain_mm"],
-                    "wind_kmh": 0 if summary is None else summary["wind_kmh"],
-                    "aqi": air_now(weather),
-                }
-            )
+    for weather in sorted(loaded, key=lambda weather: weather["reading"], reverse=True):
+        # A city whose forecast failed has no week figures, so it cannot win on them.
+        summary = summaries.get(weather["reading"].location, {})
+        rows.append(
+            {
+                "name": weather["name"],
+                "now": weather["reading"].temperature,
+                "high": summary.get("high"),
+                "low": summary.get("low"),
+                "rain_mm": summary.get("rain_mm"),
+                "wind_kmh": summary.get("wind_kmh"),
+                "aqi": air_now(weather),
+            }
+        )
     return rows
 
 
+def winner_tile(title, rows, key, describe):
+    """A card naming the city or cities with the lowest value. describe turns the value into words."""
+    names = lowest_names(rows, key)
+    if len(names) == 0:
+        return cards.tile(title, "Not available")
+    lowest = min([row[key] for row in rows if row[key] is not None])
+    return cards.tile(title, escape(winner_names(names, len(rows))), describe(lowest))
+
+
 def compare_tiles(rows):
-    total = len(rows)
+    """The four winners. rows must be warmest first."""
     warmest = rows[0]
     warmest_names = [row["name"] for row in rows if round(row["now"]) == round(warmest["now"])]
-    driest = lowest_names(rows, "rain_mm")
-    calmest = lowest_names(rows, "wind_kmh")
-    cleanest = lowest_names(rows, "aqi")
-
-    driest_value = min([row["rain_mm"] for row in rows])
-    driest_text = "No rain this week" if driest_value == 0 else f"{rain_amount_text(driest_value)} this week"
-    calmest_value = min([row["wind_kmh"] for row in rows])
-
-    air_value = "Not available"
-    air_small = ""
-    if len(cleanest) > 0:
-        air_value = winner_names(cleanest, total)
-        best_aqi = min([row["aqi"] for row in rows if row["aqi"] is not None])
-        air_small = f"{aqi_label(best_aqi)} air right now"
-
     return (
         '<div class="grid-4">'
-        + cards.tile("Warmest", escape(winner_names(warmest_names, total)), f"{round(warmest['now'])}° right now")
-        + cards.tile("Driest", escape(winner_names(driest, total)), driest_text)
-        + cards.tile("Calmest", escape(winner_names(calmest, total)), f"Wind around {calmest_value:.0f} km/h")
-        + cards.tile("Cleanest air", escape(air_value), air_small)
+        + cards.tile("Warmest", escape(winner_names(warmest_names, len(rows))), f"{round(warmest['now'])}° right now")
+        + winner_tile("Driest", rows, "rain_mm", lambda value: "No rain this week" if value == 0 else f"{rain_amount_text(value)} this week")
+        + winner_tile("Calmest", rows, "wind_kmh", lambda value: f"Wind around {value:.0f} km/h")
+        + winner_tile("Cleanest air", rows, "aqi", lambda value: f"{aqi_label(value)} air right now")
         + "</div>"
     )
 
@@ -325,7 +315,7 @@ def show_compare(weather_by_city):
     rows = compare_rows(loaded)
     st.html(compare_tiles(rows))
     with st.container(key="panel-compare"):
-        order = st.segmented_control("Sort by", COMPARE_ORDERS, default="Warmest", required=True, key="compare_order", label_visibility="collapsed")
+        order = st.selectbox("Sort the table by", COMPARE_ORDERS, key="compare_order", width=220)
         st.html(cards.city_table(sort_city_rows(rows, order)))
         st.caption("High, low, rain and wind cover the next 5 days. Wind is the average.")
 

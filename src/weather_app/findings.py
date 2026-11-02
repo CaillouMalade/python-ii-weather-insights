@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+import pandas as pd
+
 # Name, what it is in a few words, and the verb forms that go with the name.
 POLLUTANTS = {
     "pm2_5": {"name": "Fine particles (PM2.5)", "about": "Tiny specks from traffic and burning that reach deep into the lungs", "is": "are", "tends": "tend"},
@@ -160,6 +162,13 @@ def week_headline(parts, today):
     return f"{capitalize_first(best_name)} is your best bet; avoid {part_name(worst, today)}."
 
 
+def wind_text(wind_kmh, gust_kmh):
+    """Wind speed, and gusts when the forecast gives them. A forecast step can lack a gust."""
+    if pd.isna(gust_kmh):
+        return f"{wind_kmh:.0f} km/h"
+    return f"{wind_kmh:.0f} km/h, gusts up to {gust_kmh:.0f} km/h"
+
+
 def rain_amount_text(millimetres):
     """Say a rain total without false precision."""
     if millimetres == 0:
@@ -175,8 +184,7 @@ def guideline_days_text(days_over, days):
         return ""
     if days_over == 0:
         return "Within health guidelines over the last 3 months"
-    day_word = "day" if days_over == 1 else "days"
-    return f"Above health guidelines on {days_over} {day_word} in the last 3 months"
+    return f"Above health guidelines on {plural(days_over, 'day')} in the last 3 months"
 
 
 def pollutant_text(days_over, days):
@@ -226,45 +234,50 @@ def winner_names(names, total):
 
 
 def sort_city_rows(rows, order):
-    """Sort Compare's rows. Warmest keeps the order given, and missing air data goes last."""
-    if order == "Driest":
-        return sorted(rows, key=lambda row: row["rain_mm"])
-    if order == "Calmest":
-        return sorted(rows, key=lambda row: row["wind_kmh"])
-    if order == "Cleanest air":
-        return sorted(rows, key=lambda row: 9 if row["aqi"] is None else row["aqi"])
-    return rows
+    """Sort Compare's rows, lowest first. Temperature keeps the order given. A missing value goes last."""
+    keys = {"Rain": "rain_mm", "Wind": "wind_kmh", "Air quality": "aqi"}
+    if order not in keys:
+        return rows
+    key = keys[order]
+    return sorted(rows, key=lambda row: float("inf") if row[key] is None else row[key])
+
+
+def plural(count, word, many=None):
+    """Say a count with the right word form: 1 city, 2 cities."""
+    if count == 1:
+        return f"{count} {word}"
+    return f"{count} {many or word + 's'}"
 
 
 def format_duration(hours):
     """Say a length of time in the most natural unit."""
     if hours < 1:
-        minutes = round(hours * 60)
-        return f"{minutes} minute" if minutes == 1 else f"{minutes} minutes"
+        return plural(round(hours * 60), "minute")
     if hours < 48:
-        whole = round(hours)
-        return f"{whole} hour" if whole == 1 else f"{whole} hours"
+        return plural(round(hours), "hour")
     return f"{round(hours / 24)} days"
 
 
 def coverage_part(name, readings, span_hours):
-    word = "reading" if readings == 1 else "readings"
     if readings < 2:
-        return f"{readings} {word} for {name}"
-    return f"{readings} {word} for {name} over {format_duration(span_hours)}"
+        return f"{plural(readings, 'reading')} for {name}"
+    return f"{plural(readings, 'reading')} for {name} over {format_duration(span_hours)}"
 
 
 def coverage_sentence(rows, selected):
     """How much history the log holds: the selected city in full, the others added up."""
     chosen = [row for row in rows if row["name"] == selected]
     others = [row for row in rows if row["name"] != selected]
+    total = plural(sum([row["readings"] for row in others]), "reading")
+    cities = plural(len(others), "city", "cities")
+    if selected is None:
+        return f"Your log has {total}."
     if len(chosen) == 0:
-        total = sum([row["readings"] for row in others])
-        return f"Your log has {total} {'reading' if total == 1 else 'readings'} across {len(others)} {'city' if len(others) == 1 else 'cities'}, but none yet for {selected}." if selected else f"Your log has {total} {'reading' if total == 1 else 'readings'}."
+        return f"Your log has {total} across {cities}, but none yet for {selected}."
     text = f"Your log has {coverage_part(chosen[0]['name'], chosen[0]['readings'], chosen[0]['span_hours'])}"
     if len(others) > 0:
-        total = sum([row["readings"] for row in others])
-        text = text + f", plus {total} {'reading' if total == 1 else 'readings'} for {len(others)} other {'city' if len(others) == 1 else 'cities'}"
+        other_cities = plural(len(others), "other city", "other cities")
+        text = text + f", plus {total} for {other_cities}"
     return text + "."
 
 
@@ -283,8 +296,8 @@ def trend_finding(values, metric, unit):
 
 
 def daily_range_sentence(day_labels, ranges):
-    """How much the temperature moves within a day. Needs at least two days."""
-    if len(ranges) < 2:
+    """How much the temperature moves within a day. One or two days say too little."""
+    if len(ranges) < 3:
         return ""
     biggest = max(ranges)
     biggest_day = day_labels[ranges.index(biggest)]

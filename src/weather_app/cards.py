@@ -2,6 +2,7 @@
 
 from html import escape
 
+from .analytics import METRES_PER_SECOND_TO_KMH
 from .display import (
     aqi_label,
     aqi_position,
@@ -72,12 +73,12 @@ def header(city, reading, high, low, rain_chance, now):
     if reading.wind_deg is not None:
         wind_small = f"From the {compass_direction(reading.wind_deg)}"
     if reading.wind_gust is not None:
-        wind_small = f"{wind_small}, gusts {reading.wind_gust * 3.6:.0f} km/h".strip(", ")
+        wind_small = f"{wind_small}, gusts {reading.wind_gust * METRES_PER_SECOND_TO_KMH:.0f} km/h".strip(", ")
 
     rain_value = "No data" if rain_chance is None else f"{rain_chance * 100:.0f} %"
     stats = (
         stat("Feels like", f"{round(reading.feels_like)}°", feels_small(reading.feels_like_delta))
-        + stat("Wind", f"{reading.wind_speed * 3.6:.0f} km/h", wind_small)
+        + stat("Wind", f"{reading.wind_speed * METRES_PER_SECOND_TO_KMH:.0f} km/h", wind_small)
         + stat("Humidity", f"{reading.humidity} %")
         + stat("Chance of rain", rain_value, "Next few hours")
     )
@@ -119,7 +120,7 @@ def next_hours_strip(steps, timezone_offset, measure, reading):
     if measure == "Precipitation":
         now_value = format_precipitation((reading.rain_1h or 0) + (reading.snow_1h or 0))
     elif measure == "Wind":
-        now_value = f"{reading.wind_speed * 3.6:.0f} km/h"
+        now_value = f"{reading.wind_speed * METRES_PER_SECOND_TO_KMH:.0f} km/h"
 
     items = [strip_item("Now", weather_emoji(reading.icon), now_value)]
     for _, row in steps.iterrows():
@@ -129,7 +130,7 @@ def next_hours_strip(steps, timezone_offset, measure, reading):
             value = format_precipitation(row["rain_3h"] + row["snow_3h"])
             small = f'{row["pop"] * 100:.0f} % chance'
         elif measure == "Wind":
-            value = f'{row["wind_speed"] * 3.6:.0f} km/h'
+            value = f'{row["wind_speed"] * METRES_PER_SECOND_TO_KMH:.0f} km/h'
         items.append(strip_item(format_local_time(int(row["dt"]), timezone_offset), weather_emoji(row["icon"]), value, small))
     return '<div class="strip">' + "".join(items) + "</div>"
 
@@ -279,12 +280,12 @@ def air_outlook(days):
 
 
 def city_table(rows):
-    """One row per city. Every column says its unit, and air is in words."""
+    """One row per city. Every column says its unit, air is in words, and a dash means no data."""
     body = ""
     for row in rows:
-        week = "No forecast" if row["high"] is None else f'{round(row["low"])}° to {round(row["high"])}°'
-        rain = "" if row["high"] is None else f'{row["rain_mm"]:.0f} mm'
-        wind = "" if row["high"] is None else f'{row["wind_kmh"]:.0f} km/h'
-        air = "" if row["aqi"] is None else aqi_label(row["aqi"])
+        week = "–" if row["high"] is None else f'{round(row["low"])}° to {round(row["high"])}°'
+        rain = "–" if row["rain_mm"] is None else f'{row["rain_mm"]:.0f} mm'
+        wind = "–" if row["wind_kmh"] is None else f'{row["wind_kmh"]:.0f} km/h'
+        air = "–" if row["aqi"] is None else aqi_label(row["aqi"])
         body = body + f'<tr><td><b>{escape(row["name"])}</b></td><td>{round(row["now"])}°</td><td>{week}</td><td>{rain}</td><td>{wind}</td><td>{air}</td></tr>'
     return f'<table class="cities"><tr><th>City</th><th>Now</th><th>Low, high</th><th>Rain</th><th>Wind</th><th>Air</th></tr>{body}</table>'
