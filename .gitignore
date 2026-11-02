@@ -16,3 +16,6 @@ __pycache__/
 build/
 dist/
 .streamlit/secrets.toml
+
+# Each person's own saved cities
+data/saved_cities.csv
