@@ -75,6 +75,11 @@ def background_for(weather_id, night):
     return BACKGROUNDS[group + "_day"]
 
 
+def high_low_text(high, low):
+    """The same wording everywhere. The page keeps the two spaces (see .high-low in style.py)."""
+    return f"High {high:.0f}°  Low {low:.0f}°"
+
+
 def aqi_label(aqi):
     return AQI_LABELS.get(aqi, "Unknown")
 

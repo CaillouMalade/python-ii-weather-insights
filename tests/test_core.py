@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from PIL import Image
 
-from weather_app.cards import air_tile, city_card, hero, sun_tile, wind_tile
+from weather_app.cards import air_tile, city_card, detail_tiles, feels_small, format_precipitation, header, next_hours_strip
 from weather_app.client import WeatherClient, validate_location
 from weather_app.display import (
     aqi_label,
@@ -15,6 +15,7 @@ from weather_app.display import (
     background_for,
     BACKGROUNDS,
     compass_direction,
+    high_low_text,
     format_local_time,
     is_night,
     range_bar,
@@ -208,33 +209,65 @@ def test_city_card_without_a_reading_shows_the_escaped_note():
     assert "&lt;i&gt;failed" in html
 
 
-def test_hero_escapes_text_and_rounds():
-    html = hero("<b>Town</b>", make_reading(temperature=20.4, conditions="<i>rain</i>"), 21.0, 3.0, MONDAY)
+def test_header_escapes_text_and_uses_high_low_wording():
+    html = header("<b>Town</b>", make_reading(temperature=20.4, conditions="<i>rain</i>"), 21.0, 3.0, 0.5, MONDAY)
     assert "&lt;b&gt;Town" in html
-    assert "&lt;i&gt;Rain" not in html and "&lt;i&gt;rain" in html
+    assert "<i>" not in html
     assert "20°" in html
+    assert "High 21°  Low 3°" in html
+    assert "50 %" in html
+
+
+def test_feels_small_uses_the_delta():
+    assert feels_small(-2.0) == "2° colder than actual"
+    assert feels_small(3.0) == "3° warmer than actual"
+    assert feels_small(0.2) == "About the actual temperature"
+
+
+def test_high_low_text():
+    assert high_low_text(15.4, 11.6) == "High 15°  Low 12°"
+
+
+def test_format_precipitation():
+    assert format_precipitation(0) == "0 mm"
+    assert format_precipitation(0.42) == "0.4 mm"
+
+
+def make_strip_steps():
+    return pd.DataFrame({"dt": [MONDAY + 3600], "temperature": [14.2], "wind_speed": [5.0], "rain_3h": [0.4], "snow_3h": [0.0], "pop": [0.25], "icon": ["10d"]})
+
+
+def test_strip_puts_the_unit_on_every_value():
+    reading = make_reading()
+    assert "14°" in next_hours_strip(make_strip_steps(), 0, "Temperature", reading)
+    wind = next_hours_strip(make_strip_steps(), 0, "Wind", reading)
+    assert "18 km/h" in wind
+    assert "36 km/h" in wind
+    rain = next_hours_strip(make_strip_steps(), 0, "Precipitation", reading)
+    assert "0.4 mm" in rain
+    assert "25 % chance" in rain
+    assert "0 mm" in rain
+
+
+def test_strip_shows_regular_times_only():
+    html = next_hours_strip(make_strip_steps(), 0, "Temperature", make_reading())
+    assert "01:00" in html
+    assert "Sunrise" not in html
 
 
 def test_air_tile_hidden_without_aqi():
     assert air_tile({"aqi": None}) == ""
 
 
-def test_wind_tile_converts_to_kmh_and_names_the_direction():
-    reading = make_reading()
-    reading.wind_deg = 270
-    reading.wind_gust = 20.0
-    html = wind_tile(reading)
-    assert "<b>36</b>km/h" in html
-    assert "From the W" in html
-    assert "gusts 72 km/h" in html
-
-
-def test_sun_tile_daylight_length():
+def test_detail_tiles_show_uv_as_today_and_hide_missing_data():
     reading = make_reading()
     reading.sunrise = MONDAY + 7 * 3600
-    reading.sunset = MONDAY + 17 * 3600
-    reading.timezone_offset = 0
-    assert "10.0 h of daylight" in sun_tile(reading)
+    reading.timezone_offset = 3600
+    html = detail_tiles(reading, None, 3.6, None, "")
+    assert "UV index today" in html
+    assert "08:00" in html
+    assert "Sunset" not in html
+    assert "UV index today" not in detail_tiles(reading, None, None, None, "")
 
 
 # Map maths

@@ -11,9 +11,19 @@ import math
 import plotly.graph_objects as go
 from PIL import Image
 
+MAP_LAYERS = {
+    "Precipitation": "precipitation_new",
+    "Temperature": "temp_new",
+    "Wind": "wind_new",
+    "Clouds": "clouds_new",
+    "Pressure": "pressure_new",
+}
+
 TILE_SIZE = 256
 GRID_COLUMNS = 5
 GRID_ROWS = 3
+# The tiles are sharp when the map itself is one zoom level further out.
+TILE_ZOOM = 5
 
 
 def lat_lon_to_tile(latitude, longitude, zoom):
@@ -87,18 +97,18 @@ def image_to_data_uri(image):
     return f"data:image/png;base64,{encoded}"
 
 
-def build_map_figure(image_uri, bounds, latitude, longitude, view_zoom):
+def build_map_figure(image_uri, bounds, latitude, longitude):
     """A Plotly map: free dark basemap, weather image on top, and a dot on the city."""
     fig = go.Figure(go.Scattermap(lat=[latitude], lon=[longitude], mode="markers", marker=dict(size=11, color="white")))
     fig.update_layout(
         map=dict(
             style="carto-darkmatter",
             center=dict(lat=latitude, lon=longitude),
-            zoom=view_zoom,
+            zoom=TILE_ZOOM - 1,
             layers=[dict(sourcetype="image", source=image_uri, coordinates=bounds, opacity=0.85)],
         ),
         margin=dict(l=0, r=0, t=0, b=0),
-        height=420,
+        height=350,
         showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)",
     )

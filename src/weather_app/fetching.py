@@ -9,7 +9,7 @@ from .analytics import add_local_time, daily_summary
 from .client import WeatherClient
 from .config import API_KEY
 from .display import format_local_time, today_high_low
-from .maps import image_to_data_uri, stitch_tiles, tile_grid
+from .maps import TILE_ZOOM, image_to_data_uri, stitch_tiles, tile_grid
 from .storage import append_reading
 
 TEN_MINUTES = 600
@@ -62,16 +62,16 @@ def fetch_tile(layer, zoom, x, y):
     return WeatherClient(API_KEY).tile(layer, zoom, x, y)
 
 
-def fetch_map_image(layer, latitude, longitude, zoom):
+def fetch_map_image(layer, latitude, longitude):
     """Return (data URI, bounds, number of missing tiles) for the grid around a location."""
-    grid = tile_grid(latitude, longitude, zoom)
+    grid = tile_grid(latitude, longitude, TILE_ZOOM)
     missing = 0
     rows_of_bytes = []
     for row in grid["rows"]:
         row_of_bytes = []
         for x, y in row:
             try:
-                row_of_bytes.append(fetch_tile(layer, zoom, x, y))
+                row_of_bytes.append(fetch_tile(layer, TILE_ZOOM, x, y))
             except ValueError:
                 row_of_bytes.append(None)
                 missing = missing + 1
