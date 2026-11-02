@@ -98,3 +98,15 @@ Known limits: RainViewer's API is for personal and educational use. The first ma
 Rain axis ticks are round, sidebar cards are one fixed height, air headings say "the last 3 months", and a typed-city box covers cities missing from the dropdown. This restores input validation and a city-not-found message a grader can trigger, which closes the rubric risk noted earlier. The box needs an API key, so it is hidden without one.
 
 Not verified yet: the real geocoding endpoint through this box, and the map boost on real tiles (the orchestrator is checking the boost; it was not changed).
+
+## 2 November 2026 — final v0.1 round (branch release/v0.1, not merged)
+
+This round softened the map's weather layers and put labels above them, made High and Low agree everywhere, stopped a failed forecast winning Compare, fixed a "nan km/h" bug, folded the typed-city box, added a bar behind the phone's sidebar arrow, and simplified the code (app code is 22 lines shorter overall, because the fixes added code as well). Streamlit now has a minimum version of 1.66.1, matching the lock file.
+
+**Correction to earlier entries:** `migrate_log` no longer exists. `data/weather_log.csv` already had the current header when it was removed, but an older-format log would no longer be upgraded automatically.
+
+Verified: all tests pass with no key; real Chrome at 1280 and 390 px against a throwaway fake OpenWeatherMap; no test key or `appid` in pages, requests or WebSocket frames.
+
+Not verified by the agent: the softer layers on real tiles, whether CARTO keeps the layer name `waterway_label`, and real phones.
+
+Still open: `data/weather_log.csv` is uncommitted and the orchestrator handles it. The orchestrator also pushes and merges. The brief requires commits from every team member, and Team is still to be filled in. `PROJECT_BOT.md` is staying for now.

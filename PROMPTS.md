@@ -191,3 +191,39 @@
 ### Be ready to explain: new forms not evidenced in class material
 
 `st.form(border=False)` and `st.form_submit_button(on_click=...)`; Plotly `tickmode="array"`, `tickvals`; CSS `text-overflow: ellipsis`, flexbox; `while` loop in `rain_axis_ticks`; `str.split(", ", 1)`.
+
+## v0.1 final fix round — 2 November 2026
+
+**Asked:** After live testing with the real key and an independent audit, Arthur approved these fixes: softer map layers with labels on top; a clearer loading note; the daily-range sentence only from 3 days; less duplication in Compare; the typed box folded under "Not listed?"; the phone sidebar arrow no longer floating over content; High and Low agreeing everywhere; a failed forecast unable to win Compare; the key not kept in error context; no "nan km/h"; a code cleanup; a minimum Streamlit version; and accurate docs.
+
+**Got:**
+- `WEATHER_LAYER_BOOST` halved from 3 to 1.5, and weather layers placed below the basemap's first label layer. Radar is unchanged.
+- `with_today_range`, so the Today row uses the same figures as the sidebar and header.
+- Missing forecast values are now `None`, with a dash in the Compare table. A selectbox replaces the sort buttons that repeated the winner cards.
+- `from None` on the three network errors.
+- `wind_text` and `pd.to_numeric` for missing gusts. This was a real bug: a missing gust showed "nan", and a forecast with no gusts at all would have crashed.
+- Removed `migrate_log` after checking that `data/weather_log.csv` already has the current header. Also removed the nested loop, repeated plural code, five unused forecast fields, and the `3.6` literals in `cards.py`.
+
+**Checked:** All tests pass with no key. In real Chrome at 1280 and 390 px against a throwaway fake OpenWeatherMap, with a failing forecast, missing gusts and a current high above the forecast's. Pages, requests and WebSocket frames were searched for the test key and `appid`. **Not checked by the agent:** the softer layers on real tiles, or anything on a real phone.
+
+**Kept / changed / rejected:**
+- `sorted(loaded, key=lambda weather: weather["reading"], reverse=True)` replaced the nested loop. The key values are the reading objects, so `sorted` still compares them with `WeatherReading.__lt__`.
+- Kept one way to sort the table, a selectbox, so the buttons no longer repeat the card names.
+- The map caption says a new layer can take a few seconds to appear, because the spinner covers fetching and Streamlit cannot see when the browser finishes painting. No JavaScript was added.
+- The label layer is named in `FIRST_LABEL_LAYER`. If CARTO renames it, the map may need this name updating.
+
+### Real-key checks by the orchestrator
+
+The agent never read a key or called OpenWeatherMap. The orchestrator ran real-key checks between rounds:
+- It probed which endpoints the key can use, including the 401s on One Call, hourly, daily, history and climate data, and on Weather Maps 2.0.
+- It confirmed the forecast's `dew_point` with a real request.
+- It tested the app live, which found the London search result, Mumbai's equal High and Low, the Tokyo and Rio temperature layers at average alpha about 228, and Rio's 33° against 32°.
+- The rows in `data/weather_log.csv` come from those live runs.
+
+### Earlier commits by Codex
+
+Commits `73043d4`, `387fdb0` and `b3c61e9` carry a `Co-Authored-By: Codex <noreply@openai.com>` trailer. Codex, OpenAI's coding agent, helped with those, which are the repository initialization and the earlier Pitwall work.
+
+### Be ready to explain: forms not listed in earlier entries
+
+`pytest.approx`; class attributes (`COLOR_SCHEME`, `OPTIONS` on `RainViewerClient`); `.pop` on `st.session_state`; `.items()` on a dictionary; `dropna(subset=...)`; the `:02d` format; `datetime.timestamp()`; `getattr` in `to_dict`; `raise ... from None`; `traceback.format_exception` in a test; `float("inf")` as a sort key; `pd.to_numeric`; `.loc[mask, column] = value`; `st.expander`; `st.selectbox(width=...)`; the `below` setting on a Plotly map layer; CSS `min-height`.

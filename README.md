@@ -4,7 +4,7 @@ Python II group assignment: an object-oriented weather app built on OpenWeatherM
 
 ## What it does
 
-**Sidebar:** search about 5,000 cities in a dropdown, largest first, and tap a saved city to open it. The list holds the largest cities plus national capitals. A city that is not listed can be typed into the box below it, which checks the text and looks the city up with OpenWeatherMap's geocoding. Each card shows local time, temperature, conditions, high and low, and ✕ removes a city. Saved cities survive a refresh. On a phone the sidebar starts closed and a city picker appears at the top of the page.
+**Sidebar:** search about 5,000 cities in a dropdown, largest first, and tap a saved city to open it. The list holds the largest cities plus national capitals. A city that is not listed can be typed under "Not listed?" just below it, which checks the text and looks the city up with OpenWeatherMap's geocoding. Each card shows local time, temperature, conditions, high and low, and ✕ removes a city. Saved cities survive a refresh. On a phone the sidebar starts closed and a city picker appears at the top of the page.
 
 **Weather tab**, in one consistent grid, which adapts to the width available:
 - A header with the city, local time, temperature, conditions, high and low, plus feels like, wind, humidity and chance of rain.
@@ -16,7 +16,7 @@ Python II group assignment: an object-oriented weather app built on OpenWeatherM
 - **Plan the week:** one headline, a temperature-and-rain chart, and a card per day with a one-sentence summary and morning, afternoon and evening rated in words with a reason.
 - **Air:** how the air usually is, the share of days in each band, each pollutant in plain words against its health guideline, the best and worst time of day, and the coming days.
 - **Compare:** the warmest, driest, calmest and cleanest of your saved cities, and a sortable table.
-- **History:** your own logged data: how much there is, a trend chart once a city has 3 readings over at least an hour, and how much the temperature moves within a day. This is the only section that works without an API key.
+- **History:** your own logged data: how much there is, a trend chart once a city has 3 readings over at least an hour, and, from 3 days of data, how much the temperature moves within a day. This is the only section that works without an API key.
 
 Each successful current-weather fetch is added to `data/weather_log.csv` with a UTC timestamp. Readings are cached for 10 minutes, so ordinary page reruns do not add duplicate rows. Forecasts are not logged.
 
@@ -25,8 +25,8 @@ Each successful current-weather fetch is added to `data/weather_log.csv` with a 
 Requires Python 3.11 or newer and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-git clone <repository-url>
-cd <repository-folder>
+git clone --branch release/v0.1 https://github.com/CaillouMalade/python-ii-weather-insights.git
+cd python-ii-weather-insights
 uv sync
 ```
 
@@ -65,6 +65,16 @@ The tests use small hand-made cases with known answers. They need no key and mak
 ## How the API key stays private
 
 The key is only used on the server. Weather map tile URLs need the key, so the server downloads the tiles, joins them into one image with Pillow, and sends the browser only that image. Radar comes from RainViewer and needs no key; it is fetched the same way. The map background comes from CARTO's free basemap, which needs no token.
+
+## The hardest parts to explain
+
+For the team's walkthrough. Start with these, because they are the least obvious code in the project.
+
+- **Map tiles (`src/weather_app/maps.py`):** a web map is a grid of square images. `lat_lon_to_tile` turns a place into a tile number, `tile_grid` picks the tiles around it, and `stitch_tiles` joins them into one picture. The server does this because OpenWeatherMap's tile URLs contain the key, so the browser only ever gets the finished image.
+- **Logging inside the cache (`fetch_and_log_current` in `src/weather_app/fetching.py`):** Streamlit reruns the whole script on every click. The log is written inside the function decorated with `@st.cache_data`, so a rerun reuses the saved answer and adds no duplicate row. A new row appears only when the 10-minute cache runs out.
+- **Tab callbacks (`app.py`, `src/weather_app/views_analytics.py`, `src/weather_app/sidebar.py`):** `st.tabs(..., on_change="rerun")` makes the script rerun when a tab changes, and `.open` says which tab is showing, so hidden tabs make no API calls. Callbacks such as `on_click=select_city` run before the script reruns, which is why they can safely change `st.session_state`.
+- **Ozone rolling mean (`daily_guideline_levels` in `src/weather_app/analytics.py`):** the WHO's ozone guideline is an 8-hour level and the others are daily. So ozone uses each day's highest 8-hour rolling mean, while the others use the daily mean.
+- **Tappable cards (`src/weather_app/style.py`, `show_sidebar` in `src/weather_app/sidebar.py`):** a Streamlit button cannot contain a designed card. So each card is plain HTML, and an invisible real button is stretched over it with CSS. The ✕ sits above that button so it can still be pressed.
 
 ## Project structure
 
