@@ -6,16 +6,13 @@ from pathlib import Path
 
 import pandas as pd
 
+from .models import READING_COLUMNS
+
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 LOG_PATH = DATA_DIR / "weather_log.csv"
 CITIES_PATH = DATA_DIR / "cities.csv"
 SAVED_CITIES_PATH = DATA_DIR / "saved_cities.csv"
 
-READING_COLUMNS = [
-    "location", "latitude", "longitude", "temperature", "feels_like", "humidity", "wind_speed", "conditions",
-    "temp_min", "temp_max", "pressure", "clouds", "wind_deg", "wind_gust", "visibility", "rain_1h", "snow_1h",
-    "weather_id", "icon", "observed_at", "timezone_offset", "sunrise", "sunset",
-]
 LOG_COLUMNS = ["timestamp_utc"] + READING_COLUMNS
 
 SAVED_CITY_COLUMNS = ["location", "label", "city", "latitude", "longitude"]
@@ -32,36 +29,9 @@ def _read_header(path):
         return ""
 
 
-def migrate_log(path=LOG_PATH):
-    """Add any missing columns to an older log, leaving them blank. Existing rows are kept.
-
-    The new file is written beside the old one and checked before it replaces it,
-    so a problem part-way through cannot damage the real data.
-    """
-    header = _read_header(path)
-    if header == "" or header == ",".join(LOG_COLUMNS):
-        return
-
-    # dtype=str and keep_default_na=False keep every old value exactly as it was written.
-    old = pd.read_csv(path, dtype=str, keep_default_na=False, encoding="utf-8")
-    new = old.copy()
-    for name in LOG_COLUMNS:
-        if name not in new.columns:
-            new[name] = ""
-
-    temporary_path = Path(str(path) + ".tmp")
-    new[LOG_COLUMNS].to_csv(temporary_path, index=False, encoding="utf-8")
-
-    check = pd.read_csv(temporary_path, dtype=str, keep_default_na=False, encoding="utf-8")
-    if not check[old.columns.to_list()].equals(old):
-        raise ValueError("The weather log could not be upgraded safely, so it was left unchanged.")
-    temporary_path.replace(path)
-
-
 def append_reading(reading, path=LOG_PATH):
     """Append one reading with a UTC timestamp, writing the header if the file is new."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    migrate_log(path)
     write_header = _read_header(path) == ""
     values = reading.to_dict()
     row = [datetime.now(timezone.utc).isoformat()] + [values[name] for name in READING_COLUMNS]
@@ -80,7 +50,6 @@ def append_reading(reading, path=LOG_PATH):
 
 def load_log(path=LOG_PATH):
     """Return the whole log as a DataFrame, or an empty one if nothing has been logged."""
-    migrate_log(path)
     if _read_header(path) == "":
         return pd.DataFrame(columns=LOG_COLUMNS)
 

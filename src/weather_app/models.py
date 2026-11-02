@@ -1,6 +1,14 @@
 """The data class for one weather reading."""
 
 
+# The fields of a reading. The log's columns come from this list too.
+READING_COLUMNS = [
+    "location", "latitude", "longitude", "temperature", "feels_like", "humidity", "wind_speed", "conditions",
+    "temp_min", "temp_max", "pressure", "clouds", "wind_deg", "wind_gust", "visibility", "rain_1h", "snow_1h",
+    "weather_id", "icon", "observed_at", "timezone_offset", "sunrise", "sunset",
+]
+
+
 class WeatherReading:
     """Current conditions at one location. Units: °C, %, m/s, hPa, metres, mm."""
 
@@ -68,28 +76,7 @@ class WeatherReading:
         return self.temperature < other.temperature
 
     def to_dict(self):
-        return {
-            "location": self.location,
-            "latitude": self.latitude,
-            "longitude": self.longitude,
-            "temperature": self.temperature,
-            "feels_like": self.feels_like,
-            "humidity": self.humidity,
-            "wind_speed": self.wind_speed,
-            "conditions": self.conditions,
-            "temp_min": self.temp_min,
-            "temp_max": self.temp_max,
-            "pressure": self.pressure,
-            "clouds": self.clouds,
-            "wind_deg": self.wind_deg,
-            "wind_gust": self.wind_gust,
-            "visibility": self.visibility,
-            "rain_1h": self.rain_1h,
-            "snow_1h": self.snow_1h,
-            "weather_id": self.weather_id,
-            "icon": self.icon,
-            "observed_at": self.observed_at,
-            "timezone_offset": self.timezone_offset,
-            "sunrise": self.sunrise,
-            "sunset": self.sunset,
-        }
+        values = {}
+        for name in READING_COLUMNS:
+            values[name] = getattr(self, name)
+        return values
