@@ -92,3 +92,9 @@ Verified without a real OpenWeatherMap key or call: all tests pass; real Chrome 
 Not verified yet: real OpenWeatherMap tiles (including how the boost looks and whether the legends match them), and real forecast and air data. Real phones are also untested.
 
 Known limits: RainViewer's API is for personal and educational use. The first map load fetches 30 tiles one at a time, so it can take several seconds; a spinner shows meanwhile. A capital missing from GeoNames' `cities15000` file cannot be added. High and low are hidden when they would be equal.
+
+## 2 November 2026 — v0.1 polish round (branch release/v0.1, not merged)
+
+Rain axis ticks are round, sidebar cards are one fixed height, air headings say "the last 3 months", and a typed-city box covers cities missing from the dropdown. This restores input validation and a city-not-found message a grader can trigger, which closes the rubric risk noted earlier. The box needs an API key, so it is hidden without one.
+
+Not verified yet: the real geocoding endpoint through this box, and the map boost on real tiles (the orchestrator is checking the boost; it was not changed).

@@ -4,7 +4,7 @@ Python II group assignment: an object-oriented weather app built on OpenWeatherM
 
 ## What it does
 
-**Sidebar:** search about 5,000 cities in a dropdown, largest first, and tap a saved city to open it. The list holds the largest cities plus national capitals. Each card shows local time, temperature, conditions, high and low, and ✕ removes a city. Saved cities survive a refresh. On a phone the sidebar starts closed and a city picker appears at the top of the page.
+**Sidebar:** search about 5,000 cities in a dropdown, largest first, and tap a saved city to open it. The list holds the largest cities plus national capitals. A city that is not listed can be typed into the box below it, which checks the text and looks the city up with OpenWeatherMap's geocoding. Each card shows local time, temperature, conditions, high and low, and ✕ removes a city. Saved cities survive a refresh. On a phone the sidebar starts closed and a city picker appears at the top of the page.
 
 **Weather tab**, in one consistent grid, which adapts to the width available:
 - A header with the city, local time, temperature, conditions, high and low, plus feels like, wind, humidity and chance of rain.
