@@ -1,23 +1,22 @@
 ﻿# Weather Insights
 
-Python II group assignment: an object-oriented weather app built on OpenWeatherMap and Streamlit, made to look and behave like a phone or laptop weather app. This is v0.1, a general weather app.
+Python II group assignment: an object-oriented weather app built on OpenWeatherMap and Streamlit. This is v0.1, a general weather app.
 
 ## What it does
 
-**Sidebar:** search about 5,000 cities in a dropdown (no exact spelling needed) and tap a saved city to open it. Each card shows local time, temperature, conditions and high/low, and ✕ removes a city. Saved cities survive a refresh. On a phone the sidebar starts closed and a city picker appears at the top of the page.
+**Sidebar:** search about 5,000 cities in a dropdown (no exact spelling needed) and tap a saved city to open it. Each card shows local time, temperature, conditions, high and low, and ✕ removes a city. Saved cities survive a refresh. On a phone the sidebar starts closed and a city picker appears at the top of the page.
 
-**Weather tab:**
-- Overview of the city, with a background that follows the conditions and the time of day.
-- Conditions for the next 24 hours in 3-hour steps, switchable between temperature, precipitation and wind, with sunrise and sunset where they fall. The free API has no hourly forecast.
-- Forecast for up to 5 days, with lows and highs computed from the 3-hour steps.
-- Tiles for air quality, wind, UV (hidden if that legacy endpoint fails), sunrise and sunset, feels like, humidity, visibility and pressure.
-- A weather map with five layers: precipitation, temperature, wind, clouds and pressure.
+**Weather tab**, in one consistent grid, which adapts to the width available:
+- A header with the city, local time, temperature, conditions, high and low, plus feels like, wind, humidity and chance of rain.
+- Next hours, switchable between temperature, precipitation and wind.
+- A 5-day forecast beside a weather map with five layers (stacked on a phone).
+- Same-size detail tiles: air quality, UV index today, sunrise, sunset, dew point, visibility, pressure and cloud cover.
 
-**Analytics tab:**
-- **Your history:** temperature and feels-like from your own log, daily low/high/range, and feels-like minus actual temperature. This works without an API key.
-- **Next 5 days:** temperature, dew point, precipitation, wind, pressure tendency, and a comfort score with the best and worst daytime windows.
-- **Air quality:** up to 90 days compared with the WHO 2021 guidelines, the share of days per AQI band, a day-and-hour pattern, and the outlook.
-- **Compare cities:** your saved cities ranked and side by side, with heatmaps.
+**Analytics tab:** four short answers for the selected city (best time outside, next rain, windiest moment, air quality), then four sections. Each section leads with a finding computed from the data, and all times are local to the city.
+- **Plan the week:** a day-by-time heatmap of comfort, temperature, chance of rain or wind, and the three best windows to be outside, with reasons.
+- **Air:** 90 days of daily AQI as a calendar, the hour-of-day pattern of a chosen pollutant, a comparison with the WHO 2021 guidelines, and the outlook.
+- **Compare:** your saved cities ranked and day by day on temperature, rain, wind or air quality.
+- **History:** your own logged data: how much there is for each city, a trend chart, and a daily range table. This is the only section that works without an API key.
 
 Each successful current-weather fetch is added to `data/weather_log.csv` with a UTC timestamp. Readings are cached for 10 minutes, so ordinary page reruns do not add duplicate rows. Forecasts are not logged.
 
@@ -45,7 +44,7 @@ cp variables.env.example variables.env
 
 Then put your own OpenWeatherMap key in `variables.env`. Git ignores this file; never commit or display a real key. A free-tier key is enough.
 
-Without a key, the app still opens. The Weather tab shows a setup message, and the analyses built on the log still work.
+Without a key, the app still opens. The Weather tab and the first three Analytics sections show a setup message, and History works on the existing log.
 
 A fresh clone starts with Madrid, Tokyo and New York City. Your own list is saved in `data/saved_cities.csv`, which Git ignores.
 
@@ -74,9 +73,10 @@ The key is only used on the server. Weather map tile URLs need the key, so the s
 - `src/weather_app/models.py`: `WeatherReading`.
 - `src/weather_app/storage.py`: the CSV log, the city list and the saved cities.
 - `src/weather_app/analytics.py`: pandas analyses, each taking and returning a DataFrame.
+- `src/weather_app/findings.py`: the plain-language sentences on the Analytics tab.
 - `src/weather_app/maps.py`: tile maths, stitching and the Plotly map.
 - `src/weather_app/fetching.py`: cached API calls.
-- `src/weather_app/display.py`: small helpers for local time, compass and backgrounds.
+- `src/weather_app/display.py`: small helpers for local time, wind direction and backgrounds.
 - `src/weather_app/sidebar.py`, `views_weather.py`, `views_analytics.py`, `cards.py`, `style.py`: the UI.
 - `scripts/build_cities_csv.py`: rebuilds `data/cities.csv`. Not needed to run the app.
 - `tests/`: the tests.

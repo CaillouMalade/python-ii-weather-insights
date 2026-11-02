@@ -70,3 +70,13 @@ Known limits:
 - Only the roughly 5,000 largest cities can be added.
 - On wide windows, or when panning, the map's weather layer ends at its fixed 5-by-3 tile area.
 - Team members remain unknown, and the brief requires commits from every member.
+
+## 2 November 2026 — v0.1 own identity and rebuilt Analytics (branch release/v0.1, not merged)
+
+The main pane is now one grid: header, Next hours, forecast beside map, then eight same-size detail tiles. Analytics is an overview strip plus Plan the week, Air, Compare and History. This replaces the Apple-style layout and the Analytics sections described in the earlier entry. The map's Region/Continent control and the wind compass are gone.
+
+Verified without a real key or live API call: all tests pass; real Chrome against a throwaway fake server at 1280, 844 and 390 px, with every tab and selector; no overflow or clipped text found; no test key or `appid` in pages, requests or WebSocket frames; no-key mode works.
+
+Not verified yet: the real API, including the UV endpoint's meaning. "UV index today" is a cautious label based on what was seen, not on anything confirmed by the agent. Findings have only run on invented data. Real phones are also untested.
+
+Known limits: at about 844 px wide with the sidebar open, the main column uses its narrow layout. Comparison ties are reported only when the top and bottom values are equal.
