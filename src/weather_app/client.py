@@ -35,15 +35,16 @@ class APIClient:
         params = self._with_key(params)
 
         # The messages are fixed text on purpose: the text of a requests error
-        # contains the full URL, and the URL contains the API key.
+        # contains the full URL, and the URL contains the API key. "from None"
+        # also stops Python keeping that error attached to the new one.
         try:
             response = requests.get(url, params=params, timeout=self.timeout)
         except requests.exceptions.Timeout:
-            raise ValueError("The weather service took too long to respond. Please try again.")
+            raise ValueError("The weather service took too long to respond. Please try again.") from None
         except requests.exceptions.ConnectionError:
-            raise ValueError("Could not connect to the weather service. Check your internet connection.")
+            raise ValueError("Could not connect to the weather service. Check your internet connection.") from None
         except requests.exceptions.RequestException:
-            raise ValueError("The request to the weather service failed. Please try again.")
+            raise ValueError("The request to the weather service failed. Please try again.") from None
 
         if response.status_code == 401:
             raise ValueError("Invalid or inactive API key. Check the key in variables.env.")
@@ -207,18 +208,13 @@ class WeatherClient(APIClient):
                         "dew_point": entry["main"].get("dew_point"),
                         "humidity": entry["main"].get("humidity"),
                         "pressure": entry["main"].get("pressure"),
-                        "clouds": entry.get("clouds", {}).get("all"),
                         "wind_speed": entry.get("wind", {}).get("speed"),
-                        "wind_deg": entry.get("wind", {}).get("deg"),
                         "wind_gust": entry.get("wind", {}).get("gust"),
-                        "visibility": entry.get("visibility"),
                         "pop": entry.get("pop", 0),
                         # The API leaves out rain and snow when there is none, so 0 mm is correct here.
                         "rain_3h": entry.get("rain", {}).get("3h", 0),
                         "snow_3h": entry.get("snow", {}).get("3h", 0),
-                        "weather_id": entry["weather"][0].get("id"),
                         "icon": entry["weather"][0].get("icon"),
-                        "conditions": entry["weather"][0].get("description"),
                     }
                 )
         except (KeyError, IndexError):
