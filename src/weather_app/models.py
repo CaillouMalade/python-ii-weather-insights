@@ -2,9 +2,34 @@
 
 
 class WeatherReading:
-    """Current conditions at one location. Units: °C, %, m/s."""
+    """Current conditions at one location. Units: °C, %, m/s, hPa, metres, mm."""
 
-    def __init__(self, location, latitude, longitude, temperature, feels_like, humidity, wind_speed, conditions):
+    def __init__(
+        self,
+        location,
+        latitude,
+        longitude,
+        temperature,
+        feels_like,
+        humidity,
+        wind_speed,
+        conditions,
+        temp_min=None,
+        temp_max=None,
+        pressure=None,
+        clouds=None,
+        wind_deg=None,
+        wind_gust=None,
+        visibility=None,
+        rain_1h=None,
+        snow_1h=None,
+        weather_id=None,
+        icon=None,
+        observed_at=None,
+        timezone_offset=None,
+        sunrise=None,
+        sunset=None,
+    ):
         self.location = location
         self.latitude = latitude
         self.longitude = longitude
@@ -13,6 +38,22 @@ class WeatherReading:
         self.humidity = humidity
         self.wind_speed = wind_speed
         self.conditions = conditions
+        # The API does not always send these, so they can stay None.
+        self.temp_min = temp_min
+        self.temp_max = temp_max
+        self.pressure = pressure
+        self.clouds = clouds
+        self.wind_deg = wind_deg
+        self.wind_gust = wind_gust
+        self.visibility = visibility
+        self.rain_1h = rain_1h
+        self.snow_1h = snow_1h
+        self.weather_id = weather_id
+        self.icon = icon
+        self.observed_at = observed_at
+        self.timezone_offset = timezone_offset
+        self.sunrise = sunrise
+        self.sunset = sunset
 
     @property
     def feels_like_delta(self):
@@ -36,4 +77,19 @@ class WeatherReading:
             "humidity": self.humidity,
             "wind_speed": self.wind_speed,
             "conditions": self.conditions,
+            "temp_min": self.temp_min,
+            "temp_max": self.temp_max,
+            "pressure": self.pressure,
+            "clouds": self.clouds,
+            "wind_deg": self.wind_deg,
+            "wind_gust": self.wind_gust,
+            "visibility": self.visibility,
+            "rain_1h": self.rain_1h,
+            "snow_1h": self.snow_1h,
+            "weather_id": self.weather_id,
+            "icon": self.icon,
+            "observed_at": self.observed_at,
+            "timezone_offset": self.timezone_offset,
+            "sunrise": self.sunrise,
+            "sunset": self.sunset,
         }
