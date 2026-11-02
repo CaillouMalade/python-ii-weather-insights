@@ -225,7 +225,12 @@ def test_complete_days_drop_part_days():
     hours = [MONDAY + 12 * HOUR + hour * HOUR for hour in range(36)]
     air = add_local_time(pd.DataFrame({"dt": hours}), 0)
     # 12 hours on Monday, then all 24 on Tuesday.
-    assert complete_days(air)["local_date"].unique().tolist() == ["2026-01-06"]
+    assert complete_days(air, 90)["local_date"].unique().tolist() == ["2026-01-06"]
+
+
+def test_complete_days_keep_only_the_latest_count():
+    air = add_local_time(pd.DataFrame({"dt": [MONDAY + hour * HOUR for hour in range(72)]}), 0)
+    assert complete_days(air, 2)["local_date"].unique().tolist() == ["2026-01-06", "2026-01-07"]
 
 
 def test_daily_worst_aqi():

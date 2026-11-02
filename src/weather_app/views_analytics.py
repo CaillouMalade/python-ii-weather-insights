@@ -48,8 +48,7 @@ from .findings import (
 )
 from .storage import load_log
 
-# One day more than we show, because the first and last day in the answer are only part-days.
-AIR_HISTORY_DAYS = 91
+AIR_HISTORY_DAYS = 90
 # A line needs a few points over some real time before it can suggest anything.
 MIN_TREND_READINGS = 3
 MIN_TREND_HOURS = 1
@@ -102,12 +101,13 @@ def load_air_history(weather):
     """Return the selected city's air quality history as a table, or None if it is not available."""
     location = weather["location"]
     try:
-        rows = fetch_air_history(location["latitude"], location["longitude"], AIR_HISTORY_DAYS)
+        # One day more than we show, because the first and last day in the answer are only part-days.
+        rows = fetch_air_history(location["latitude"], location["longitude"], AIR_HISTORY_DAYS + 1)
     except ValueError:
         return None
     if len(rows) == 0:
         return None
-    return complete_days(add_local_time(pd.DataFrame(rows), weather["reading"].timezone_offset or 0))
+    return complete_days(add_local_time(pd.DataFrame(rows), weather["reading"].timezone_offset or 0), AIR_HISTORY_DAYS)
 
 
 def air_now(weather):
@@ -335,10 +335,10 @@ def show_history(log, weather, names):
     coverage = []
     for row in log_coverage(log).to_dict("records"):
         coverage.append({"name": names.get(row["location"], row["location"]), "readings": row["readings"], "span_hours": row["span_hours"]})
-    show_finding(coverage_sentence(coverage))
-
     if weather is None:
+        show_finding(coverage_sentence(coverage, None))
         return
+    show_finding(coverage_sentence(coverage, weather["name"]))
 
     series = history_series(log, weather["location"]["location"])
     span_hours = 0

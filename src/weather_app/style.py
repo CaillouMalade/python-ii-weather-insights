@@ -43,7 +43,7 @@ CSS = """
 .strip-small { font-size: 0.72rem; color: #7fd0f5; min-height: 1rem; white-space: nowrap; }
 
 /* Daily forecast: the rows share the card's height, to match the map beside it */
-.days { min-height: 461px; display: flex; flex-direction: column; }
+.days { min-height: 488px; display: flex; flex-direction: column; }
 .day { flex: 1; display: grid; grid-template-columns: 3.2rem 3rem 2.4rem 1fr 2.4rem; gap: 8px; align-items: center; border-top: 1px solid rgba(255,255,255,.15); }
 .day-pop { font-size: 0.7rem; color: #7fd0f5; }
 .day-icon { text-align: center; font-size: 1.25rem; line-height: 1.1; }

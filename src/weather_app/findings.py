@@ -253,11 +253,18 @@ def coverage_part(name, readings, span_hours):
     return f"{readings} {word} for {name} over {format_duration(span_hours)}"
 
 
-def coverage_sentence(rows):
-    """How much history the log holds. rows have name, readings and span_hours."""
-    ordered = sorted(rows, key=lambda row: row["readings"], reverse=True)
-    parts = [coverage_part(row["name"], row["readings"], row["span_hours"]) for row in ordered]
-    return f"Your log has {join_words(parts)}."
+def coverage_sentence(rows, selected):
+    """How much history the log holds: the selected city in full, the others added up."""
+    chosen = [row for row in rows if row["name"] == selected]
+    others = [row for row in rows if row["name"] != selected]
+    if len(chosen) == 0:
+        total = sum([row["readings"] for row in others])
+        return f"Your log has {total} {'reading' if total == 1 else 'readings'} across {len(others)} {'city' if len(others) == 1 else 'cities'}, but none yet for {selected}." if selected else f"Your log has {total} {'reading' if total == 1 else 'readings'}."
+    text = f"Your log has {coverage_part(chosen[0]['name'], chosen[0]['readings'], chosen[0]['span_hours'])}"
+    if len(others) > 0:
+        total = sum([row["readings"] for row in others])
+        text = text + f", plus {total} {'reading' if total == 1 else 'readings'} for {len(others)} other {'city' if len(others) == 1 else 'cities'}"
+    return text + "."
 
 
 def too_little_history_text(name, readings, span_hours):

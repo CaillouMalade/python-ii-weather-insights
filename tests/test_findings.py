@@ -211,9 +211,16 @@ def test_format_duration_picks_a_natural_unit():
 
 
 def test_coverage_sentence():
-    rows = [{"name": "Madrid", "readings": 7, "span_hours": 2.0}, {"name": "Oslo", "readings": 1, "span_hours": 0.0}]
-    assert coverage_sentence(rows) == "Your log has 7 readings for Madrid over 2 hours and 1 reading for Oslo."
-    assert coverage_sentence(list(reversed(rows))) == coverage_sentence(rows)
+    rows = [{"name": "Madrid", "readings": 7, "span_hours": 2.0}, {"name": "Oslo", "readings": 1, "span_hours": 0.0}, {"name": "Lima", "readings": 3, "span_hours": 1.0}]
+    assert coverage_sentence(rows, "Madrid") == "Your log has 7 readings for Madrid over 2 hours, plus 4 readings for 2 other cities."
+    assert coverage_sentence(rows[:1], "Madrid") == "Your log has 7 readings for Madrid over 2 hours."
+    assert coverage_sentence(rows[:2], "Oslo") == "Your log has 1 reading for Oslo, plus 7 readings for 1 other city."
+
+
+def test_coverage_sentence_for_a_city_with_no_history_yet():
+    rows = [{"name": "Madrid", "readings": 7, "span_hours": 2.0}]
+    assert coverage_sentence(rows, "Oslo") == "Your log has 7 readings across 1 city, but none yet for Oslo."
+    assert coverage_sentence(rows, None) == "Your log has 7 readings."
 
 
 def test_too_little_history_text():

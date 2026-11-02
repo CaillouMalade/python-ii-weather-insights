@@ -181,11 +181,11 @@ def pressure_tendency(steps):
 # Air quality
 
 
-def complete_days(air):
-    """Keep only local days with at least 20 hours of data, so part-days do not skew the counts."""
+def complete_days(air, count):
+    """Keep the latest count local days with at least 20 hours of data, so part-days do not skew the counts."""
     out = air.copy()
     counts = out.groupby("local_date").agg(hours=("dt", "count")).reset_index()
-    full = counts[counts["hours"] >= 20]["local_date"].to_list()
+    full = counts[counts["hours"] >= 20]["local_date"].to_list()[-count:]
     return out[out["local_date"].isin(full)]
 
 
