@@ -3,6 +3,8 @@
 import streamlit as st
 
 from .cards import city_card
+from .client import WeatherClient
+from .config import API_KEY
 from .fetching import now_seconds
 from .storage import load_city_list, rows_to_locations, save_cities
 
@@ -24,12 +26,26 @@ def add_chosen_city():
         return
 
     cities = city_list()
-    location = rows_to_locations(cities[cities["label"] == label])[0]
+    save_and_select(rows_to_locations(cities[cities["label"] == label])[0])
+
+
+def save_and_select(location):
     names = [saved["location"] for saved in st.session_state["locations"]]
     if location["location"] not in names:
         st.session_state["locations"].append(location)
         save_cities(st.session_state["locations"])
     st.session_state["selected_city"] = location["location"]
+
+
+def add_typed_city():
+    """Runs when Add is pressed. A problem becomes a message, shown under the box."""
+    try:
+        location = WeatherClient(API_KEY).find_city(st.session_state["typed_city"])
+    except ValueError as e:
+        st.session_state["typed_city_error"] = str(e)
+        return
+    st.session_state["typed_city"] = ""
+    save_and_select(location)
 
 
 def remove_city(name):
@@ -59,8 +75,20 @@ def show_city_search(where):
     )
 
 
+def show_typed_city_box():
+    """For a city that is not in the dropdown. Looking one up needs the API key."""
+    if not API_KEY:
+        return
+    with st.sidebar.form("typed_city_form", border=False):
+        st.text_input("Not listed? Type a city", key="typed_city")
+        st.form_submit_button("Add", on_click=add_typed_city)
+    if "typed_city_error" in st.session_state:
+        st.sidebar.error(st.session_state.pop("typed_city_error"))
+
+
 def show_sidebar(weather_by_city, selected, now):
     show_city_search(st.sidebar)
+    show_typed_city_box()
     if len(weather_by_city) == 0:
         st.sidebar.info("Search above to add your first city.")
     for number in range(len(weather_by_city)):

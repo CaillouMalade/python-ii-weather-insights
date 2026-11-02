@@ -81,12 +81,36 @@ def validate_location(location):
         raise ValueError(f"{name} has coordinates outside the valid range.")
 
 
+def validate_city(city):
+    """Return the cleaned city name, or raise ValueError if it is obviously invalid."""
+    if not isinstance(city, str):
+        raise ValueError("The city name must be text.")
+
+    cleaned = city.strip()
+    if cleaned == "":
+        raise ValueError("Please enter a city name.")
+    if len(cleaned) > 100:
+        raise ValueError("That city name is too long.")
+
+    letters = [character for character in cleaned if character.isalpha()]
+    if len(letters) == 0:
+        raise ValueError(f"'{cleaned}' is not a valid city name: it contains no letters.")
+
+    return cleaned
+
+
 class WeatherClient(APIClient):
     """Knows the OpenWeatherMap endpoints and fields."""
 
     def __init__(self, api_key):
         super().__init__(BASE_URL, api_key, "appid")
         self._not_found_message = "OpenWeatherMap could not find this location."
+
+    def find_city(self, city):
+        """Check a typed city, then return its top geocoding match as a location dictionary."""
+        cleaned = validate_city(city)
+        data = self._get("geo/1.0/direct", {"q": cleaned, "limit": 1})
+        return self._parse_city(data, cleaned)
 
     def current(self, location):
         """Return a WeatherReading for a location dictionary from the city list."""
@@ -130,6 +154,16 @@ class WeatherClient(APIClient):
         if layer not in TILE_LAYERS:
             raise ValueError(f"Unknown map layer: {layer}")
         return self._get_bytes(f"{TILE_URL}/map/{layer}/{zoom}/{x}/{y}.png", {})
+
+    def _parse_city(self, data, cleaned):
+        if len(data) == 0:
+            raise ValueError(f"City '{cleaned}' was not found. Check the spelling.")
+        try:
+            top_match = data[0]
+            name = f"{top_match['name']}, {top_match['country']}"
+            return {"location": name, "label": name, "city": top_match["name"], "latitude": top_match["lat"], "longitude": top_match["lon"]}
+        except (KeyError, IndexError):
+            raise ValueError("OpenWeatherMap sent a location in an unexpected format.")
 
     def _parse_current(self, data, location):
         try:
