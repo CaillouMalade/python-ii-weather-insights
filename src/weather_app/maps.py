@@ -11,19 +11,36 @@ import math
 import plotly.graph_objects as go
 from PIL import Image
 
+RADAR_LAYER = "Rain radar"
 MAP_LAYERS = {
-    "Precipitation": "precipitation_new",
     "Temperature": "temp_new",
     "Wind": "wind_new",
     "Clouds": "clouds_new",
     "Pressure": "pressure_new",
 }
 
+# Colour scales from OpenWeatherMap's map legend (openweathermap.org/map_legend), listed as
+# (label, colour). Temperature is as published. Wind is published in m/s and pressure in Pa,
+# so their labels are converted to km/h and hPa. Stops are shown evenly spaced.
+LEGENDS = {
+    "Temperature": ("°C", [("-30", "#8257DB"), ("-20", "#208CEC"), ("-10", "#20C4E8"), ("0", "#23DDDD"), ("10", "#C2FF28"), ("20", "#FFF028"), ("30", "#FC8014")]),
+    "Wind": ("km/h", [("18", "#EECECC"), ("54", "#B364BC"), ("90", "#3F213B"), ("180", "#744CAC"), ("360", "#4600AF")]),
+    "Clouds": ("%", [("10", "#FDFDFF"), ("50", "#F7F7FF"), ("80", "#E9E9DF"), ("100", "#D2D2D2")]),
+    "Pressure": ("hPa", [("940", "#0073FF"), ("980", "#4BD0D6"), ("1000", "#8DE7C7"), ("1010", "#B0F720"), ("1020", "#F0B800"), ("1040", "#FB5515"), ("1080", "#C60000")]),
+}
+
+# OpenWeatherMap's tiles are mostly see-through, so low values hardly show. Multiplying
+# each pixel's opacity makes them read clearly. The colours themselves stay the same.
+WEATHER_LAYER_BOOST = 3
+RADAR_BOOST = 2
+# How strongly areas without radar are shaded, out of 255.
+NO_COVERAGE_OPACITY = 90
+
 TILE_SIZE = 256
 GRID_COLUMNS = 5
 GRID_ROWS = 3
 # The tiles are sharp when the map itself is one zoom level further out.
-TILE_ZOOM = 5
+TILE_ZOOM = 6
 
 
 def lat_lon_to_tile(latitude, longitude, zoom):
@@ -67,7 +84,7 @@ def tile_grid(latitude, longitude, zoom):
     north, west = tile_to_lat_lon(first_x, first_y, zoom)
     south, east = tile_to_lat_lon(first_x + GRID_COLUMNS, first_y + GRID_ROWS, zoom)
     bounds = [[west, north], [east, north], [east, south], [west, south]]
-    return {"rows": rows, "bounds": bounds}
+    return {"rows": rows, "bounds": bounds, "first_x": first_x, "first_y": first_y}
 
 
 def stitch_tiles(rows_of_png_bytes):
@@ -89,6 +106,29 @@ def stitch_tiles(rows_of_png_bytes):
     return image
 
 
+def boost_opacity(image, factor):
+    """Multiply every pixel's opacity, up to fully solid. See-through pixels stay see-through."""
+    red, green, blue, alpha = image.split()
+    alpha = alpha.point(lambda value: min(255, value * factor))
+    return Image.merge("RGBA", (red, green, blue, alpha))
+
+
+def has_radar_coverage(coverage_image, latitude, longitude, zoom, grid):
+    """Read the coverage image at a place. RainViewer draws it black where there is no radar."""
+    x, y = lat_lon_to_tile(latitude, longitude, zoom)
+    pixel_x = int((x - grid["first_x"]) * TILE_SIZE)
+    pixel_y = int((y - grid["first_y"]) * TILE_SIZE)
+    return coverage_image.getpixel((pixel_x, pixel_y))[3] < 128
+
+
+def radar_over_coverage(radar_image, coverage_image):
+    """Shade the areas with no radar lightly, and put the radar on top."""
+    red, green, blue, alpha = coverage_image.split()
+    alpha = alpha.point(lambda value: min(value, NO_COVERAGE_OPACITY))
+    shaded = Image.merge("RGBA", (red, green, blue, alpha))
+    return Image.alpha_composite(shaded, radar_image)
+
+
 def image_to_data_uri(image):
     """Return an image as text the browser can show without requesting any URL."""
     buffer = io.BytesIO()
@@ -105,10 +145,10 @@ def build_map_figure(image_uri, bounds, latitude, longitude):
             style="carto-darkmatter",
             center=dict(lat=latitude, lon=longitude),
             zoom=TILE_ZOOM - 1,
-            layers=[dict(sourcetype="image", source=image_uri, coordinates=bounds, opacity=0.85)],
+            layers=[dict(sourcetype="image", source=image_uri, coordinates=bounds, opacity=1)],
         ),
         margin=dict(l=0, r=0, t=0, b=0),
-        height=350,
+        height=320,
         showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)",
     )

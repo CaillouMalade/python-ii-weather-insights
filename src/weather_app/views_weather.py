@@ -7,8 +7,8 @@ from . import cards
 from .analytics import next_steps, pressure_tendency
 from .config import SETUP_MESSAGE
 from .display import format_local_time
-from .fetching import fetch_air_now, fetch_map_image, fetch_uv, now_seconds
-from .maps import MAP_LAYERS, build_map_figure
+from .fetching import fetch_air_now, fetch_radar_image, fetch_uv, fetch_weather_layer, now_seconds
+from .maps import MAP_LAYERS, RADAR_LAYER, build_map_figure
 
 # The current reading plus seven forecast steps fill the eight columns of the strip.
 FORECAST_STEPS_SHOWN = 7
@@ -40,13 +40,28 @@ def show_map(weather):
     location = weather["location"]
     with st.container(key="map-card"):
         st.html('<div class="card-title">Weather map</div>')
-        layer = st.selectbox("Layer", list(MAP_LAYERS.keys()), key="map_layer", label_visibility="collapsed")
-        image_uri, bounds, missing = fetch_map_image(MAP_LAYERS[layer], location["latitude"], location["longitude"])
-        fig = build_map_figure(image_uri, bounds, location["latitude"], location["longitude"])
+        layer = st.selectbox("Layer", [RADAR_LAYER] + list(MAP_LAYERS.keys()), key="map_layer", label_visibility="collapsed")
+        try:
+            with st.spinner("Loading the map"):
+                if layer == RADAR_LAYER:
+                    result = fetch_radar_image(location["latitude"], location["longitude"])
+                else:
+                    result = fetch_weather_layer(MAP_LAYERS[layer], location["latitude"], location["longitude"])
+        except ValueError as e:
+            st.warning(f"This map layer is not available right now. {e}")
+            return
+
+        fig = build_map_figure(result["uri"], result["bounds"], location["latitude"], location["longitude"])
         st.plotly_chart(fig, config={"displayModeBar": False})
-        if missing > 0:
-            st.warning(f"{missing} map tiles could not be loaded, so part of this layer is missing.")
-        st.caption("Weather layers © OpenWeatherMap")
+        if layer == RADAR_LAYER:
+            st.html(cards.radar_note(result["time"], weather["reading"].timezone_offset or 0, result["covered"], weather["name"]))
+            attribution = "Radar: [RainViewer](https://www.rainviewer.com/)"
+        else:
+            st.html(cards.map_legend(layer))
+            attribution = "Weather layers © OpenWeatherMap"
+        if result["missing"] > 0:
+            st.warning(f"{result['missing']} map tiles could not be loaded, so part of this layer is missing.")
+        st.caption(attribution)
 
 
 def show_details(weather):
@@ -81,13 +96,13 @@ def show_weather_tab(weather):
         if weather["note"] == "Needs an API key":
             st.warning(SETUP_MESSAGE)
         else:
-            st.warning(f"Could not load {weather['location']['city']}: {weather['note']}")
+            st.warning(f"Could not load {weather['name']}: {weather['note']}")
         return
 
     rain_chance = None
     if weather["steps"] is not None:
         rain_chance = next_steps(weather["steps"], now_seconds(), 1)["pop"].max()
-    st.html(cards.header(weather["location"]["city"], reading, weather["high"], weather["low"], rain_chance, now_seconds()))
+    st.html(cards.header(weather["name"], reading, weather["high"], weather["low"], rain_chance, now_seconds()))
 
     if weather["steps"] is None:
         st.warning(f"Could not load the forecast: {weather['note']}")

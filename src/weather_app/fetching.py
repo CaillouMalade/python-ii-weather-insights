@@ -6,12 +6,13 @@ import pandas as pd
 import streamlit as st
 
 from .analytics import add_local_time, daily_summary
-from .client import WeatherClient
+from .client import RainViewerClient, WeatherClient
 from .config import API_KEY
 from .display import format_local_time, today_high_low
-from .maps import TILE_ZOOM, image_to_data_uri, stitch_tiles, tile_grid
+from .maps import RADAR_BOOST, TILE_ZOOM, WEATHER_LAYER_BOOST, boost_opacity, has_radar_coverage, image_to_data_uri, radar_over_coverage, stitch_tiles, tile_grid
 from .storage import append_reading
 
+FIVE_MINUTES = 300
 TEN_MINUTES = 600
 ONE_HOUR = 3600
 
@@ -62,21 +63,60 @@ def fetch_tile(layer, zoom, x, y):
     return WeatherClient(API_KEY).tile(layer, zoom, x, y)
 
 
-def fetch_map_image(layer, latitude, longitude):
-    """Return (data URI, bounds, number of missing tiles) for the grid around a location."""
-    grid = tile_grid(latitude, longitude, TILE_ZOOM)
+@st.cache_data(ttl=FIVE_MINUTES, show_spinner=False)
+def fetch_radar_frame():
+    return RainViewerClient().latest_frame()
+
+
+@st.cache_data(ttl=TEN_MINUTES, show_spinner=False)
+def fetch_radar_tile(frame, x, y):
+    return RainViewerClient().radar_tile(frame, TILE_ZOOM, x, y)
+
+
+@st.cache_data(ttl=ONE_HOUR, show_spinner=False)
+def fetch_coverage_tile(frame, x, y):
+    return RainViewerClient().coverage_tile(frame, TILE_ZOOM, x, y)
+
+
+def collect_tiles(grid, fetch_one):
+    """Fetch every tile of a grid. Return the rows of bytes and how many tiles failed."""
     missing = 0
     rows_of_bytes = []
     for row in grid["rows"]:
         row_of_bytes = []
         for x, y in row:
             try:
-                row_of_bytes.append(fetch_tile(layer, TILE_ZOOM, x, y))
+                row_of_bytes.append(fetch_one(x, y))
             except ValueError:
                 row_of_bytes.append(None)
                 missing = missing + 1
         rows_of_bytes.append(row_of_bytes)
-    return image_to_data_uri(stitch_tiles(rows_of_bytes)), grid["bounds"], missing
+    return rows_of_bytes, missing
+
+
+def fetch_weather_layer(layer, latitude, longitude):
+    """Return the OpenWeatherMap image for a layer, stitched and boosted, as a dictionary."""
+    grid = tile_grid(latitude, longitude, TILE_ZOOM)
+    rows, missing = collect_tiles(grid, lambda x, y: fetch_tile(layer, TILE_ZOOM, x, y))
+    image = boost_opacity(stitch_tiles(rows), WEATHER_LAYER_BOOST)
+    return {"uri": image_to_data_uri(image), "bounds": grid["bounds"], "missing": missing}
+
+
+def fetch_radar_image(latitude, longitude):
+    """Return the newest radar image as a dictionary, with its time and whether radar covers the place."""
+    frame = fetch_radar_frame()
+    grid = tile_grid(latitude, longitude, TILE_ZOOM)
+    rows, missing = collect_tiles(grid, lambda x, y: fetch_radar_tile(frame, x, y))
+    coverage_rows, coverage_missing = collect_tiles(grid, lambda x, y: fetch_coverage_tile(frame, x, y))
+    radar = boost_opacity(stitch_tiles(rows), RADAR_BOOST)
+    coverage = stitch_tiles(coverage_rows)
+
+    # A coverage tile that failed looks clear, which would wrongly mean "covered".
+    covered = None
+    if coverage_missing == 0:
+        covered = has_radar_coverage(coverage, latitude, longitude, TILE_ZOOM, grid)
+    image = radar_over_coverage(radar, coverage)
+    return {"uri": image_to_data_uri(image), "bounds": grid["bounds"], "missing": missing, "time": frame["time"], "covered": covered}
 
 
 def load_city_weather(location):

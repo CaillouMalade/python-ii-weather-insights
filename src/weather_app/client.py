@@ -1,4 +1,4 @@
-"""API clients: a generic client and its OpenWeatherMap subclass."""
+"""API clients: a generic client and one subclass per provider."""
 
 import requests
 
@@ -6,15 +6,16 @@ from .models import WeatherReading
 
 BASE_URL = "https://api.openweathermap.org"
 TILE_URL = "https://tile.openweathermap.org"
+RAINVIEWER_URL = "https://api.rainviewer.com"
 
-TILE_LAYERS = ["precipitation_new", "temp_new", "wind_new", "clouds_new", "pressure_new"]
+TILE_LAYERS = ["temp_new", "wind_new", "clouds_new", "pressure_new"]
 POLLUTANTS = ["co", "no", "no2", "o3", "so2", "pm2_5", "pm10", "nh3"]
 
 
 class APIClient:
-    """Calls any API that takes its key as a query parameter."""
+    """Calls any API. A provider with a key passes it as a query parameter; one without passes None."""
 
-    def __init__(self, base_url, api_key, key_param, timeout=10):
+    def __init__(self, base_url, api_key=None, key_param=None, timeout=10):
         self.base_url = base_url
         self.key_param = key_param
         self.timeout = timeout
@@ -23,9 +24,15 @@ class APIClient:
         # The real protection is keeping the key out of the repo and the browser.
         self.__api_key = api_key
 
+    def _with_key(self, params):
+        """Add the key to the parameters, if this provider has one."""
+        if self.__api_key:
+            params[self.key_param] = self.__api_key
+        return params
+
     def _request(self, url, params):
         """Send a GET request and return the response, or raise ValueError with a clear message."""
-        params[self.key_param] = self.__api_key
+        params = self._with_key(params)
 
         # The messages are fixed text on purpose: the text of a requests error
         # contains the full URL, and the URL contains the API key.
@@ -175,7 +182,6 @@ class WeatherClient(APIClient):
                         # The API leaves out rain and snow when there is none, so 0 mm is correct here.
                         "rain_3h": entry.get("rain", {}).get("3h", 0),
                         "snow_3h": entry.get("snow", {}).get("3h", 0),
-                        "pod": entry.get("sys", {}).get("pod"),
                         "weather_id": entry["weather"][0].get("id"),
                         "icon": entry["weather"][0].get("icon"),
                         "conditions": entry["weather"][0].get("description"),
@@ -199,3 +205,36 @@ class WeatherClient(APIClient):
                 row[name] = entry.get("components", {}).get(name)
             rows.append(row)
         return rows
+
+
+class RainViewerClient(APIClient):
+    """Real radar from RainViewer, which needs no key. See https://www.rainviewer.com/api.html"""
+
+    # Colour scheme 2 is Universal Blue, the one RainViewer's documentation lists.
+    # "1_1" means smoothed, with snow in its own colours.
+    COLOR_SCHEME = 2
+    OPTIONS = "1_1"
+
+    def __init__(self):
+        super().__init__(RAINVIEWER_URL)
+        self._not_found_message = "RainViewer has no radar image for this place right now."
+
+    def latest_frame(self):
+        """Return the newest radar frame: a dictionary with host, path and time (Unix seconds)."""
+        return self._parse_latest_frame(self._get("public/weather-maps.json", {}))
+
+    def radar_tile(self, frame, zoom, x, y):
+        """Return the PNG bytes of one radar tile. RainViewer's maximum zoom is 7."""
+        url = f"{frame['host']}{frame['path']}/256/{zoom}/{x}/{y}/{self.COLOR_SCHEME}/{self.OPTIONS}.png"
+        return self._get_bytes(url, {})
+
+    def coverage_tile(self, frame, zoom, x, y):
+        """Return the PNG bytes of one coverage tile: black where there is no radar, clear where there is."""
+        return self._get_bytes(f"{frame['host']}/v2/coverage/0/256/{zoom}/{x}/{y}/0/0_0.png", {})
+
+    def _parse_latest_frame(self, data):
+        try:
+            newest = data["radar"]["past"][-1]
+            return {"host": data["host"], "path": newest["path"], "time": newest.get("time")}
+        except (KeyError, IndexError, TypeError):
+            raise ValueError("RainViewer sent its radar list in an unexpected format.")
