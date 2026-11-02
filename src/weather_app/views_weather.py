@@ -8,7 +8,7 @@ from .analytics import next_steps, pressure_tendency
 from .config import SETUP_MESSAGE
 from .display import format_local_time
 from .fetching import fetch_air_now, fetch_radar_image, fetch_uv, fetch_weather_layer, now_seconds
-from .maps import MAP_LAYERS, RADAR_LAYER, build_map_figure
+from .maps import FIRST_LABEL_LAYER, MAP_LAYERS, RADAR_LAYER, build_map_figure
 
 # The current reading plus seven forecast steps fill the eight columns of the strip.
 FORECAST_STEPS_SHOWN = 7
@@ -51,7 +51,8 @@ def show_map(weather):
             st.warning(f"This map layer is not available right now. {e}")
             return
 
-        fig = build_map_figure(result["uri"], result["bounds"], location["latitude"], location["longitude"])
+        below = None if layer == RADAR_LAYER else FIRST_LABEL_LAYER
+        fig = build_map_figure(result["uri"], result["bounds"], location["latitude"], location["longitude"], below)
         st.plotly_chart(fig, config={"displayModeBar": False})
         if layer == RADAR_LAYER:
             st.html(cards.radar_note(result["time"], weather["reading"].timezone_offset or 0, result["covered"], weather["name"]))
@@ -61,7 +62,8 @@ def show_map(weather):
             attribution = "Weather layers © OpenWeatherMap"
         if result["missing"] > 0:
             st.warning(f"{result['missing']} map tiles could not be loaded, so part of this layer is missing.")
-        st.caption(attribution)
+        # The spinner covers fetching. The browser paints the image later, and we cannot see that.
+        st.caption(f"{attribution}. A new layer can take a few seconds to appear.")
 
 
 def show_details(weather):

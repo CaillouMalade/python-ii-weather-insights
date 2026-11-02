@@ -30,8 +30,10 @@ LEGENDS = {
 }
 
 # OpenWeatherMap's tiles are mostly see-through, so low values hardly show. Multiplying
-# each pixel's opacity makes them read clearly. The colours themselves stay the same.
-WEATHER_LAYER_BOOST = 3
+# each pixel's opacity makes them read clearly, while coasts and labels still show through.
+WEATHER_LAYER_BOOST = 1.5
+# The basemap's first label layer. A layer placed below it leaves the labels on top.
+FIRST_LABEL_LAYER = "waterway_label"
 RADAR_BOOST = 2
 # How strongly areas without radar are shaded, out of 255.
 NO_COVERAGE_OPACITY = 90
@@ -109,7 +111,7 @@ def stitch_tiles(rows_of_png_bytes):
 def boost_opacity(image, factor):
     """Multiply every pixel's opacity, up to fully solid. See-through pixels stay see-through."""
     red, green, blue, alpha = image.split()
-    alpha = alpha.point(lambda value: min(255, value * factor))
+    alpha = alpha.point(lambda value: min(255, int(value * factor)))
     return Image.merge("RGBA", (red, green, blue, alpha))
 
 
@@ -137,15 +139,18 @@ def image_to_data_uri(image):
     return f"data:image/png;base64,{encoded}"
 
 
-def build_map_figure(image_uri, bounds, latitude, longitude):
-    """A Plotly map: free dark basemap, weather image on top, and a dot on the city."""
+def build_map_figure(image_uri, bounds, latitude, longitude, below=None):
+    """A Plotly map: free dark basemap, weather image on top, and a dot on the city.
+
+    below is the basemap layer to put the image under. None puts it on top of everything.
+    """
     fig = go.Figure(go.Scattermap(lat=[latitude], lon=[longitude], mode="markers", marker=dict(size=11, color="white")))
     fig.update_layout(
         map=dict(
             style="carto-darkmatter",
             center=dict(lat=latitude, lon=longitude),
             zoom=TILE_ZOOM - 1,
-            layers=[dict(sourcetype="image", source=image_uri, coordinates=bounds, opacity=1)],
+            layers=[dict(sourcetype="image", source=image_uri, coordinates=bounds, opacity=1, below=below)],
         ),
         margin=dict(l=0, r=0, t=0, b=0),
         height=320,
