@@ -1,18 +1,31 @@
 ﻿# Weather Insights
 
-Python II group assignment: an object-oriented weather analytics application using OpenWeatherMap and Streamlit. This repository is initialized from the supplied scaffold; the application features and analytics remain to be implemented.
+Python II group assignment: an object-oriented weather app built on OpenWeatherMap and Streamlit. This is v0.1, a general weather app.
 
-The original [assignment brief](assignment/BRIEF.md), [course reference](summary.md), and [supplied template](starter_template/) are preserved for reference. Develop the application in the root `src/`, `tests/`, and `app.py` files.
+## What it does
 
-## Setup
+- **Sidebar:** add cities by name, select one, remove one, and switch between the two views. At start-up, the city list is filled from the locations already in the log.
+- **Live Conditions:** a weather card for the selected city (temperature, conditions, feels-like, humidity, wind), a chart of the forecast temperature, and a comparison of all your cities, warmest first. If one city fails, you get a warning and the others still load.
+- **Analytics:** three analyses that read only the saved log and make no API calls:
+  1. Temperature trend for the selected city.
+  2. All cities ranked by latest temperature.
+  3. Feels-like minus actual temperature, per city, over time. This is a metric the API does not return.
 
-Requires Python 3.11 or newer and uv. Run these commands from the repository root:
+Each successful current-weather fetch is added to `data/weather_log.csv` with a UTC timestamp. Readings are cached for 10 minutes, so ordinary page reruns do not add duplicate rows. The file is created on the first live fetch. Forecasts are not logged.
+
+Removing a city lasts until you refresh the page: its history stays in the log, and the list is rebuilt from the log.
+
+## Setup from a clean clone
+
+Requires Python 3.11 or newer and [uv](https://docs.astral.sh/uv/).
 
 ```bash
+git clone <repository-url>
+cd <repository-folder>
 uv sync
 ```
 
-Copy `variables.env.example` to `variables.env`, then fill in your own OpenWeatherMap key. On Windows PowerShell:
+Copy the example settings file. On Windows PowerShell:
 
 ```powershell
 Copy-Item variables.env.example variables.env
@@ -24,7 +37,9 @@ On macOS/Linux:
 cp variables.env.example variables.env
 ```
 
-`variables.env` is ignored by Git. Never commit or display a real key.
+Then put your own OpenWeatherMap key in `variables.env`. Git ignores this file; never commit or display a real key.
+
+Without a key, the app still opens. Live Conditions shows a setup message, and Analytics works on any existing log data.
 
 ## Run the app
 
@@ -32,24 +47,25 @@ cp variables.env.example variables.env
 uv run streamlit run app.py
 ```
 
-The supplied app currently contains two placeholder views: Live Conditions and Analytics. It does not fetch or log weather data yet.
-
 ## Run the tests
 
 ```bash
 uv run pytest
 ```
 
-The supplied test is a placeholder, not evidence of working weather analytics.
+The tests use small hand-made cases with known answers for the analytics, the reading class and input validation. They need no key and make no API calls.
 
 ## Project structure
 
-- `pyproject.toml` and `uv.lock` define the installable package and dependencies.
-- `src/weather_app/` contains the supplied client, model, storage, analytics and configuration modules.
-- `app.py` is the Streamlit entry point.
-- `tests/` contains the supplied test scaffold.
-- `variables.env.example` documents the environment variable to configure locally.
-- `PROMPTS.md` records AI collaboration.
+- `app.py`: the Streamlit UI.
+- `src/weather_app/client.py`: `APIClient` (generic JSON GET) and `WeatherClient` (OpenWeatherMap).
+- `src/weather_app/models.py`: `WeatherReading`.
+- `src/weather_app/storage.py`: appends to and loads the CSV log.
+- `src/weather_app/analytics.py`: the pandas analyses.
+- `src/weather_app/config.py`: reads the API key.
+- `tests/`: the tests.
+- `PROMPTS.md`: the AI collaboration log.
+- `assignment/BRIEF.md`, `summary.md` and `starter_template/`: the original assignment material.
 
 ## Team
 
