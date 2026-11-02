@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import pandas as pd
 import streamlit as st
 
-from .analytics import add_local_time, daily_summary
+from .analytics import add_local_time, daily_summary, with_today_range
 from .client import RainViewerClient, WeatherClient
 from .config import API_KEY
 from .display import format_local_time, today_high_low
@@ -152,4 +152,5 @@ def load_city_weather(location):
         result["days"] = daily_summary(steps)
         today = format_local_time(now_seconds(), offset, "%Y-%m-%d")
         result["high"], result["low"] = today_high_low(result["days"], today, high, low)
+        result["days"] = with_today_range(result["days"], today, result["high"], result["low"])
     return result

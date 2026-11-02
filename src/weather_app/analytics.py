@@ -85,6 +85,14 @@ def daily_summary(steps):
     return days.sort_values("local_date").head(5)
 
 
+def with_today_range(days, today, high, low):
+    """Put today's high and low into the daily table, so every place that shows them agrees."""
+    out = days.copy()
+    out.loc[out["local_date"] == today, "high"] = high
+    out.loc[out["local_date"] == today, "low"] = low
+    return out
+
+
 def next_steps(steps, now, count):
     """The next forecast steps after now (Unix seconds)."""
     out = steps.copy()
@@ -115,7 +123,8 @@ def forecast_measures(steps):
     out = comfort_score(steps)
     out = out.sort_values("dt")
     out["wind_kmh"] = out["wind_speed"] * METRES_PER_SECOND_TO_KMH
-    out["gust_kmh"] = out["wind_gust"] * METRES_PER_SECOND_TO_KMH
+    # to_numeric because a forecast with no gusts at all gives a column of None.
+    out["gust_kmh"] = pd.to_numeric(out["wind_gust"]) * METRES_PER_SECOND_TO_KMH
     out["precipitation_mm"] = out["rain_3h"] + out["snow_3h"]
     return out
 
