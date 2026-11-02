@@ -80,3 +80,15 @@ Verified without a real key or live API call: all tests pass; real Chrome agains
 Not verified yet: the real API, including the UV endpoint's meaning. "UV index today" is a cautious label based on what was seen, not on anything confirmed by the agent. Findings have only run on invented data. Real phones are also untested.
 
 Known limits: at about 844 px wide with the sidebar open, the main column uses its narrow layout. Comparison ties are reported only when the top and bottom values are equal.
+
+## 2 November 2026 — v0.1 radar map and Analytics for humans (branch release/v0.1, not merged)
+
+The map now opens on real RainViewer radar, with OpenWeatherMap's temperature, wind, clouds and pressure as other layers. Analytics has been rewritten in plain words; this replaces the Analytics description in the earlier entry. `data/cities.csv` now holds 5,074 cities: the 5,000 largest plus national capitals. The search keeps largest-first order.
+
+Weather Maps 2.0 returned 401 on our key (checked by the orchestrator), so the fainter 1.0 tiles stay and are boosted on the server.
+
+Verified without a real OpenWeatherMap key or call: all tests pass; real Chrome at 1280 and 390 px against a throwaway fake OpenWeatherMap and the real RainViewer service; no test key or `appid` in pages, requests or WebSocket frames.
+
+Not verified yet: real OpenWeatherMap tiles (including how the boost looks and whether the legends match them), and real forecast and air data. Real phones are also untested.
+
+Known limits: RainViewer's API is for personal and educational use. The first map load fetches 30 tiles one at a time, so it can take several seconds; a spinner shows meanwhile. A capital missing from GeoNames' `cities15000` file cannot be added. High and low are hidden when they would be equal.
