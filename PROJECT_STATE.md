@@ -114,3 +114,13 @@ Still open at the time: `data/weather_log.csv` was uncommitted and the orchestra
 ## 3 November 2026 — v0.1 merged into main
 
 The orchestrator committed the real log (tag `v0.1` holds 45 rows; later real rows were added before the merge), pushed `release/v0.1` and tag `v0.1`, and, with Arthur's approval, fast-forwarded `main` to it. The README clone line now uses the default branch. An independent re-audit of `v0.1` found no banned construct, no secret and no regression, and estimated 9–9.5/10. Open: commits from every team member, the Team section, a team walkthrough of the README's hardest parts, and more logged days. The racetrack collector still lives untracked in the main checkout and on the `data-collection` branch; it comes into the app in V2.
+
+## 3 November 2026 — racetrack MVP (branch racetrack-mvp-build, not merged)
+
+The app is now circuit-only: 18 circuits from `data/circuits.csv` (same ids as the collector), a Today view (header, next 5 days of temperature and cloud cover, radar beside wind arrows from a 3 by 3 grid, rain and snow per 3-hour window with a rain-timing sentence) and a History view built on `data/current_weather.csv`, a committed snapshot of the collector's file taken 3 November. Everything about cities, air quality, UV, map layers, Plan the week and Compare is gone. App code: 2,647 lines before, 1,463 after.
+
+Verified without a real key or live OpenWeatherMap call: 77 tests pass; AppTest with no key (Today shows the setup message, History renders for all 18 circuits); real Chrome at 1280 and 390 px against a throwaway fake server, with one failing circuit and one failing grid point, and the real RainViewer service; no test key or `appid` in the page, its resource URLs or its chart data. `data/weather_log.csv` was restored after the fake run.
+
+Not verified yet: the real API and key, real wind-grid values, real phones. Maps only paint while the Chrome window is in front, which is normal browser throttling, not an app bug.
+
+Known gaps: the bad-city input rubric item cannot be reached from the UI any more; `__lt__` has no caller in the app; the README's MVP section still mentions a radar nowcast the app does not have. `straight_heading_deg` is blank and waiting for Arthur. The collector, `circuits.json` and the main checkout were not touched.

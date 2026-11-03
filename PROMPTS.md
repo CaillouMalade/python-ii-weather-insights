@@ -227,3 +227,50 @@ Commits `73043d4`, `387fdb0` and `b3c61e9` carry a `Co-Authored-By: Codex <norep
 ### Be ready to explain: forms not listed in earlier entries
 
 `pytest.approx`; class attributes (`COLOR_SCHEME`, `OPTIONS` on `RainViewerClient`); `.pop` on `st.session_state`; `.items()` on a dictionary; `dropna(subset=...)`; the `:02d` format; `datetime.timestamp()`; `getattr` in `to_dict`; `raise ... from None`; `traceback.format_exception` in a test; `float("inf")` as a sort key; `pd.to_numeric`; `.loc[mask, column] = value`; `st.expander`; `st.selectbox(width=...)`; the `below` setting on a Plotly map layer; CSS `min-height`.
+
+## Racetrack MVP — 3 November 2026
+
+**Asked:** Arthur asked Claude Code (Opus 5.5) to turn v0.1 into the racetrack MVP described at the top of the README: "a clean, functional but limited MVP, not overcrowded slop", one provider done well, circuits from a CSV, a Today page (header, temperature and cloud cover, radar beside wind with direction, a precipitation histogram and a rain-timing line) and History built only on the collector's real readings, with the 2–3 November gap shown as a gap. Same class rules as v0.1, no key and no live OpenWeatherMap calls. Partway through, Arthur set a standing design bar: as finished as Linear's website or Apple Notes, no taglines, helper text, captions or footnotes, fewer modules, one way to do each thing, no dead code, and the quietest honest form wherever the earlier wording asked for sentences or notes.
+
+**Got:**
+- `data/circuits.csv`, built from the 18 circuits in `circuits.json` with the same ids. `straight_heading_deg` is blank and not used.
+- `data/current_weather.csv`, a read-only snapshot of the collector's file (2,971 readings, 29 October to 3 November).
+- New `forecast.py` (3-hour windows, today's high and low, `rain_timing`) and `history.py` (local time, hourly values with gaps, daily rain hours, daily extremes, one finding per section).
+- Wind grid and arrows in `maps.py`: 9 cached current-weather calls around the circuit, arrows coloured by speed band, a km/h legend.
+- One `views.py` for the sidebar, Today and History, replacing `sidebar.py`, `views_weather.py` and `views_analytics.py`.
+- `WeatherReading.wind_kmh` as the property, replacing `feels_like_delta`, which nothing used any more.
+- Tests: `test_forecast.py` and `test_history.py` are new; `test_core.py` and `test_storage.py` were rewritten. 77 tests in all.
+
+**Checked:**
+- `uv run pytest` passes with no key.
+- AppTest with no key: Today shows the setup message without exceptions, and History rendered for all 18 circuits without exceptions.
+- A throwaway fake OpenWeatherMap server in a scratch folder, with invented data, Monza failing and one of Spa's grid points failing, plus the real keyless RainViewer service. The agent looked at real Chrome (a visible window driven through the DevTools protocol) at 1280 px and 390 px: the sidebar, Portimão and Spa on Today, and History for Spa.
+- Monza's card showed its error while every other circuit loaded. Spa's wind map showed "1 of 9 points missing" with 8 arrows.
+- The test key and `appid` were not in the page HTML, the 100 resource URLs or the chart data.
+- `data/weather_log.csv` was restored afterwards, so no invented rows were committed.
+- **Not checked by the agent:** the real OpenWeatherMap API and key, real wind and forecast values, real phones, and Streamlit's WebSocket frames (v0.1's check covered those; this round checked what reached the page).
+
+**Kept / changed / rejected:**
+- Kept: the v0.1 header and card look, server-side radar stitching, `APIClient` and both subclasses, `validate_location`, the log schema, `__repr__` and `__lt__`, logging inside the cache.
+- Removed: the city search, typed-city box, saved cities, `data/cities.csv` and its build script; air quality, UV, OpenWeatherMap's map layers and legends; Next hours, the daily forecast card and the detail tiles; Plan the week, Air, Compare and the four overview cards; `analytics.py` and `findings.py`. App code went from 2,647 to 1,463 lines.
+- Sidebar cards show wind instead of high and low, so the sidebar needs one call per circuit (18) rather than two (36). With the 9 wind calls and the collector also running, two calls per circuit came close to the free key's 60 calls per minute.
+- Each 3-hour step is treated as the window ending at its time, because OpenWeatherMap documents `rain.3h` as the last 3 hours. "Rain likely" means a chance of at least 50 %. "Dry until" is only said when no earlier window has any rain; otherwise it says "Rain unlikely until".
+- A history day counts as full from 20 hours with data. Only full days get high and low markers, so a day the collector only half covered cannot claim a low it never saw.
+
+**Cut under the design bar:**
+- All captions: map attribution and loading notes, "How we rate this", "Next few hours", "local time", feels-like comparisons, the short-history note and the empty-tile notes.
+- Sentences turned into small timestamps: "Radar 08:30" in the radar card's title, "Forecast 08:36" in the rain card's title.
+- The coverage sentence is now one quiet line: readings, span and the longest stretch with no data.
+- Findings were shortened to one line each, such as "Rain in 6 of 60 hours (10 %), on Sat 31 Oct, Mon 2 Nov."
+- One attribution line for OpenWeatherMap and RainViewer at the foot of the sidebar; the basemap shows its own.
+- The "one weather point" limit stays in the README only, not on the page.
+- Kept only conditional notes that report a real failure: "No radar coverage here", "N radar tiles missing", "N of 9 points missing".
+
+**Known gaps to resolve before submission:**
+- With circuits coming from a CSV, the brief's "bad city name" and user-input validation items can no longer be triggered from the UI. `validate_location` still checks every circuit and grid point before any call, and a blank or broken row in `circuits.csv` gives a clear message on that circuit's card, but a grader cannot type bad input.
+- `WeatherReading.__lt__` is kept, as Arthur asked, and tested with `sorted()`, but nothing in the app sorts readings now that comparison is out of scope.
+- The README's MVP section still promises "the radar for the next hour or so" for rain timing; the app shows only the latest radar image, not a radar nowcast.
+
+### Be ready to explain: new forms not evidenced in class material
+
+`Series.dt.tz_convert` with a zone name and `.dt.tz_localize(None)`; `pd.to_datetime(..., utc=True)`; `DataFrame.set_index("time").resample("h").mean()` (resample is in class; on a column set as the index it is not); `Series.shift` as a whole column; `Series.value_counts().index[0]`; `math.isnan`, `math.cos`, `math.sin`; `go.Scattermap` with `mode="lines"` and `None` breaks; `fill="tozeroy"`; `add_bar(width=...)` in milliseconds; `barmode="stack"` and `"overlay"`; `hovermode="x unified"`; `st.selectbox(format_func=...)`; CSS `linear-gradient` with hard colour stops.
