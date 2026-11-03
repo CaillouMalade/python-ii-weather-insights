@@ -10,6 +10,10 @@ from .models import METRES_PER_SECOND_TO_KMH
 
 # A day with fewer hours of data than this is partial: its low and high are not the day's.
 FULL_DAY_HOURS = 20
+# A day with fewer hours than this is not shown at all: too little for a real range.
+SHOWN_DAY_HOURS = 12
+# This many readings in a row with the same temperature, wind speed and direction are stuck.
+STUCK_RUN = 3
 # OpenWeatherMap condition codes below 700 are thunderstorm, drizzle, rain and snow.
 WET_CODE_LIMIT = 700
 # Below this, a wind direction means little, so it is left out of the usual direction.
@@ -23,6 +27,42 @@ for number in range(len(COMPASS_POINTS)):
 def day_text(moment):
     """A date such as Sat 31 Oct. Built by hand because %-d does not work on Windows."""
     return f"{moment.strftime('%a')} {moment.day} {moment.strftime('%b')}"
+
+
+def drop_stuck(history):
+    """The history without the provider's stuck readings: in a run of STUCK_RUN or more readings
+    in a row for one location with the same temperature, wind speed and wind direction, only
+    the first is kept. A shorter repeat is kept, since weather can hold still for an hour.
+
+    Only the analysis uses this; data/current_weather.csv itself is never changed.
+    """
+    out = history.copy()
+    out["order"] = pd.to_datetime(out["fetched_at_utc"], format="mixed", utc=True)
+    out = out.sort_values(["location_id", "order"])
+
+    # The length of each run of identical readings, in order.
+    runs = []
+    previous = None
+    for reading in zip(out["location_id"], out["temperature_c"], out["wind_speed_m_s"], out["wind_direction_deg"]):
+        if reading == previous:
+            runs[-1] = runs[-1] + 1
+        else:
+            runs.append(1)
+        previous = reading
+
+    keep = []
+    for length in runs:
+        if length >= STUCK_RUN:
+            keep = keep + [True] + [False] * (length - 1)
+        else:
+            keep = keep + [True] * length
+    return out[keep].drop(columns="order")
+
+
+def shown_days(rows):
+    """The History rows with enough data to show: at least SHOWN_DAY_HOURS hours collected."""
+    out = rows.copy()
+    return out[out["hours"] >= SHOWN_DAY_HOURS]
 
 
 def circuit_readings(history, circuit_id, timezone):

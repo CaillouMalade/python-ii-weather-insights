@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from weather_app.history import circuit_readings, daily, daily_rows, hourly, rain_finding, usual_direction
+from weather_app.history import SHOWN_DAY_HOURS, circuit_readings, daily, daily_rows, drop_stuck, hourly, rain_finding, shown_days, usual_direction
 from weather_app.storage import load_circuits, load_history
 
 
@@ -119,6 +119,12 @@ def test_le_mans_shows_the_providers_frozen_reading():
     assert len(frozen) == 40
     assert frozen["wind_direction_deg"].unique().tolist() == [230]
     assert frozen["humidity_pct"].nunique() > 5
+    # After drop_stuck, only the first of each stuck run is left.
+    cleaned = drop_stuck(history)
+    left = cleaned[(cleaned["location_id"] == "lemans") & (cleaned["temperature_c"] == 8.87) & (cleaned["wind_speed_m_s"] == 1.34)]
+    assert 0 < len(left) < 20
+    # The raw history is untouched.
+    assert len(history) == 2971
 
 
 def test_the_real_snapshot_shows_the_2_to_3_november_gap():
@@ -133,3 +139,36 @@ def test_the_real_snapshot_shows_the_2_to_3_november_gap():
     assert len(hours["2026-11-02 14:00":"2026-11-03 06:00"]) == 17
     assert pd.notna(hours["2026-11-02 13:00"])
     assert pd.notna(hours["2026-11-03 07:00"])
+
+
+def test_a_stuck_run_of_three_keeps_only_its_first_reading():
+    times = every_half_hour("2026-11-01 00:00", 5)
+    history = make_history(times, [9.0, 8.0, 8.0, 8.0, 7.0])
+    cleaned = drop_stuck(history)
+    assert cleaned["temperature_c"].to_list() == [9.0, 8.0, 7.0]
+    assert cleaned["fetched_at_utc"].to_list() == [times[0], times[1], times[4]]
+
+
+def test_a_genuine_repeat_of_two_is_kept():
+    history = make_history(every_half_hour("2026-11-01 00:00", 4), [9.0, 8.0, 8.0, 7.0])
+    assert drop_stuck(history)["temperature_c"].to_list() == [9.0, 8.0, 8.0, 7.0]
+
+
+def test_a_run_needs_the_same_wind_too():
+    # Same temperature three times, but the wind changes: weather, not a stuck reading.
+    history = make_history(every_half_hour("2026-11-01 00:00", 3), [8.0, 8.0, 8.0], winds=[2.0, 2.5, 2.0])
+    assert len(drop_stuck(history)) == 3
+
+
+def test_stuck_readings_at_one_location_leave_the_others_alone():
+    times = every_half_hour("2026-11-01 00:00", 3)
+    history = pd.concat([make_history(times, [8.0, 8.0, 8.0]), make_history(times, [8.0, 8.0, 8.0], winds=[1.0, 2.0, 3.0], location="jerez")], ignore_index=True)
+    cleaned = drop_stuck(history)
+    assert (cleaned["location_id"] == "spa").sum() == 1
+    assert (cleaned["location_id"] == "jerez").sum() == 3
+
+
+def test_days_with_too_few_hours_are_hidden():
+    rows = pd.DataFrame({"day": ["2026-10-29", "2026-10-30", "2026-10-31"], "hours": [SHOWN_DAY_HOURS - 1, SHOWN_DAY_HOURS, 24]})
+    assert SHOWN_DAY_HOURS == 12
+    assert shown_days(rows)["day"].to_list() == ["2026-10-30", "2026-10-31"]

@@ -12,7 +12,7 @@ from .config import SETUP_MESSAGE
 from .display import condition_kind, format_local_time, rain_bar_color, temperature_color
 from .fetching import fetch_radar_image, fetch_wind_grid, now_seconds
 from .forecast import RAIN_LIKELY, STEP_HOURS, calm_clouds, daily_conditions, rain_timing, status_lights, today_high_low
-from .history import circuit_readings, daily_rows, day_text, rain_finding
+from .history import circuit_readings, daily_rows, day_text, drop_stuck, rain_finding, shown_days
 from .icons import icon_uri
 from .maps import circuit_bounds, radar_figure, wind_field, wind_figure, wind_grid_bounds, wind_grid_points
 from .sessions import add_default_weekend, check_session, session_status, session_times
@@ -351,14 +351,14 @@ def show_history(circuit):
     history = load_history()
     readings = pd.DataFrame()
     if len(history) > 0:
-        readings = circuit_readings(history, circuit["id"], circuit["timezone"])
+        readings = circuit_readings(drop_stuck(history), circuit["id"], circuit["timezone"])
     if len(readings) == 0:
         st.info(f"No collected history for {circuit['location']} yet.")
         return
 
     rows = daily_rows(readings)
     with st.container(key="panel-history"):
-        st.html(f'<div class="finding">{escape(rain_finding(rows))}</div>' + cards.history_rows(rows))
+        st.html(f'<div class="finding">{escape(rain_finding(rows))}</div>' + cards.history_rows(shown_days(rows)))
 
 
 def show_credits():
