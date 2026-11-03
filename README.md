@@ -1,4 +1,4 @@
-﻿# Weather Insights
+# Weather Insights
 
 Python II group assignment: an object-oriented weather app built on OpenWeatherMap and Streamlit. This is v0.1, a general weather app.
 
@@ -19,6 +19,14 @@ Python II group assignment: an object-oriented weather app built on OpenWeatherM
 - **History:** your own logged data: how much there is, a trend chart once a city has 3 readings over at least an hour, and, from 3 days of data, how much the temperature moves within a day. This is the only section that works without an API key.
 
 Each successful current-weather fetch is added to `data/weather_log.csv` with a UTC timestamp. Readings are cached for 10 minutes, so ordinary page reruns do not add duplicate rows. Forecasts are not logged.
+
+## Screenshots
+
+![Weather tab](docs/screenshots/weather.png)
+![Analytics: Plan the week](docs/screenshots/plan-the-week.png)
+![Analytics: Air](docs/screenshots/air.png)
+![Analytics: Compare](docs/screenshots/compare.png)
+![Analytics: History](docs/screenshots/history.png)
 
 ## Setup from a clean clone
 
