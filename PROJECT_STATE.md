@@ -148,3 +148,18 @@ Watch: a cold start now makes 45 OpenWeatherMap calls (18 current, 18 forecast, 
 `data/weather_log.csv` still has 18 real, uncommitted rows from the orchestrator's live check at 07:50 UTC. They were left as they were.
 
 Still open from the MVP round: the bad-city rubric gap, `__lt__` without a caller, and blank `straight_heading_deg`.
+
+## 3 November 2026 — track map round (branch racetrack-mvp-build, not merged)
+
+Built on `cdf10d4`.
+- **Outlines:** every circuit's outline is drawn on the radar map and framed to fill it, and drawn faintly on the wind map. The files are in `data/tracks/`: 9 from f1-circuits (MIT), 9 from OpenStreetMap (ODbL), all 18 checked against their circuits.
+- **Header and lights:** the header's chance of rain and the next-3-hours light now share one definition.
+- **History:** the wind chart has no gusts line.
+- **Cloud band:** smoothed.
+- **Size:** app code is 1,644 lines.
+
+Verified without a real key or live OpenWeatherMap call: 98 tests pass; real Chrome at 1280 px (Spa, Le Mans, the Nordschleife, Silverstone) and 390 px (Portimão) against a throwaway fake server and the real RainViewer service.
+
+Not verified yet: the real API and key, and real phones.
+
+`data/weather_log.csv` holds 36 real, uncommitted rows from the orchestrator's live checks, left as they were. Still open: the bad-city rubric gap, `__lt__` without a caller, a blank `straight_heading_deg`, and the 45-call cold start.

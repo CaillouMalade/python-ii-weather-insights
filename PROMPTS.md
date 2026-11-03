@@ -315,3 +315,44 @@ Commits `73043d4`, `387fdb0` and `b3c61e9` carry a `Co-Authored-By: Codex <norep
 ### Be ready to explain: new forms not evidenced in class material
 
 `Image.crop`, `Image.resize` with `Image.Resampling.BICUBIC`, the `RGBa` mode (premultiplied alpha); `math.log2`; `//` floor division in pixel maths; `st.plotly_chart(theme=None)` and the `plotly_dark` template; `line_shape="spline"` with `smoothing`; `yaxis_dtick`; CSS custom properties (`--name`, `var()`), `box-shadow`, `:focus-visible` and `:has()`; `aria-label` and `role="img"`.
+
+## Track map round — 3 November 2026
+
+**Asked:** Arthur liked the design round ("pretty good, I like that there isn't verbose text") but said "I still don't see the track map properly." The orchestrator relayed the brief to Claude Code (Opus 5.5):
+- Draw each circuit's real outline on the radar map, framed to fill it, and faintly on the wind map.
+- Copy the 18 GeoJSON files read-only from the Pitwall project and check each one is the right circuit.
+- Credit f1-circuits (MIT) in the map's existing attribution, and list both sources in the README.
+- Fix three findings from the orchestrator's live check: the header's "Rain, next 3 h: 0 %" disagreed with a red next-3-hours light at Le Mans; History's gusts line looked broken; and the cloud band was still spiky.
+
+**Got:**
+- `data/tracks/` with the 18 files and the f1-circuits licence. `circuits.csv` gains `track_file` and `track_credit`.
+- `load_track` in `storage.py`: a GeoJSON file becomes a list of line segments, and the OSM ways are not joined.
+- `track_bounds`, `track_view` and `track_layer` in `maps.py`. The outline is a 3 px `#E8EDEA` line over a 6 px dark casing, drawn as map layers above the radar.
+- `next_three_hours` in `forecast.py`, used by both the header and the light. `calm_clouds`, a centred 15-hour mean used only by the chart.
+- History's wind chart without gusts.
+- 98 tests, with new known-answer tests for loading an outline, file to segments, bounds to framing, every real track filling its map, the header and the light agreeing, and the calm cloud band.
+
+**Checked:**
+- **Each file is its circuit.** The drawn length is within 3 % of the official length for all 18, and the line passes within 0.25 km of the circuit's coordinate, or 0.9 km for the Nordschleife and Le Mans, whose coordinate sits inside the lap. A small-multiples drawing of all 18 matched each layout by eye.
+- **No mismatches.** No circuit was left without an outline.
+- **Tests and AppTest:** `uv run pytest` passes with no key; AppTest with no key, as before.
+- **Real Chrome at 1280 px:** Spa (F1, wet now), Le Mans La Sarthe (OSM, dry now but rain likely in the next window), the Nordschleife (OSM, 53 ways) and Silverstone, all against the throwaway fake server and the real RainViewer service.
+  - Each outline fills its radar map.
+  - The attribution reads "f1-circuits (MIT) | © OpenStreetMap contributors © CARTO" for F1 tracks, and no f1 credit for OSM ones.
+  - Le Mans' header showed 80 % beside a red next-3-hours light.
+- **Real Chrome at 390 px:** Portimão's outline fills the map with no sideways scroll.
+- **The log:** the fake run logged to a scratch file; the 36 real uncommitted rows in `data/weather_log.csv` were left untouched.
+- **Not checked by the agent:** the real API and key, real phones, and a fresh key search (the key path is unchanged).
+
+**Kept / changed / rejected:**
+- **Layers, not traces:** the outline is drawn as map layers, because only a layer can add its source to the map's own attribution text. That keeps the f1-circuits credit without a caption.
+- **Framing width:** the framing assumes a 340 by 320 pixel map, about the narrowest (a phone), so the outline fits everywhere. Desktop panels at 1280 px measured about 363 px wide. A test checks that all 18 tracks fill 78–84 % of the deciding side.
+- **One definition of "next 3 hours":** the running window and the next one. In the live check, at 08:30 the header read only the running window (0 %) while the light read only the next window (80 %).
+- **Light test expectations changed:** with the new definition, rain now also lights the next-3-hours light.
+- **Wind map:** the outline is drawn at 1.5 px and 45 % opacity, and the map keeps zoom 8.3. At that zoom a 5 km track is a small shape at the centre, which is enough to relate the two maps.
+- **Removed:** History's gusts line and the gust column from the hourly table.
+- **Browser note:** Chrome pauses map drawing in a window covered by other windows. The agent's checking browser ran with `--disable-backgrounding-occluded-windows` to see the maps; the app itself is unaffected.
+
+### Be ready to explain: new forms not evidenced in class material
+
+`json.load`; GeoJSON (`FeatureCollection`, `LineString`, `MultiLineString`); Plotly map layers with `sourcetype="geojson"`, `type="line"`, `below="traces"` and `sourceattribution`; `math.floor` to round a zoom down; `Series.rolling(5, center=True, min_periods=1)`; `pd.isna` on a single cell.

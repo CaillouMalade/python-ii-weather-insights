@@ -19,7 +19,7 @@ One page per circuit about today (current conditions, temperature and cloud cove
 - Circuit comparison.
 - Track temperature, grip and tyre calls, which can't be estimated honestly from forecast data.
 - Several providers and a settings pane to pick them (planned for a later version).
-- Race calendar and track outlines.
+- Race calendar.
 
 ### Data limits
 
@@ -36,14 +36,14 @@ The rest of this README describes the app as it is now.
 **Today:**
 - A header with the circuit, local time, temperature, conditions, high and low, feels like, wind with gusts, humidity, and the chance of rain in the next 3 hours.
 - A track-status strip: three lights for now, the next 3 hours and later today (green dry, red rain likely, unlit without a forecast), one sentence on when rain is likely, and the radar image's time.
-- The next 5 days: temperature as a line over a quiet cloud-cover band.
-- Two maps side by side, stacked on a phone: rain radar from RainViewer, framed on the circuit, and wind arrows from a 3 by 3 grid of points about 17 km apart, coloured by speed in km/h.
+- The next 5 days: temperature as a line over a quiet cloud-cover band (a 15-hour average).
+- Two maps side by side, stacked on a phone: rain radar from RainViewer under the circuit's outline, which fills the map, and wind arrows from a 3 by 3 grid of points about 17 km apart, coloured by speed in km/h, over the same outline drawn faintly.
 - Rain and snow per 3-hour forecast window in mm, with the chance of rain.
 
 **History**, from our own collected readings for the selected circuit, every 30 minutes since 29 October 2026:
 - Temperature by the hour, with each full day's high and low.
 - Hours with rain on each day, or only the sentence when it did not rain.
-- Wind and gusts by the hour.
+- Wind by the hour, with the strongest gust in the sentence.
 
 Each section starts with one finding computed from the data. Hours with no reading stay blank, so the collector's gap on 2 and 3 November shows as a gap. History works without an API key.
 
@@ -97,7 +97,8 @@ The key is only used on the server. The browser receives the radar as one finish
 
 For the team's walkthrough. Start with these, because they are the least obvious code in the project.
 
-- **Radar framing (`src/weather_app/maps.py`):** a web map is a grid of square images. `lat_lon_to_tile` turns a place into a tile position, `radar_area` picks the tiles around the circuit and the square to keep, and `stitch_tiles` joins them. RainViewer's tiles stop at zoom 7, where a pixel is about 1 km, but the map opens at zoom 10 to 13.5 (`zoom_for_length`), so `enlarge` stretches the square 16 times with smooth bicubic resampling.
+- **Radar framing (`src/weather_app/maps.py`):** a web map is a grid of square images. `lat_lon_to_tile` turns a place into a tile position, `radar_area` picks the tiles around the circuit and the square to keep, and `stitch_tiles` joins them. RainViewer's tiles stop at zoom 7, where a pixel is about 1 km, but the map is zoomed in much further, so `enlarge` stretches the square 16 times with smooth bicubic resampling.
+- **Track outlines (`load_track` in `storage.py`, `track_view` and `track_layer` in `maps.py`):** each GeoJSON file becomes a list of line segments; OpenStreetMap ways stay separate, as in the file. `track_view` finds the zoom at which the outline's bounds fill a 340 by 320 pixel map with a small margin, on the map's own grid, where at zoom z the world is 512 × 2^z pixels across. The outline is drawn as map layers, a dark casing then a 3 px line, so the map credits f1-circuits itself.
 - **Wind arrows (`wind_grid_points` and `wind_arrow` in `maps.py`):** OpenWeatherMap's wind map shows speed only, so the app asks for current weather at 9 points around the circuit. Wind direction says where the wind comes from, so each arrow is drawn the opposite way, as a short line plus two head lines. A degree of longitude shrinks towards the poles, so longitude distances are divided by `cos(latitude)`.
 - **3-hour windows (`src/weather_app/forecast.py`):** OpenWeatherMap gives each forecast step's rain as the amount in the 3 hours before its time, so each step is drawn as the window that ends at that time. `rain_timing` walks through the windows to find the first run with a chance of rain of at least 50 %.
 - **Gaps in history (`hourly` in `src/weather_app/history.py`):** `resample("h").mean()` makes one row for every hour, and an hour without readings gets no value. Plotly stops a line at a missing value, so a gap stays a gap. Times are converted with each circuit's time zone name, so summer time is handled.
@@ -117,7 +118,8 @@ For the team's walkthrough. Start with these, because they are the least obvious
 - `src/weather_app/fetching.py`: cached API calls.
 - `src/weather_app/display.py`: small helpers for local time, wind direction and high and low.
 - `src/weather_app/views.py`, `cards.py`, `style.py`: the UI.
-- `data/circuits.csv`: the circuits. `straight_heading_deg` is blank for now and not used.
+- `data/circuits.csv`: the circuits, each with its outline file and, for the f1-circuits files, the credit the map shows. `straight_heading_deg` is blank for now and not used.
+- `data/tracks/`: one GeoJSON outline per circuit, and the f1-circuits licence.
 - `data/current_weather.csv`: a snapshot of the collected history, taken 3 November 2026.
 - `data/weather_log.csv`: the app's own fetches.
 - `tests/`: the tests.
@@ -129,6 +131,8 @@ For the team's walkthrough. Start with these, because they are the least obvious
 - Weather and forecasts: [OpenWeatherMap](https://openweathermap.org).
 - Rain radar: [RainViewer](https://www.rainviewer.com/), whose API is for personal and educational use.
 - Basemap: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors © [CARTO](https://carto.com/attributions).
+- Track outlines for Spa, the Nürburgring GP, Barcelona, Magny-Cours, Paul Ricard, Silverstone, Monza, Imola and Portimão: [f1-circuits](https://github.com/bacinger/f1-circuits) by Tomislav Bacinger, MIT licence (`data/tracks/LICENSE-f1-circuits.txt`).
+- Track outlines for MotorLand Aragón, Dijon-Prenois, Estoril, Jarama, Jerez, Le Mans (both layouts), Nogaro and the Nordschleife: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, [ODbL](https://opendatacommons.org/licenses/odbl/).
 
 ## Team
 
