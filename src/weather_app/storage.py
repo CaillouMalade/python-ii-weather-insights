@@ -1,4 +1,4 @@
-"""Files: the weather log (our own time series), the city list and the saved cities."""
+"""Files: the circuit list, the collected history, and the app's own weather log."""
 
 import csv
 from datetime import datetime, timezone
@@ -9,15 +9,13 @@ import pandas as pd
 from .models import READING_COLUMNS
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+CIRCUITS_PATH = DATA_DIR / "circuits.csv"
+# Collected every 30 minutes for every circuit since 29 October 2026, by a separate collector.
+HISTORY_PATH = DATA_DIR / "current_weather.csv"
+# Every reading the app itself fetches.
 LOG_PATH = DATA_DIR / "weather_log.csv"
-CITIES_PATH = DATA_DIR / "cities.csv"
-SAVED_CITIES_PATH = DATA_DIR / "saved_cities.csv"
 
 LOG_COLUMNS = ["timestamp_utc"] + READING_COLUMNS
-
-SAVED_CITY_COLUMNS = ["location", "label", "city", "latitude", "longitude"]
-# What a fresh clone shows.
-DEFAULT_CITIES = ["Madrid, ES", "Tokyo, JP", "New York City, US"]
 
 
 def _read_header(path):
@@ -36,8 +34,8 @@ def append_reading(reading, path=LOG_PATH):
     values = reading.to_dict()
     row = [datetime.now(timezone.utc).isoformat()] + [values[name] for name in READING_COLUMNS]
 
-    # utf-8 is needed for names like "São Paulo": the Windows default encoding
-    # cannot write every city name, and pandas reads the file back as utf-8.
+    # utf-8 is needed for names like "Nürburgring": the Windows default encoding
+    # cannot write every name, and pandas reads the file back as utf-8.
     try:
         with open(path, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
@@ -48,49 +46,33 @@ def append_reading(reading, path=LOG_PATH):
         raise ValueError("Could not save to the weather log. Close the file if it is open in another program.")
 
 
-def load_log(path=LOG_PATH):
-    """Return the whole log as a DataFrame, or an empty one if nothing has been logged."""
-    if _read_header(path) == "":
-        return pd.DataFrame(columns=LOG_COLUMNS)
+def load_circuits(path=CIRCUITS_PATH):
+    """Return the circuits as location dictionaries, in the file's order.
 
-    log = pd.read_csv(path, encoding="utf-8")
-    # format="mixed" because isoformat() leaves out the microseconds when they are exactly 0.
-    log["timestamp_utc"] = pd.to_datetime(log["timestamp_utc"], format="mixed")
-    return log
-
-
-def load_city_list(path=CITIES_PATH):
-    """Return the GeoNames city list used by the search dropdown."""
-    # keep_default_na=False because Namibia's country code "NA" is not a missing value.
-    return pd.read_csv(path, encoding="utf-8", keep_default_na=False)
-
-
-def rows_to_locations(rows):
-    """Turn DataFrame rows into the location dictionaries used across the app."""
-    locations = []
-    for _, row in rows.iterrows():
-        locations.append(
+    "location" holds the name, because the API client and the log expect it there.
+    Coordinates are not checked here: WeatherClient checks them before any call, so a
+    bad row only affects its own circuit.
+    """
+    circuits = []
+    for _, row in pd.read_csv(path, encoding="utf-8").iterrows():
+        circuits.append(
             {
-                "location": row["location"],
-                "label": row["label"],
-                "city": row["city"],
+                "id": row["id"],
+                "location": row["name"],
+                "country": row["country"],
                 # float() because pandas gives a NumPy number, not a Python one.
                 "latitude": float(row["latitude"]),
                 "longitude": float(row["longitude"]),
+                "timezone": row["timezone"],
+                "length_km": float(row["length_km"]),
             }
         )
-    return locations
+    return circuits
 
 
-def load_saved_cities(path=SAVED_CITIES_PATH, cities_path=CITIES_PATH):
-    """Return the saved cities, or the defaults if nothing has ever been saved."""
-    if _read_header(path) == "":
-        city_list = load_city_list(cities_path)
-        return rows_to_locations(city_list[city_list["location"].isin(DEFAULT_CITIES)])
-    return rows_to_locations(pd.read_csv(path, encoding="utf-8", keep_default_na=False))
-
-
-def save_cities(locations, path=SAVED_CITIES_PATH):
-    """Write the saved cities. An empty list still writes the header, so removals stick."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(locations, columns=SAVED_CITY_COLUMNS).to_csv(path, index=False, encoding="utf-8")
+def load_history(path=HISTORY_PATH):
+    """Return the collected history, or an empty table if the file is missing."""
+    try:
+        return pd.read_csv(path, encoding="utf-8")
+    except FileNotFoundError:
+        return pd.DataFrame()

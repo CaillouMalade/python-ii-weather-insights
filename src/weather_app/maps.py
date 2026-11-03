@@ -1,7 +1,7 @@
-"""Weather map helpers: tile maths, stitching tiles into one image, and the Plotly map.
+"""The two maps: rain radar from stitched tiles, and wind arrows from a grid of points.
 
-The tile URLs need the API key, so the server fetches the tiles and the browser only
-ever receives the finished image, as a data URI. That keeps the key out of the page.
+The server fetches everything. The browser only receives the finished radar image, as a
+data URI, and the wind figures, so no URL with the key ever reaches the page.
 """
 
 import base64
@@ -11,38 +11,31 @@ import math
 import plotly.graph_objects as go
 from PIL import Image
 
-RADAR_LAYER = "Rain radar"
-MAP_LAYERS = {
-    "Temperature": "temp_new",
-    "Wind": "wind_new",
-    "Clouds": "clouds_new",
-    "Pressure": "pressure_new",
-}
+from .display import compass_direction
 
-# Colour scales from OpenWeatherMap's map legend (openweathermap.org/map_legend), listed as
-# (label, colour). Temperature is as published. Wind is published in m/s and pressure in Pa,
-# so their labels are converted to km/h and hPa. Stops are shown evenly spaced.
-LEGENDS = {
-    "Temperature": ("°C", [("-30", "#8257DB"), ("-20", "#208CEC"), ("-10", "#20C4E8"), ("0", "#23DDDD"), ("10", "#C2FF28"), ("20", "#FFF028"), ("30", "#FC8014")]),
-    "Wind": ("km/h", [("18", "#EECECC"), ("54", "#B364BC"), ("90", "#3F213B"), ("180", "#744CAC"), ("360", "#4600AF")]),
-    "Clouds": ("%", [("10", "#FDFDFF"), ("50", "#F7F7FF"), ("80", "#E9E9DF"), ("100", "#D2D2D2")]),
-    "Pressure": ("hPa", [("940", "#0073FF"), ("980", "#4BD0D6"), ("1000", "#8DE7C7"), ("1010", "#B0F720"), ("1020", "#F0B800"), ("1040", "#FB5515"), ("1080", "#C60000")]),
-}
+MAP_HEIGHT = 320
 
-# OpenWeatherMap's tiles are mostly see-through, so low values hardly show. Multiplying
-# each pixel's opacity makes them read clearly, while coasts and labels still show through.
-WEATHER_LAYER_BOOST = 1.5
-# The basemap's first label layer. A layer placed below it leaves the labels on top.
-FIRST_LABEL_LAYER = "waterway_label"
+# Radar
+TILE_SIZE = 256
+GRID_COLUMNS = 5
+GRID_ROWS = 3
+# The tiles are sharp when the map itself is one zoom level further out. RainViewer stops at 7.
+TILE_ZOOM = 6
 RADAR_BOOST = 2
 # How strongly areas without radar are shaded, out of 255.
 NO_COVERAGE_OPACITY = 90
 
-TILE_SIZE = 256
-GRID_COLUMNS = 5
-GRID_ROWS = 3
-# The tiles are sharp when the map itself is one zoom level further out.
-TILE_ZOOM = 6
+# Wind: a 3 by 3 grid, so 9 calls, 0.2 degrees of latitude (about 22 km) apart.
+WIND_GRID_SIZE = 3
+WIND_GRID_STEP = 0.2
+# Arrow length in degrees of latitude.
+ARROW_LENGTH = 0.1
+WIND_MAP_ZOOM = 8.3
+# (lowest speed in km/h, colour). The legend under the map is drawn from this list too.
+WIND_BANDS = [(0, "#8fc7e8"), (10, "#6fd3a0"), (20, "#f2d13c"), (30, "#ef8a3a"), (40, "#e0455a")]
+
+
+# Tile maths
 
 
 def lat_lon_to_tile(latitude, longitude, zoom):
@@ -87,6 +80,9 @@ def tile_grid(latitude, longitude, zoom):
     south, east = tile_to_lat_lon(first_x + GRID_COLUMNS, first_y + GRID_ROWS, zoom)
     bounds = [[west, north], [east, north], [east, south], [west, south]]
     return {"rows": rows, "bounds": bounds, "first_x": first_x, "first_y": first_y}
+
+
+# Radar image
 
 
 def stitch_tiles(rows_of_png_bytes):
@@ -139,22 +135,125 @@ def image_to_data_uri(image):
     return f"data:image/png;base64,{encoded}"
 
 
-def build_map_figure(image_uri, bounds, latitude, longitude, below=None):
-    """A Plotly map: free dark basemap, weather image on top, and a dot on the city.
+# Wind arrows
 
-    below is the basemap layer to put the image under. None puts it on top of everything.
+
+def wind_grid_points(latitude, longitude):
+    """A square grid of points centred on the circuit, north row first, as (latitude, longitude) pairs.
+
+    Longitude lines get closer towards the poles, so the longitude step is widened by
+    1 / cos(latitude) to keep the points about as far apart both ways. Rounding keeps
+    each point identical between reruns, so the cache finds it.
     """
-    fig = go.Figure(go.Scattermap(lat=[latitude], lon=[longitude], mode="markers", marker=dict(size=11, color="white")))
+    longitude_step = WIND_GRID_STEP / math.cos(math.radians(latitude))
+    middle = WIND_GRID_SIZE // 2
+    points = []
+    for row in range(WIND_GRID_SIZE):
+        for column in range(WIND_GRID_SIZE):
+            points.append((round(latitude + (middle - row) * WIND_GRID_STEP, 4), round(longitude + (column - middle) * longitude_step, 4)))
+    return points
+
+
+def wind_band(speed_kmh):
+    """The position in WIND_BANDS of the band a wind speed falls in."""
+    band = 0
+    for number in range(len(WIND_BANDS)):
+        if speed_kmh >= WIND_BANDS[number][0]:
+            band = number
+    return band
+
+
+def wind_arrow(latitude, longitude, from_degrees):
+    """One arrow centred on a place, as a list of latitudes and a list of longitudes.
+
+    Wind direction says where the wind comes from (0 = from the north), so the arrow points
+    the opposite way. The line runs from tail to tip, then along the two sides of the head;
+    None lifts the pen between them.
+    """
+    to_radians = math.radians((from_degrees + 180) % 360)
+    longitude_scale = 1 / math.cos(math.radians(latitude))
+    half = ARROW_LENGTH / 2
+    north = math.cos(to_radians) * half
+    east = math.sin(to_radians) * half * longitude_scale
+    tip_latitude = latitude + north
+    tip_longitude = longitude + east
+
+    latitudes = [latitude - north, tip_latitude, None]
+    longitudes = [longitude - east, tip_longitude, None]
+    for turn in [150, -150]:
+        side = to_radians + math.radians(turn)
+        latitudes = latitudes + [tip_latitude + math.cos(side) * half * 0.6, tip_latitude]
+        longitudes = longitudes + [tip_longitude + math.sin(side) * half * 0.6 * longitude_scale, tip_longitude]
+    return latitudes + [None], longitudes + [None]
+
+
+def wind_arrow_lines(points):
+    """Join the arrows of each speed band into one line, so each band is one colour.
+
+    points is a list of dictionaries with latitude, longitude, speed_kmh and degrees. A point
+    without a direction gets no arrow. Returns one dictionary per band that has arrows.
+    """
+    lines = []
+    for number in range(len(WIND_BANDS)):
+        latitudes = []
+        longitudes = []
+        for point in points:
+            if point["degrees"] is None or wind_band(point["speed_kmh"]) != number:
+                continue
+            arrow_latitudes, arrow_longitudes = wind_arrow(point["latitude"], point["longitude"], point["degrees"])
+            latitudes = latitudes + arrow_latitudes
+            longitudes = longitudes + arrow_longitudes
+        if len(latitudes) > 0:
+            lines.append({"color": WIND_BANDS[number][1], "latitudes": latitudes, "longitudes": longitudes})
+    return lines
+
+
+def wind_label(point):
+    """Hover text for one grid point, such as 23 km/h SW."""
+    label = f"{point['speed_kmh']:.0f} km/h"
+    if point["degrees"] is not None:
+        label = f"{label} {compass_direction(point['degrees'])}"
+    return label
+
+
+# Figures
+
+
+def circuit_dot(latitude, longitude):
+    return go.Scattermap(lat=[latitude], lon=[longitude], mode="markers", marker=dict(size=11, color="white"), hoverinfo="skip")
+
+
+def map_layout(fig, latitude, longitude, zoom, layers):
+    """The look both maps share: free dark basemap, centred on the circuit, no margins."""
     fig.update_layout(
-        map=dict(
-            style="carto-darkmatter",
-            center=dict(lat=latitude, lon=longitude),
-            zoom=TILE_ZOOM - 1,
-            layers=[dict(sourcetype="image", source=image_uri, coordinates=bounds, opacity=1, below=below)],
-        ),
+        map=dict(style="carto-darkmatter", center=dict(lat=latitude, lon=longitude), zoom=zoom, layers=layers),
         margin=dict(l=0, r=0, t=0, b=0),
-        height=320,
+        height=MAP_HEIGHT,
         showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)",
     )
     return fig
+
+
+def radar_figure(image_uri, bounds, latitude, longitude):
+    layers = [dict(sourcetype="image", source=image_uri, coordinates=bounds, opacity=1)]
+    return map_layout(go.Figure(circuit_dot(latitude, longitude)), latitude, longitude, TILE_ZOOM - 1, layers)
+
+
+def wind_figure(points, latitude, longitude):
+    """Arrows coloured by speed. Invisible markers on the points give each one hover text."""
+    fig = go.Figure()
+    for line in wind_arrow_lines(points):
+        fig.add_trace(go.Scattermap(lat=line["latitudes"], lon=line["longitudes"], mode="lines", line=dict(width=3, color=line["color"]), hoverinfo="skip"))
+    fig.add_trace(
+        go.Scattermap(
+            lat=[point["latitude"] for point in points],
+            lon=[point["longitude"] for point in points],
+            mode="markers",
+            marker=dict(size=16, opacity=0),
+            hovertext=[wind_label(point) for point in points],
+            hoverinfo="text",
+        )
+    )
+    fig.add_trace(circuit_dot(latitude, longitude))
+    return map_layout(fig, latitude, longitude, WIND_MAP_ZOOM, [])
