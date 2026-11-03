@@ -118,3 +118,15 @@ def rain_timing(windows, now):
     earlier_rain = left["precipitation_mm"].to_list()[:first]
     opening = "Dry" if sum(earlier_rain) == 0 else "Mostly dry"
     return f"{opening} until {short_time(left['start'].to_list()[first])}, then rain{until}"
+
+
+def daily_conditions(windows):
+    """One row per local day: its midday (12:00, where the day's icon goes) and the condition
+    code of the window closest to 13:00, which describes the day better than a night one.
+    On a tie (12:00 and 15:00 are both an hour away), the earlier window wins."""
+    out = windows.copy()
+    out["day"] = out["end"].dt.strftime("%Y-%m-%d")
+    out["from_midday"] = (out["end"].dt.hour - 13).abs()
+    out = out.sort_values(["day", "from_midday", "end"]).drop_duplicates(subset="day", keep="first")
+    out["midday"] = pd.to_datetime(out["day"]) + pd.to_timedelta(12, unit="h")
+    return out[["day", "midday", "weather_id"]].reset_index(drop=True)

@@ -559,3 +559,90 @@ def test_wind_figure_is_framed_exactly_like_the_radar_with_the_full_outline():
     # One arrow line for the one speed band, then the 25 hover points.
     assert len(wind.data) == 2
     assert len(wind.data[1].hovertext) == 25
+
+
+# Colour that encodes data
+
+
+def test_temperature_color_known_answers():
+    from weather_app.display import temperature_color
+    assert temperature_color(-5) == "#6FA8DC"
+    assert temperature_color(0) == "#6FA8DC"
+    assert temperature_color(15) == "#C9C5B9"
+    # Halfway between the 10° and 15° stops: (159+201)/2, (183+197)/2, (201+185)/2.
+    assert temperature_color(12.5) == "#B4BEC1"
+    assert temperature_color(25) == "#F0A040"
+    assert temperature_color(40) == "#F0A040"
+
+
+def test_temperature_scale_has_no_green_or_red():
+    from weather_app.display import TEMPERATURE_STOPS
+    for _, red, green, blue in TEMPERATURE_STOPS:
+        # Never a green-dominant or a red-dominant colour: those mean dry and rain.
+        assert not (green > red + 30 and green > blue + 30)
+        assert not (red > green + 100 and red > blue + 100)
+
+
+def test_rain_bar_is_red_only_when_rain_is_likely():
+    from weather_app.display import RAIN_BAR_LIKELY, RAIN_BAR_UNLIKELY, rain_bar_color
+    assert rain_bar_color(0.5, 0.5) == RAIN_BAR_LIKELY
+    assert rain_bar_color(0.9, 0.5) == RAIN_BAR_LIKELY
+    assert rain_bar_color(0.49, 0.5) == RAIN_BAR_UNLIKELY
+    assert rain_bar_color(0.0, 0.5) == RAIN_BAR_UNLIKELY
+    assert "229" not in RAIN_BAR_UNLIKELY
+
+
+def test_condition_kind_and_glyphs():
+    from weather_app.display import condition_kind
+    from weather_app.icons import arrow_img, icon_img, icon_uri
+    assert [condition_kind(code, False) for code in [211, 310, 501, 601, 741, 800, 801, 803, None]] == ["rain", "rain", "rain", "snow", "fog", "sun", "sun", "cloud", "cloud"]
+    assert condition_kind(800, True) == "night"
+    assert 'alt="Rain"' in icon_img("rain")
+    # Drawn inline as a data URI: nothing is loaded from the network.
+    assert icon_uri("cloud").startswith("data:image/svg+xml;base64,")
+    assert 'src="data:image/svg+xml;base64,' in icon_img("sun")
+    assert 'alt="From the SW"' in arrow_img(225, "#9A8FD0", "From the SW")
+
+
+def test_wind_colour_is_one_hue_getting_brighter():
+    from weather_app.maps import wind_color
+    levels = []
+    for speed in [0, 10, 20, 30, 40]:
+        color = wind_color(speed)
+        levels.append(int(color[1:3], 16) + int(color[3:5], 16) + int(color[5:7], 16))
+    assert levels == sorted(levels)
+    assert wind_color(5) == wind_color(0)
+
+
+def test_now_group_colours_the_temperature_and_shows_a_glyph():
+    reading = make_reading(temperature=25.0)
+    html = now_group(reading, 26.0, 18.0, MONDAY, ["dry", "dry", "dry"], "Dry all week", "")
+    assert 'style="color:#F0A040"' in html
+    assert 'alt="Cloudy"' in html
+
+
+def test_history_rows_draw_ranges_rain_and_wind_and_mute_partial_days():
+    import pandas as pd
+    from weather_app.cards import history_rows
+    rows = pd.DataFrame(
+        {
+            "day": ["2026-11-01", "2026-11-02"],
+            "low": [5.0, 10.0],
+            "high": [15.0, 25.0],
+            "wind_kmh": [12.0, 3.0],
+            "direction": [225, float("nan")],
+            "hours": [24, 6],
+            "rain_hours": [3, 0],
+            "full": [True, False],
+        }
+    )
+    html = history_rows(rows)
+    assert html.count('class="day-row') == 2
+    assert html.count('class="day-row partial"') == 1
+    assert "Sun 1" in html and "Mon 2" in html
+    # On one shared scale from 5° to 25°: the first bar starts at 0 % and covers half.
+    assert "left:0.0%;width:50.0%" in html
+    assert "left:25.0%;width:75.0%" in html
+    assert 'aria-label="Rain: rain likely"' in html and "<span>3 h</span>" in html
+    assert 'aria-label="Dry: dry"' in html
+    assert 'alt="From the SW"' in html and "12 km/h" in html

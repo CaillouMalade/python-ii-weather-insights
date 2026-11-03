@@ -1,11 +1,11 @@
 """Our collected history: one reading per circuit every 30 minutes. No Streamlit and no key needed.
 
-Each function takes a DataFrame and returns a new one, or returns a sentence for the page.
+Each function takes a DataFrame and returns a new one, or returns the sentence for the page.
 """
 
 import pandas as pd
 
-from .display import compass_direction
+from .display import COMPASS_POINTS, compass_direction
 from .models import METRES_PER_SECOND_TO_KMH
 
 # A day with fewer hours of data than this is partial: its low and high are not the day's.
@@ -14,16 +14,15 @@ FULL_DAY_HOURS = 20
 WET_CODE_LIMIT = 700
 # Below this, a wind direction means little, so it is left out of the usual direction.
 CALM_KMH = 5
+# Each compass point's direction in degrees: N 0, NE 45 and so on.
+COMPASS_DEGREES = {}
+for number in range(len(COMPASS_POINTS)):
+    COMPASS_DEGREES[COMPASS_POINTS[number]] = number * 45
 
 
 def day_text(moment):
     """A date such as Sat 31 Oct. Built by hand because %-d does not work on Windows."""
     return f"{moment.strftime('%a')} {moment.day} {moment.strftime('%b')}"
-
-
-def moment_text(moment):
-    """A date and time such as Sat 31 Oct 14:00."""
-    return f"{day_text(moment)} {moment.strftime('%H:%M')}"
 
 
 def circuit_readings(history, circuit_id, timezone):
@@ -37,10 +36,9 @@ def circuit_readings(history, circuit_id, timezone):
     out["time"] = times.dt.tz_convert(timezone).dt.tz_localize(None)
     out = out.sort_values("time")
     out["wind_kmh"] = out["wind_speed_m_s"] * METRES_PER_SECOND_TO_KMH
-    out["gust_kmh"] = out["wind_gust_m_s"] * METRES_PER_SECOND_TO_KMH
     # rain_1h_mm is blank when it did not rain, and a blank is never above 0.
     out["wet"] = (out["weather_code"] < WET_CODE_LIMIT) | (out["rain_1h_mm"] > 0)
-    return out[["time", "temperature_c", "wind_kmh", "gust_kmh", "wind_direction_deg", "wet"]]
+    return out[["time", "temperature_c", "wind_kmh", "wind_direction_deg", "wet"]]
 
 
 def hourly(readings):
@@ -67,29 +65,28 @@ def daily(hourly_values):
     return out
 
 
-def daily_extremes(hourly_values, full_days):
-    """The hour of each full day's highest and lowest temperature, as two tables in time order."""
-    out = hourly_values.dropna(subset=["temperature_c"]).copy()
+def usual_direction(degrees):
+    """The compass point the wind came from most often, as degrees (0, 45 ... 315), or None
+    when there are no readings to go by."""
+    if len(degrees) == 0:
+        return None
+    points = [compass_direction(value) for value in degrees]
+    return COMPASS_DEGREES[pd.Series(points).value_counts().index[0]]
+
+
+def daily_rows(readings):
+    """One row per local day for the History view: low and high, average wind, the direction
+    it came from most often (only readings above CALM_KMH count), and from daily(), the hours
+    with data, the hours with rain and whether the day is full."""
+    out = readings.copy()
     out["day"] = out["time"].dt.strftime("%Y-%m-%d")
-    out = out[out["day"].isin(full_days)]
-    highs = out.sort_values("temperature_c", ascending=False).drop_duplicates(subset="day", keep="first")
-    lows = out.sort_values("temperature_c").drop_duplicates(subset="day", keep="first")
-    return highs.sort_values("time"), lows.sort_values("time")
-
-
-# One short finding per section, computed from the data
-
-
-def temperature_finding(highs, lows):
-    """The warmest and coldest moments of the full days."""
-    if len(highs) == 0:
-        return "No full day collected yet."
-    warmest = highs.sort_values("temperature_c", ascending=False).to_dict("records")[0]
-    coldest = lows.sort_values("temperature_c").to_dict("records")[0]
-    return (
-        f"Warmest {round(warmest['temperature_c'])} °C on {moment_text(warmest['time'])}, "
-        f"coldest {round(coldest['temperature_c'])} °C on {moment_text(coldest['time'])}."
-    )
+    rows = out.groupby("day").agg(low=("temperature_c", "min"), high=("temperature_c", "max"), wind_kmh=("wind_kmh", "mean")).reset_index()
+    directions = []
+    for day in rows["day"]:
+        moving = out[(out["day"] == day) & (out["wind_kmh"] >= CALM_KMH)]
+        directions.append(usual_direction(moving["wind_direction_deg"].to_list()))
+    rows["direction"] = directions
+    return rows.merge(daily(hourly(readings)), on="day", how="left")
 
 
 def rain_finding(days):
@@ -100,17 +97,3 @@ def rain_finding(days):
         return f"No rain in the {hours} hours collected."
     names = [day_text(pd.to_datetime(day)) for day in days[days["rain_hours"] > 0]["day"]]
     return f"Rain in {rain_hours} of the {hours} hours collected ({rain_hours / hours * 100:.0f} %), on {', '.join(names)}."
-
-
-def wind_finding(readings):
-    """Average wind, the strongest gust, and the usual direction."""
-    parts = [f"Average {readings['wind_kmh'].mean():.0f} km/h"]
-    gusts = readings.dropna(subset=["gust_kmh"])
-    if len(gusts) > 0:
-        strongest = gusts.sort_values("gust_kmh", ascending=False).to_dict("records")[0]
-        parts.append(f"gusts up to {strongest['gust_kmh']:.0f} km/h on {moment_text(strongest['time'])}")
-    moving = readings[readings["wind_kmh"] >= CALM_KMH]
-    if len(moving) > 0:
-        directions = [compass_direction(degrees) for degrees in moving["wind_direction_deg"]]
-        parts.append(f"mostly from the {pd.Series(directions).value_counts().index[0]}")
-    return ", ".join(parts) + "."

@@ -41,8 +41,9 @@ NO_COVERAGE_OPACITY = 90
 WIND_GRID_SIZE = 3
 WIND_GRID_MARGIN = 0.25
 WIND_FIELD_SIZE = 5
-# (lowest speed in km/h, colour), from muted green-grey to the red flag.
-WIND_BANDS = [(0, "#7F9A8A"), (10, "#8E7F78"), (20, "#AD6966"), (30, "#C95A5B"), (40, "#E5484D")]
+# (lowest speed in km/h, colour): one violet hue, dim when calm and brighter when stronger,
+# so it never reads as the green of dry, the red of rain or the temperature scale.
+WIND_BANDS = [(0, "#6A6488"), (10, "#7C73A6"), (20, "#9A8FD0"), (30, "#B8AEF0"), (40, "#DCD5FF")]
 
 
 # Framing
@@ -316,6 +317,11 @@ def wind_band(speed_kmh):
         if speed_kmh >= WIND_BANDS[number][0]:
             band = number
     return band
+
+
+def wind_color(speed_kmh):
+    """The colour of a wind speed, from its band."""
+    return WIND_BANDS[wind_band(speed_kmh)][1]
 
 
 def wind_arrow(latitude, longitude, from_degrees, length):

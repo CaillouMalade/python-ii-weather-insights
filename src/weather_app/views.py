@@ -1,19 +1,19 @@
 """The page: the track picker, my sessions in the sidebar, then the Today and History views."""
 
-from datetime import time
+from datetime import time, timedelta
 from html import escape
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
 from . import cards
 from .config import SETUP_MESSAGE
-from .display import format_local_time
+from .display import condition_kind, format_local_time, rain_bar_color, temperature_color
 from .fetching import fetch_radar_image, fetch_wind_grid, now_seconds
-from .forecast import RAIN_LIKELY, STEP_HOURS, calm_clouds, rain_timing, status_lights, today_high_low
-from .history import circuit_readings, daily, daily_extremes, hourly, rain_finding, temperature_finding, wind_finding
+from .forecast import RAIN_LIKELY, STEP_HOURS, calm_clouds, daily_conditions, rain_timing, status_lights, today_high_low
+from .history import circuit_readings, daily_rows, day_text, rain_finding
+from .icons import icon_uri
 from .maps import circuit_bounds, radar_figure, wind_field, wind_figure, wind_grid_bounds, wind_grid_points
 from .sessions import add_default_weekend, check_session, session_status, session_times
 from .storage import load_history, load_sessions, load_track, save_sessions
@@ -23,11 +23,12 @@ TEXT = "#E8EDEA"
 MUTED = "#8A948F"
 BORDER = "#242A27"
 SURFACE = "#161A18"
-RED = "#E5484D"
-RED_UNLIKELY = "rgba(229, 72, 77, 0.35)"
 CLOUD_BAND = "rgba(138, 148, 143, 0.12)"
-SESSION_BAND = "rgba(47, 210, 122, 0.12)"
+SESSION_BLOCK = "rgba(47, 210, 122, 0.16)"
+SESSION_EDGE = "rgba(47, 210, 122, 0.6)"
 ONE_DAY_MS = 24 * 3600 * 1000
+# The day picker offers today and the next 13 days.
+PICKER_DAYS = 14
 
 
 @st.cache_data(show_spinner=False)
@@ -119,19 +120,27 @@ def use_default_weekend(circuit):
     save_sessions(add_default_weekend(load_sessions(), circuit["id"], local_now(circuit)))
 
 
-def session_inputs(prefix, name, day, start, end):
-    """The four inputs every session form has. Labels are hidden: each value says what it is."""
+def session_inputs(prefix, name, day, start, end, today):
+    """The same four inputs in both session forms: the name with a placeholder, a day picker
+    that reads like "Fri 7 Nov", and the two times with tiny labels."""
+    days = []
+    for number in range(PICKER_DAYS):
+        days.append(today + timedelta(days=number))
+    # A saved session can be on a day outside the picker's range; it stays selectable.
+    if day not in days:
+        days.insert(0, day)
     st.text_input("Name", value=name, key=f"{prefix}-name", placeholder="Name", label_visibility="collapsed")
-    st.date_input("Day", value=day, key=f"{prefix}-day", label_visibility="collapsed")
+    st.selectbox("Day", days, index=days.index(day), format_func=day_text, key=f"{prefix}-day", label_visibility="collapsed")
     start_column, end_column = st.columns(2)
-    start_column.time_input("Start", value=start, step=900, key=f"{prefix}-start", label_visibility="collapsed")
-    end_column.time_input("End", value=end, step=900, key=f"{prefix}-end", label_visibility="collapsed")
+    start_column.time_input("Start", value=start, step=900, key=f"{prefix}-start")
+    end_column.time_input("End", value=end, step=900, key=f"{prefix}-end")
 
 
-def show_edit_form(index, session, track):
+def show_edit_form(index, session, circuit):
     start, end = session_times(session)
+    track = circuit["id"]
     with st.sidebar.form(f"edit-{index}", border=False):
-        session_inputs(f"edit-{index}", session["name"], start.date(), start.time(), end.time())
+        session_inputs(f"edit-{index}", session["name"], start.date(), start.time(), end.time(), local_now(circuit).date())
         save_column, delete_column = st.columns(2)
         save_column.form_submit_button("Save", on_click=save_session, args=(index, track))
         delete_column.form_submit_button("Delete", on_click=delete_session, args=(index,))
@@ -153,7 +162,7 @@ def show_sessions(loaded):
         session = sessions[index]
         if st.session_state.get("session") == index:
             selected = session
-            show_edit_form(index, session, track)
+            show_edit_form(index, session, circuit)
             continue
         state, chance = None, None
         if loaded["windows"] is not None:
@@ -164,7 +173,8 @@ def show_sessions(loaded):
             st.button(f"Edit {session['name']}", key=f"open-{index}", on_click=toggle_session, args=(index,))
 
     with st.sidebar.form("add-session", border=False):
-        session_inputs("add", "", local_now(circuit).date(), time(9, 0), time(10, 0))
+        today = local_now(circuit).date()
+        session_inputs("add", "", today, time(9, 0), time(10, 0), today)
         st.form_submit_button("Add", on_click=add_session, args=(track,))
     st.sidebar.button("Use default weekend", on_click=use_default_weekend, args=(circuit,))
     if "session_error" in st.session_state:
@@ -197,10 +207,10 @@ def show_figure(fig):
     st.plotly_chart(fig, theme=None, config={"displayModeBar": False})
 
 
-def label_points(fig, rows, above, row=None):
+def label_points(fig, rows, above):
     """Write each point's temperature next to it, such as 15°, above or below the line."""
     for point in rows.to_dict("records"):
-        fig.add_annotation(x=point["x"], y=point["y"], text=f"{round(point['y'])}°", showarrow=False, yshift=11 if above else -11, font=dict(color=TEXT, size=11), row=row, col=1 if row else None)
+        fig.add_annotation(x=point["x"], y=point["y"], text=f"{round(point['y'])}°", showarrow=False, yshift=11 if above else -11, font=dict(color=TEXT, size=11), row=1, col=1)
 
 
 def daily_high_low_points(times, temperatures):
@@ -212,32 +222,60 @@ def daily_high_low_points(times, temperatures):
     return highs, lows
 
 
+def add_temperature_line(fig, times, temperatures):
+    """The temperature line, each short segment coloured by its temperature, so the line itself
+    reads warm or cold. An invisible line on top carries the hover values."""
+    times = list(times)
+    temperatures = list(temperatures)
+    for number in range(len(times) - 1):
+        middle = (temperatures[number] + temperatures[number + 1]) / 2
+        fig.add_scatter(x=times[number:number + 2], y=temperatures[number:number + 2], mode="lines", line=dict(color=temperature_color(middle), width=2.5), hoverinfo="skip", row=1, col=1)
+    fig.add_scatter(x=times, y=temperatures, mode="lines", line=dict(width=0), hovertemplate="%{y:.0f}°<extra></extra>", row=1, col=1)
+
+
+def add_day_icons(fig, windows):
+    """One condition glyph above each day, from the window closest to its midday. A day whose
+    midday is not well inside the forecast (the rest of today, the last part-day) gets none,
+    so no glyph is cut off at either end."""
+    margin = pd.to_timedelta(STEP_HOURS, unit="h")
+    first = windows["start"].min() + margin
+    last = windows["end"].max() - margin
+    for row in daily_conditions(windows).to_dict("records"):
+        if row["midday"] < first or row["midday"] > last:
+            continue
+        kind = condition_kind(row["weather_id"], False)
+        fig.add_layout_image(source=icon_uri(kind), xref="x", yref="paper", x=row["midday"], y=1.0, sizex=6 * 3600 * 1000, sizey=0.1, xanchor="center", yanchor="bottom", layer="above")
+
+
 def forecast_figure(windows, session):
     """Temperature over a faint cloud band, and rain per 3-hour window below, on one time axis.
 
-    Rain bars are red when rain is likely (the status rule) and faint red when it is not.
-    The selected session, if any, shows as a band across both.
+    Rain bars are red only when rain is likely (the status rule) and a quiet neutral otherwise.
+    The selected session, if any, shows as one block across both charts.
     """
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.62, 0.38], vertical_spacing=0.08, specs=[[{"secondary_y": True}], [{}]])
     fig.add_scatter(x=windows["end"], y=calm_clouds(windows), fill="tozeroy", mode="lines", line=dict(width=0, shape="spline", smoothing=1.3), fillcolor=CLOUD_BAND, hoverinfo="skip", row=1, col=1, secondary_y=True)
-    fig.add_scatter(x=windows["end"], y=windows["temperature"], mode="lines", line=dict(color=TEXT, width=2), hovertemplate="%{y:.0f}°<extra></extra>", row=1, col=1)
+    add_temperature_line(fig, windows["end"], windows["temperature"])
 
     highs, lows = daily_high_low_points(windows["end"], windows["temperature"])
-    label_points(fig, highs, True, row=1)
-    label_points(fig, lows, False, row=1)
+    label_points(fig, highs, True)
+    label_points(fig, lows, False)
+    add_day_icons(fig, windows)
 
     middles = windows["start"] + pd.to_timedelta(STEP_HOURS / 2, unit="h")
-    colors = [RED if pop >= RAIN_LIKELY else RED_UNLIKELY for pop in windows["pop"]]
+    colors = [rain_bar_color(pop, RAIN_LIKELY) for pop in windows["pop"]]
     chances = windows["pop"] * 100
     fig.add_bar(x=middles, y=windows["rain_3h"], width=STEP_HOURS * 3600 * 1000, marker_color=colors, customdata=chances, hovertemplate="%{y:.1f} mm · %{customdata:.0f} %<extra></extra>", row=2, col=1)
     if windows["snow_3h"].sum() > 0:
-        fig.add_bar(x=middles, y=windows["snow_3h"], width=STEP_HOURS * 3600 * 1000, marker_color=MUTED, hovertemplate="%{y:.1f} mm snow<extra></extra>", row=2, col=1)
+        fig.add_bar(x=middles, y=windows["snow_3h"], width=STEP_HOURS * 3600 * 1000, marker_color=TEXT, opacity=0.6, hovertemplate="%{y:.1f} mm snow<extra></extra>", row=2, col=1)
 
     if session is not None:
         start, end = session_times(session)
-        fig.add_vrect(x0=start, x1=end, fillcolor=SESSION_BAND, line_width=0, row="all", col=1)
+        # One shape over the whole plotting height, so the block crosses both charts and the gap between them.
+        fig.add_shape(type="rect", xref="x", yref="paper", x0=start, x1=end, y0=0, y1=1, fillcolor=SESSION_BLOCK, line=dict(color=SESSION_EDGE, width=1), layer="below")
 
-    style_figure(fig, 340)
+    style_figure(fig, 360)
+    fig.update_layout(margin=dict(l=0, r=0, t=34, b=0))
     # Temperature is read from its labels, so its axis has no ticks; the cloud band has no axis at all.
     fig.update_yaxes(visible=False, row=1, col=1)
     fig.update_yaxes(visible=False, range=[0, 100], row=1, col=1, secondary_y=True)
@@ -318,34 +356,9 @@ def show_history(circuit):
         st.info(f"No collected history for {circuit['location']} yet.")
         return
 
-    values = hourly(readings)
-    days = daily(values)
-    highs, lows = daily_extremes(values, days[days["full"]]["day"].to_list())
+    rows = daily_rows(readings)
     with st.container(key="panel-history"):
-        st.html(f'<div class="finding">{escape(temperature_finding(highs, lows))}</div>')
-        fig = go.Figure()
-        fig.add_scatter(x=values["time"], y=values["temperature_c"], mode="lines", line=dict(color=TEXT, width=1.5), hovertemplate="%{y:.0f}°<extra></extra>")
-        label_points(fig, highs.rename(columns={"time": "x", "temperature_c": "y"}), True)
-        label_points(fig, lows.rename(columns={"time": "x", "temperature_c": "y"}), False)
-        style_figure(fig, 220)
-        fig.update_yaxes(visible=False)
-        show_figure(fig)
-
-        st.html(f'<div class="finding">{escape(rain_finding(days))}</div>')
-        if days["rain_hours"].sum() > 0:
-            fig = go.Figure()
-            fig.add_bar(x=pd.to_datetime(days["day"]) + pd.to_timedelta(12, unit="h"), y=days["rain_hours"], marker_color=RED, hovertemplate="%{y} h<extra></extra>")
-            style_figure(fig, 160)
-            # Whole hours only, with about four ticks.
-            fig.update_yaxes(ticksuffix=" h", dtick=max(1, round(days["rain_hours"].max() / 4)))
-            show_figure(fig)
-
-        st.html(f'<div class="finding">{escape(wind_finding(readings))}</div>')
-        fig = go.Figure()
-        fig.add_scatter(x=values["time"], y=values["wind_kmh"], mode="lines", line=dict(color=TEXT, width=1.5), hovertemplate="%{y:.0f} km/h<extra></extra>")
-        style_figure(fig, 200)
-        fig.update_yaxes(ticksuffix=" km/h")
-        show_figure(fig)
+        st.html(f'<div class="finding">{escape(rain_finding(rows))}</div>' + cards.history_rows(rows))
 
 
 def show_credits():

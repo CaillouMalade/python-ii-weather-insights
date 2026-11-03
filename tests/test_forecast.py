@@ -142,3 +142,18 @@ def test_calm_clouds_is_a_centred_15_hour_mean():
     assert calm_clouds(windows).round(1).to_list() == [33.3, 50.0, 40.0, 60.0, 50.0, 66.7]
     # The table itself is left as it was.
     assert windows["clouds"].to_list() == [0, 100, 0, 100, 0, 100]
+
+
+def test_daily_conditions_take_the_window_closest_to_one_pm():
+    steps = []
+    for number, code in enumerate([800, 800, 800, 800, 501, 500, 803, 803, 600]):
+        steps.append({"dt": MONDAY + (number + 1) * 3 * HOUR, "temperature": 10, "clouds": 50, "pop": 0, "rain_3h": 0, "snow_3h": 0, "weather_id": code})
+    days = forecast_windows(pd.DataFrame(steps), 0)
+    from weather_app.forecast import daily_conditions
+    conditions = daily_conditions(days)
+    # Monday's windows end at 03, 06 ... 21, then 00:00 and 03:00 on Tuesday. 12:00 (code 800)
+    # and 15:00 (501) are both 1 hour from 13:00, so the earlier one wins. Tuesday has 00:00
+    # (803) and 03:00 (600); 03:00 is closer to 13:00.
+    assert conditions["day"].to_list() == ["2026-01-05", "2026-01-06"]
+    assert conditions["weather_id"].to_list() == [800, 600]
+    assert conditions["midday"].to_list()[0] == pd.Timestamp("2026-01-05 12:00")

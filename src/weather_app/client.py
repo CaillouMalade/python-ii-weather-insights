@@ -147,6 +147,8 @@ class WeatherClient(APIClient):
                         # Both are the amount in the 3 hours up to dt.
                         "rain_3h": entry.get("rain", {}).get("3h", 0),
                         "snow_3h": entry.get("snow", {}).get("3h", 0),
+                        # The condition code, for the day icons. Kept optional, like the other extras.
+                        "weather_id": entry.get("weather", [{}])[0].get("id"),
                     }
                 )
         except (KeyError, IndexError):

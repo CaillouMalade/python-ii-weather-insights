@@ -2,11 +2,11 @@
 
 import pandas as pd
 
-from weather_app.history import circuit_readings, daily, daily_extremes, hourly, rain_finding, temperature_finding, wind_finding
+from weather_app.history import circuit_readings, daily, daily_rows, hourly, rain_finding, usual_direction
 from weather_app.storage import load_circuits, load_history
 
 
-def make_history(times, temperatures, codes=None, winds=None, gusts=None, location="spa"):
+def make_history(times, temperatures, codes=None, winds=None, gusts=None, location="spa", directions=None):
     """Collector rows with the columns the app reads. times are UTC text."""
     count = len(times)
     return pd.DataFrame(
@@ -16,7 +16,7 @@ def make_history(times, temperatures, codes=None, winds=None, gusts=None, locati
             "temperature_c": temperatures,
             "wind_speed_m_s": winds if winds is not None else [5.0] * count,
             "wind_gust_m_s": gusts if gusts is not None else [None] * count,
-            "wind_direction_deg": [225] * count,
+            "wind_direction_deg": directions if directions is not None else [225] * count,
             "rain_1h_mm": [None] * count,
             "weather_code": codes if codes is not None else [800] * count,
         }
@@ -72,23 +72,35 @@ def test_daily_counts_hours_with_data_and_rain_and_marks_full_days():
     assert days["full"].to_list() == [True, False]
 
 
-def test_daily_extremes_only_for_full_days():
+def test_daily_rows_give_each_day_its_range_wind_and_rain():
+    # A full Sunday: 10° most of the day, 4° at 04:00 and 18° at 14:30, rain in two readings,
+    # wind from the SW at 18 km/h. Then two calm readings on Monday morning, a partial day.
     times = every_half_hour("2026-11-01 00:00", 48) + every_half_hour("2026-11-02 00:00", 2)
-    temperatures = [10.0] * 48 + [30.0, 30.0]
-    temperatures[29] = 18.0  # 14:30
-    temperatures[8] = 4.0  # 04:00
-    values = hourly(circuit_readings(make_history(times, temperatures), "spa", "UTC"))
-    highs, lows = daily_extremes(values, ["2026-11-01"])
-    assert highs["time"].to_list() == [pd.Timestamp("2026-11-01 14:00")]
-    assert highs["temperature_c"].to_list() == [14.0]
-    assert lows["time"].to_list() == [pd.Timestamp("2026-11-01 04:00")]
-    assert lows["temperature_c"].to_list() == [7.0]
-    assert temperature_finding(highs, lows) == "Warmest 14 °C on Sun 1 Nov 14:00, coldest 7 °C on Sun 1 Nov 04:00."
+    temperatures = [10.0] * 48 + [6.0, 7.0]
+    temperatures[8] = 4.0
+    temperatures[29] = 18.0
+    codes = [800] * 50
+    codes[20] = 500
+    codes[21] = 500
+    winds = [5.0] * 48 + [0.5, 0.5]
+    rows = daily_rows(circuit_readings(make_history(times, temperatures, codes=codes, winds=winds), "spa", "UTC"))
+    assert rows["day"].to_list() == ["2026-11-01", "2026-11-02"]
+    assert rows["low"].to_list() == [4.0, 6.0]
+    assert rows["high"].to_list() == [18.0, 7.0]
+    assert rows["wind_kmh"].round(1).to_list() == [18.0, 1.8]
+    # 225° is SW; Monday's wind is below CALM_KMH, so it has no usual direction.
+    assert rows["direction"].to_list()[0] == 225
+    assert pd.isna(rows["direction"].to_list()[1])
+    assert rows["rain_hours"].to_list() == [1, 0]
+    assert rows["hours"].to_list() == [24, 1]
+    assert rows["full"].to_list() == [True, False]
 
 
-def test_temperature_finding_without_a_full_day():
-    empty = pd.DataFrame({"time": [], "temperature_c": []})
-    assert temperature_finding(empty, empty) == "No full day collected yet."
+def test_usual_direction_is_the_most_frequent_compass_point():
+    # 350° and 10° are both N, so north wins over the two easterly readings.
+    assert usual_direction([350, 10, 5, 90, 95]) == 0
+    assert usual_direction([200, 230, 225]) == 225
+    assert usual_direction([]) is None
 
 
 def test_rain_finding():
@@ -98,15 +110,15 @@ def test_rain_finding():
     assert rain_finding(days) == "No rain in the 60 hours collected."
 
 
-def test_wind_finding_names_the_gust_and_the_usual_direction():
-    times = every_half_hour("2026-11-01 10:00", 3)
-    readings = circuit_readings(make_history(times, [10.0] * 3, winds=[2.0, 4.0, 0.5], gusts=[None, 10.0, None]), "spa", "UTC")
-    assert wind_finding(readings) == "Average 8 km/h, gusts up to 36 km/h on Sun 1 Nov 10:30, mostly from the SW."
-
-
-def test_wind_finding_when_calm_and_without_gusts():
-    readings = circuit_readings(make_history(every_half_hour("2026-11-01 10:00", 2), [10.0] * 2, winds=[0.5, 0.5]), "spa", "UTC")
-    assert wind_finding(readings) == "Average 2 km/h."
+def test_le_mans_shows_the_providers_frozen_reading():
+    # OpenWeatherMap answered exactly 8.87 °C and 1.34 m/s from 230° for 40 of Le Mans's readings,
+    # mostly at night, while humidity and pressure kept changing: a stuck value at that point.
+    history = load_history()
+    le_mans = history[history["location_id"] == "lemans"]
+    frozen = le_mans[(le_mans["temperature_c"] == 8.87) & (le_mans["wind_speed_m_s"] == 1.34)]
+    assert len(frozen) == 40
+    assert frozen["wind_direction_deg"].unique().tolist() == [230]
+    assert frozen["humidity_pct"].nunique() > 5
 
 
 def test_the_real_snapshot_shows_the_2_to_3_november_gap():

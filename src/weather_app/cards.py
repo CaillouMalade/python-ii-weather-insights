@@ -1,11 +1,13 @@
-"""Simple HTML for the now group, the lights and the session rows. Text from the API or data
-files always goes through escape()."""
+"""Simple HTML for the now group, the lights, the session rows and the History days. Text from
+the API or data files always goes through escape()."""
 
 from html import escape
 
 import pandas as pd
 
-from .display import compass_direction, format_local_time, high_low_text
+from .display import compass_direction, condition_kind, format_local_time, high_low_text, temperature_color
+from .icons import arrow_img, icon_img
+from .maps import wind_color
 from .models import METRES_PER_SECOND_TO_KMH
 
 LIGHT_NAMES = ["Now", "Next 3 hours", "Later today"]
@@ -38,11 +40,18 @@ def radar_problem(radar):
     return ""
 
 
+def is_night(now, reading):
+    """True outside today's sunrise-to-sunset, when both are known."""
+    if reading.sunrise is None or reading.sunset is None:
+        return False
+    return now < reading.sunrise or now >= reading.sunset
+
+
 def now_group(reading, high, low, now, states, sentence, problem):
     """Everything about now in one tight group: the temperature, the facts beside it, then the
     three status lights with the rain-timing line. Labels only where a value cannot say it alone."""
     lines = [
-        [escape(reading.conditions.capitalize()), format_local_time(now, reading.timezone_offset or 0, "%a %H:%M")],
+        [icon_img(condition_kind(reading.weather_id, is_night(now, reading))) + " " + escape(reading.conditions.capitalize()), format_local_time(now, reading.timezone_offset or 0, "%a %H:%M")],
         [high_low_text(high, low), f"Feels {round(reading.feels_like)}°"],
         [wind_text(reading), f"Humidity {reading.humidity} %"],
     ]
@@ -56,7 +65,7 @@ def now_group(reading, high, low, now, states, sentence, problem):
     problem_html = f'<span class="muted">{problem}</span>' if problem else ""
     return (
         '<div class="now">'
-        f'<div class="now-temp">{round(reading.temperature)}°</div>'
+        f'<div class="now-temp" style="color:{temperature_color(reading.temperature)}">{round(reading.temperature)}°</div>'
         '<div class="now-facts">' + "".join([f"<div>{fact}</div>" for fact in facts]) + "</div>"
         f'<div class="status"><div class="lights">{lights}</div><div class="status-text">{escape(sentence)}</div>{problem_html}</div>'
         "</div>"
@@ -75,3 +84,36 @@ def session_row(session, state, chance):
         f'<span class="session-value">{value}</span>'
         "</div>"
     )
+
+
+def history_rows(rows):
+    """The collected days as weather-app rows: day, rain, low, the low-to-high range on one shared
+    scale coloured by temperature, high, then average wind with an arrow for its usual direction.
+
+    A day with less than FULL_DAY_HOURS of data is shown muted: its low and high are not the day's.
+    """
+    coldest = rows["low"].min()
+    span = max(rows["high"].max() - coldest, 1)
+    html = ""
+    for row in rows.to_dict("records"):
+        left = (row["low"] - coldest) / span * 100
+        width = max((row["high"] - row["low"]) / span * 100, 1)
+        bar = (
+            f'<div class="range"><div class="range-fill" style="left:{left:.1f}%;width:{width:.1f}%;'
+            f'background:linear-gradient(90deg, {temperature_color(row["low"])}, {temperature_color(row["high"])})"></div></div>'
+        )
+        if row["rain_hours"] > 0:
+            rain = f'{light("rain", "Rain")}<span>{row["rain_hours"]} h</span>'
+        else:
+            rain = light("dry", "Dry")
+        wind = f'{row["wind_kmh"]:.0f} km/h'
+        if not pd.isna(row["direction"]):
+            wind = arrow_img(row["direction"], wind_color(row["wind_kmh"]), f"From the {compass_direction(row['direction'])}") + wind
+        partial = "" if row["full"] else " partial"
+        day = pd.to_datetime(row["day"])
+        html = html + (
+            f'<div class="day-row{partial}"><span>{day.strftime("%a")} {day.day}</span>'
+            f'<span class="day-rain">{rain}</span><span class="muted">{round(row["low"])}°</span>{bar}'
+            f'<span>{round(row["high"])}°</span><span class="day-wind">{wind}</span></div>'
+        )
+    return f'<div class="days">{html}</div>'

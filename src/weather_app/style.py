@@ -41,6 +41,24 @@ CSS = """
 .now-facts div + div { color: var(--muted); }
 .fact { white-space: pre; }
 
+.now-facts .glyph { vertical-align: -4px; margin-right: 4px; }
+
+/* History: one row per collected day, like a weather app's daily forecast. A partial day is muted. */
+.days { display: grid; gap: 2px; margin-top: 10px; }
+.day-row { display: grid; grid-template-columns: 5.2rem 3.4rem 2.4rem minmax(40px, 1fr) 2.4rem 5.6rem; align-items: center; gap: 10px; padding: 7px 0; }
+.day-row.partial { opacity: 0.45; }
+.day-rain, .day-wind { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.day-wind { justify-content: flex-end; color: var(--muted); }
+.range { position: relative; height: 6px; border-radius: 3px; background: var(--border); }
+.range-fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+@container (max-width: 520px) {
+  .day-row { grid-template-columns: 3.6rem 2.6rem 2rem minmax(30px, 1fr) 2rem 4.2rem; gap: 6px; font-size: 0.9rem; }
+  .day-wind { font-size: 0.8rem; }
+}
+
+/* Sidebar form: only the two times carry a label, and it is tiny */
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p { font-size: 0.7rem; color: var(--muted); }
+
 /* Status lights: small filled circles with a faint glow, like track-status lights. No animation. */
 .light { display: inline-block; flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--border); }
 .light.dry { background: var(--green); box-shadow: 0 0 6px rgba(47, 210, 122, 0.55); }
