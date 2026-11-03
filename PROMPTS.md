@@ -274,3 +274,44 @@ Commits `73043d4`, `387fdb0` and `b3c61e9` carry a `Co-Authored-By: Codex <norep
 ### Be ready to explain: new forms not evidenced in class material
 
 `Series.dt.tz_convert` with a zone name and `.dt.tz_localize(None)`; `pd.to_datetime(..., utc=True)`; `DataFrame.set_index("time").resample("h").mean()` (resample is in class; on a column set as the index it is not); `Series.shift` as a whole column; `Series.value_counts().index[0]`; `math.isnan`, `math.cos`, `math.sin`; `go.Scattermap` with `mode="lines"` and `None` breaks; `fill="tozeroy"`; `add_bar(width=...)` in milliseconds; `barmode="stack"` and `"overlay"`; `hovermode="x unified"`; `st.selectbox(format_func=...)`; CSS `linear-gradient` with hard colour stops.
+
+## Design round — 3 November 2026
+
+**Asked:** After merging the MVP and his README rewrite (`b06083d`), the orchestrator relayed Arthur's feedback and a decided visual direction to Claude Code (Opus 5.5):
+- Radar zoomed in "so that the track basically fills the map", with RainViewer's low-zoom tiles enlarged smoothly. The wind map stays regional but tighter (15–25 km spacing).
+- No footnotes anywhere: the History coverage line, "Forecast 07:50" stamps and captions go. Only data attributions remain, plus the radar time inside the new status element.
+- A pit-wall look: flat graphite (`#0E1110`, `#161A18`, `#242A27`, text `#E8EDEA`, muted `#8A948F`), green `#2FD27A` for dry and selection, red `#E5484D` only for rain and failures, tabular numerals, a light-weight big temperature and fewer section titles.
+- One bold element, a track-status strip of three lights (now, next 3 hours, later today) with the timing sentence and radar time. Each sidebar card gets one light.
+- Also cut: the header subtitle. Cloud cover becomes a quiet band. History rain becomes a sentence only when dry, or red rainy hours only.
+
+**Got:**
+- `zoom_for_length` (13 for a 4 km track, one level out per doubling, kept between 10 and 13.5).
+- `radar_area`, which keeps a 48-pixel square of zoom-7 radar around the circuit, and `enlarge`, which stretches it 16 times with bicubic resampling in RGBa mode.
+- `status_lights` in `forecast.py`; `light`, `status_strip` and `radar_text` in `cards.py`.
+- A rewritten `style.py` with the colour tokens, the same colours in `.streamlit/config.toml`, a quieter map attribution and green focus rings.
+- `load_circuit`, which fetches each circuit's forecast with its current weather for the sidebar lights.
+- 84 tests in all: new known-answer tests for the lights, the zoom helper, the radar square and the smooth enlargement.
+
+**Checked:**
+- `uv run pytest` passes with no key. AppTest with no key: Today shows the setup message, and History renders for all 18 circuits without exceptions.
+- RainViewer's real maximum zoom: zoom 8 answers with a "Zoom Level Not Supported" image, so the app uses 7.
+- Real Chrome (a visible window driven through the DevTools protocol) at 1280 and 390 px, against the throwaway fake OpenWeatherMap with Portimão dry, Spa wet now, Monza failing and one Spa grid point failing, plus the real RainViewer service.
+- Looked at Portimão (three green lights), Spa (three red lights, red card light, red bars, 8 of 9 arrows), Barcelona (real rain inside the radar square), History for Paul Ricard (rain) and Portimão (dry), the status strip wrapping at 390 px, and keyboard focus on a sidebar card.
+- Contrast on the surface: text 14.8:1, muted text 5.6:1, the green focus ring 8.9:1, the red light 4.5:1.
+- The fake run logged to a scratch file. The 18 real rows from the orchestrator's live check, uncommitted in `data/weather_log.csv`, were left untouched.
+- **Not checked by the agent:** the real API and key, real phones, and a fresh key search of pages and requests (the key path did not change this round; the last search was in the MVP round).
+
+**Kept / changed / rejected:**
+- **What the enlarged radar looks like:** at zoom 12–13 the frame covers only about 8 by 8 radar pixels, each about 1 km. Nearby rain therefore appears as a soft, smoothly shaded wash over the track, not as detail. A side-by-side of Barcelona's real radar showed blocky squares with plain enlargement and soft patches with no dark fringes after `enlarge`. Rain more than about 24 km away is outside the kept square, as agreed.
+- The sidebar light needs each circuit's forecast, so a cold start now makes 18 current-weather calls, 18 forecast calls and 9 wind calls: 45 in all, against the free key's 60 per minute, while the collector also uses the key. The MVP round had avoided this; the design needs it. Cached for 10 minutes.
+- Light rule: "now" is the window running now; "next 3 hours" is the windows starting within 3 hours; "later today" is the rest of today's windows, unlit when none are left. Each light uses the 50 % rule of the sentence, and its meaning is in `aria-label` and `title`.
+- Failure notes moved into the status strip's radar slot: "No radar here", "Radar incomplete" or "Radar unavailable" replace the time when they apply. The wind map no longer says how many points failed; a failed point simply has no arrow.
+- `st.plotly_chart(theme=None)` with the `plotly_dark` template, because Streamlit's chart theme was replacing the muted tick colour.
+- The wind scale runs from muted green-grey `#7F9A8A` to the red flag `#E5484D`.
+- Removed: the per-condition gradients (`BACKGROUNDS`, `background_for`, `is_night`), `gaps` and `coverage_text`, the forecast fetch time, the "Next 5 days" title and the History section titles, the header's country and length, and the "N of 9 points missing" and "radar tiles missing" notes.
+
+**Still open:** the bad-city rubric gap and the unused `__lt__`, both from the MVP round.
+
+### Be ready to explain: new forms not evidenced in class material
+
+`Image.crop`, `Image.resize` with `Image.Resampling.BICUBIC`, the `RGBa` mode (premultiplied alpha); `math.log2`; `//` floor division in pixel maths; `st.plotly_chart(theme=None)` and the `plotly_dark` template; `line_shape="spline"` with `smoothing`; `yaxis_dtick`; CSS custom properties (`--name`, `var()`), `box-shadow`, `:focus-visible` and `:has()`; `aria-label` and `role="img"`.

@@ -124,3 +124,27 @@ Verified without a real key or live OpenWeatherMap call: 77 tests pass; AppTest 
 Not verified yet: the real API and key, real wind-grid values, real phones. Maps only paint while the Chrome window is in front, which is normal browser throttling, not an app bug.
 
 Known gaps: the bad-city input rubric item cannot be reached from the UI any more; `__lt__` has no caller in the app; the README's MVP section still mentions a radar nowcast the app does not have. `straight_heading_deg` is blank and waiting for Arthur. The collector, `circuits.json` and the main checkout were not touched.
+
+## 3 November 2026 — design round (branch racetrack-mvp-build, not merged)
+
+Built on `b06083d` (the MVP plus Arthur's README rewrite).
+- **Look:** a pit-wall look, with flat graphite, green for dry and selection, and red only for rain and failures.
+- **Status:** a three-light track-status strip under the header, and one light on each sidebar card.
+- **Radar:** framed on the circuit, at zoom 10 to 13.5 from `length_km`. RainViewer's zoom-7 tiles are cropped and enlarged 16 times, bicubic.
+- **Wind:** the grid is 17 km apart.
+- **Cut:** footnotes, gradients and the header subtitle.
+- **Size:** app code is 1,519 lines (1,463 after the MVP round).
+
+Verified without a real key or live OpenWeatherMap call:
+- 84 tests pass.
+- AppTest with no key.
+- Real Chrome at 1280 and 390 px against a throwaway fake server (one dry circuit, one wet, one failing, one failing grid point) and the real RainViewer service.
+- Contrast is AA for text and muted text, and keyboard focus is visible on the sidebar cards.
+
+Not verified yet: the real API and key, real phones, and a fresh key search (unchanged code path, last searched in the MVP round).
+
+Watch: a cold start now makes 45 OpenWeatherMap calls (18 current, 18 forecast, 9 wind), against 60 per minute on the free key, shared with the collector.
+
+`data/weather_log.csv` still has 18 real, uncommitted rows from the orchestrator's live check at 07:50 UTC. They were left as they were.
+
+Still open from the MVP round: the bad-city rubric gap, `__lt__` without a caller, and blank `straight_heading_deg`.
