@@ -24,28 +24,28 @@ One page per circuit about today (current conditions, temperature and cloud cove
 ### Data limits
 
 - The free OpenWeatherMap key only gives the forecast in 3 hour steps, so rain timing is per window, and the radar shows the latest image only. OpenWeatherMap's student plan has an hourly 4-day forecast, applying for it would give hourly steps.
-- The wind map only shows speed, so the arrows come from current weather at a 3 by 3 grid of points around the circuit.
+- The wind map only shows speed, so the arrows are interpolated from current weather at a 3 by 3 grid of points around the track.
 - One weather point per circuit can't catch rain falling on only part of a big track (Spa, the Nordschleife, Le Mans).
 
 The rest of this README describes the app as it is now.
 
 ## What it does
 
-**Sidebar:** the 18 circuits from `data/circuits.csv`, one card each with a status light for the next 3 hours, local time, temperature, conditions and wind. Tap a card to open the circuit. On a phone the sidebar starts closed and a circuit picker appears at the top of the page.
+**Track:** a dropdown at the top of the page picks one of the 18 circuits in `data/circuits.csv`. The choice is kept in the address (`?track=spa`), so a reload or a bookmark keeps it. Only that track is fetched.
 
-**Today:**
-- A header with the circuit, local time, temperature, conditions, high and low, feels like, wind with gusts, humidity, and the chance of rain in the next 3 hours.
-- A track-status strip: three lights for now, the next 3 hours and later today (green dry, red rain likely, unlit without a forecast), one sentence on when rain is likely, and the radar image's time.
-- The next 5 days: temperature as a line over a quiet cloud-cover band (a 15-hour average).
-- Two maps side by side, stacked on a phone: rain radar from RainViewer under the circuit's outline, which fills the map, and wind arrows from a 3 by 3 grid of points about 17 km apart, coloured by speed in km/h, over the same outline drawn faintly.
-- Rain and snow per 3-hour forecast window in mm, with the chance of rain.
+**Sidebar, my sessions:** the sessions you add for the selected track, each with a status light (green dry, red rain likely, unlit beyond the forecast) and its highest chance of rain, by the same rule as the status lights. Tap a session to edit it in place (Save, Delete); its time shows as a band on the forecast charts. Add a session with the form, or fill the standard weekend with "Use default weekend" (FP1 and FP2 on Friday, FP3 and Qualifying on Saturday, the Race on Sunday, in track time). Sessions are saved in `data/sessions.csv`, which Git ignores.
+
+**Today**, in three groups:
+- Now: temperature, conditions, local time, high and low, feels like, wind with gusts and humidity, then three status lights for now, the next 3 hours and later today, with one short line on when rain is likely.
+- The next 5 days on one time axis: temperature with each day's high and low written on the line, over a faint cloud-cover band, and below it rain and snow per 3-hour window in mm, red when rain is likely.
+- Two maps side by side, stacked on a phone, both framed so the circuit's outline fills them: rain radar from RainViewer, and a 5 by 5 field of wind arrows coloured by speed, interpolated from current weather at 9 points around the track.
 
 **History**, from our own collected readings for the selected circuit, every 30 minutes since 29 October 2026:
-- Temperature by the hour, with each full day's high and low.
+- Temperature by the hour, with each full day's high and low written on the line.
 - Hours with rain on each day, or only the sentence when it did not rain.
 - Wind by the hour, with the strongest gust in the sentence.
 
-Each section starts with one finding computed from the data. Hours with no reading stay blank, so the collector's gap on 2 and 3 November shows as a gap. History works without an API key.
+Each chart has one sentence computed from the data. Hours with no reading stay blank, so the collector's gap on 2 and 3 November shows as a gap. History works without an API key.
 
 Each current-weather fetch for a circuit is added to `data/weather_log.csv` with a UTC timestamp. Readings are cached for 10 minutes, so ordinary page reruns do not add duplicate rows. Forecasts and the wind grid points are not logged.
 
@@ -105,13 +105,14 @@ The key is only used on the server. The browser receives the radar as one finish
 For the team's walkthrough. Start with these, because they are the least obvious code in the project.
 
 - **Radar framing (`src/weather_app/maps.py`):** a web map is a grid of square images. `lat_lon_to_tile` turns a place into a tile position, `radar_area` picks the tiles around the circuit and the square to keep, and `stitch_tiles` joins them. RainViewer's tiles stop at zoom 7, where a pixel is about 1 km, but the map is zoomed in much further, so `enlarge` stretches the square 16 times with smooth bicubic resampling.
-- **Track outlines (`load_track` in `storage.py`, `track_view` and `track_layer` in `maps.py`):** each GeoJSON file becomes a list of line segments; OpenStreetMap ways stay separate, as in the file. `track_view` finds the zoom at which the outline's bounds fill a 340 by 320 pixel map with a small margin, on the map's own grid, where at zoom z the world is 512 × 2^z pixels across. The outline is drawn as map layers, a dark casing then a 3 px line, so the map credits f1-circuits itself.
-- **Wind arrows (`wind_grid_points` and `wind_arrow` in `maps.py`):** OpenWeatherMap's wind map shows speed only, so the app asks for current weather at 9 points around the circuit. Wind direction says where the wind comes from, so each arrow is drawn the opposite way, as a short line plus two head lines. A degree of longitude shrinks towards the poles, so longitude distances are divided by `cos(latitude)`.
+- **Track outlines (`load_track` in `storage.py`, `track_view` and `track_layer` in `maps.py`):** each GeoJSON file becomes a list of line segments; OpenStreetMap ways stay separate, as in the file. `track_view` finds the zoom at which the outline's bounds fill a 340 by 320 pixel map with a small margin, on the map's own grid, where at zoom z the world is 512 × 2^z pixels across. The outline is drawn as map layers, a dark casing then a 3 px line, on both maps.
+- **Wind field (`wind_field`, `interpolate_wind` and `wind_arrow` in `maps.py`):** OpenWeatherMap's wind map shows speed only, so the app asks for current weather at a 3 by 3 grid around the track. Each of the 25 arrows takes its value by bilinear interpolation of the four grid points around it. Directions cannot be averaged as numbers (350° and 10° would give 180°), so each wind is first split into east and north parts (`wind_vector`), interpolated, then turned back. Wind direction says where the wind comes from, so each arrow is drawn the opposite way.
 - **3-hour windows (`src/weather_app/forecast.py`):** OpenWeatherMap gives each forecast step's rain as the amount in the 3 hours before its time, so each step is drawn as the window that ends at that time. `rain_timing` walks through the windows to find the first run with a chance of rain of at least 50 %.
 - **Gaps in history (`hourly` in `src/weather_app/history.py`):** `resample("h").mean()` makes one row for every hour, and an hour without readings gets no value. Plotly stops a line at a missing value, so a gap stays a gap. Times are converted with each circuit's time zone name, so summer time is handled.
 - **Logging inside the cache (`fetch_and_log_current` in `src/weather_app/fetching.py`):** Streamlit reruns the whole script on every click. The log is written inside the function decorated with `@st.cache_data`, so a rerun reuses the saved answer and adds no duplicate row.
 - **Status lights (`status_lights` in `forecast.py`, `light` in `cards.py`):** each light is the rain-timing rule (a chance of rain of at least 50 %) applied to a slice of the windows: the one running now, those starting within 3 hours, and the rest of today. Each light also carries its meaning in words, for screen readers.
-- **Tappable cards (`src/weather_app/style.py`, `show_sidebar` in `src/weather_app/views.py`):** a Streamlit button cannot contain a designed card. So each card is plain HTML, and an invisible real button is stretched over it with CSS.
+- **Sessions (`src/weather_app/sessions.py`):** a session overlaps every 3-hour window that starts before it ends and ends after it starts; its light is the status rule applied to those windows. `weekend_friday` picks the current weekend until Sunday's race has ended, then the next one.
+- **Tappable rows (`src/weather_app/style.py`, `show_sessions` in `src/weather_app/views.py`):** a Streamlit button cannot contain a designed row. So each session row is plain HTML, and an invisible real button is stretched over it with CSS.
 
 ## Project structure
 
@@ -124,8 +125,10 @@ For the team's walkthrough. Start with these, because they are the least obvious
 - `src/weather_app/maps.py`: tile maths, the radar image, wind arrows and the two Plotly maps.
 - `src/weather_app/fetching.py`: cached API calls.
 - `src/weather_app/display.py`: small helpers for local time, wind direction and high and low.
+- `src/weather_app/sessions.py`: my sessions, the default weekend and their rain status.
 - `src/weather_app/views.py`, `cards.py`, `style.py`: the UI.
-- `data/circuits.csv`: the circuits, each with its outline file and, for the f1-circuits files, the credit the map shows. `straight_heading_deg` is blank for now and not used.
+- `data/circuits.csv`: the circuits, each with its outline file. `straight_heading_deg` is blank for now and not used.
+- `data/sessions.csv`: your own sessions, created when you add one. Git ignores it.
 - `data/tracks/`: one GeoJSON outline per circuit, and the f1-circuits licence.
 - `data/current_weather.csv`: a snapshot of the collected history, taken 3 November 2026.
 - `data/weather_log.csv`: the app's own fetches.
@@ -134,6 +137,8 @@ For the team's walkthrough. Start with these, because they are the least obvious
 - `assignment/BRIEF.md`, `summary.md` and `starter_template/`: the original assignment material.
 
 ## Data sources and credits
+
+OpenStreetMap and CARTO are credited on each map, as their licences ask. The other sources are credited in one line at the foot of the page.
 
 - Weather and forecasts: [OpenWeatherMap](https://openweathermap.org).
 - Rain radar: [RainViewer](https://www.rainviewer.com/), whose API is for personal and educational use.

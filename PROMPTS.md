@@ -356,3 +356,92 @@ Commits `73043d4`, `387fdb0` and `b3c61e9` carry a `Co-Authored-By: Codex <norep
 ### Be ready to explain: new forms not evidenced in class material
 
 `json.load`; GeoJSON (`FeatureCollection`, `LineString`, `MultiLineString`); Plotly map layers with `sourcetype="geojson"`, `type="line"`, `below="traces"` and `sourceattribution`; `math.floor` to round a zoom down; `Series.rolling(5, center=True, min_periods=1)`; `pd.isna` on a single cell.
+
+## Sessions and legibility round — 3 November 2026
+
+**Asked:** Arthur found the app "a bit too Claude-y verbose" and asked for more legibility through gestalt principles and core data-visualisation ideas, adding that "the small useless taglines are very annoying". The orchestrator relayed the brief to Claude Code (Opus 5.5), with these additions during the round:
+- **Track picker:** a single dropdown at the top, kept in `st.query_params` and `session_state`.
+- **Sidebar = my sessions** for the selected track:
+  - each row has a light (green dry, red rain likely, unlit beyond the forecast) and one value, by the status rule;
+  - Add, "Use default weekend" (FP1 Fri 09–10, FP2 Fri 15–16, FP3 Sat 09–10, Qualifying Sat 15–16, Race Sun 14–16, durations as one constant), and editing in place with Save and Delete;
+  - a selected session shows as a band on the charts.
+- **Legibility:** remove titles, legends, axis titles, micro-labels and stamps; fold labels into values; one surface per group; one shared time axis for temperature and rain; direct labels; day names; units on ticks; no wind legend; credits in one footer line where the licences allow.
+- **Wind map** (added mid-round): frame it exactly like the radar, with the full outline, and use a tight 3×3 grid feeding an interpolated field of about 5×5 arrows.
+- **Light/dark toggle:** asked for, then dropped by Arthur. No theme code was written; Streamlit 1.66's support was only read in the venv.
+
+**Got:**
+- **New modules and storage:**
+  - `sessions.py`: `DEFAULT_WEEKEND`, `weekend_friday`, `default_weekend`, `add_default_weekend`, `check_session`, `session_windows` and `session_status`.
+  - Session storage in `storage.py` (`load_sessions`, `save_sessions`, `data/sessions.csv`, git-ignored).
+- **Views:** `views.py` rebuilt.
+  - The track picker.
+  - The sessions sidebar with in-place editing.
+  - Today as three groups: `now_group` in `cards.py`, a two-row shared-x `forecast_figure`, and the maps.
+  - History as one surface.
+- **Wind maths in `maps.py`:** `circuit_bounds`, `wind_grid_bounds`, `wind_vector`, `vector_to_wind`, `grid_vectors`, `interpolate_wind` and `wind_field`. Both maps now share `map_layout`'s framing.
+- **Status line:** `rain_timing` now gives one short line ("Dry all week", "Rain likely until Tue 19:00", "Dry until Wed 06:00, then rain until Wed 12:00").
+- **Tests:** 110 in all. New known-answer tests cover:
+  - default weekend dates, including inside the weekend and Sunday evening;
+  - no duplicates, and input checks;
+  - session overlap and the session rain rule;
+  - saving sessions, and editing a row without duplicating it;
+  - interpolation, and grid bounds from an outline;
+  - the wind map framed like the radar;
+  - the short status lines.
+
+**Checked:**
+- `uv run pytest` passes with no key.
+- AppTest with no key: no exceptions, `?track=portimao` set, and the empty sessions state is the form with Add and "Use default weekend".
+- **Real Chrome against the throwaway fake server** (Portimão dry, Spa raining now) and the real RainViewer service:
+  - the track came from `?track=spa`;
+  - "Use default weekend" added five sessions after a custom one;
+  - tapping "Test day" opened the prefilled form and drew the band across both chart rows;
+  - renaming it to "Shakedown" and saving changed the CSV row in place, with no duplicate;
+  - Shakedown was red at 90 %, FP1–Qualifying green with their chances, and the Race unlit beyond the forecast;
+  - Portimão read "Dry all week" with three green lights.
+- **Widths:** 1280 px window, 500 px real window (Chrome's minimum) and 390 px emulation. At 500 px the sidebar's scroll width equals its width.
+- **Key:** not in the page HTML, its 115 resource URLs or the chart data.
+- **Sessions file:** the fake run wrote to a scratch file; `data/sessions.csv` was never created in the repo.
+- **Not checked by the agent:** the real API and key, real phones, and Streamlit's sidebar at a true 390 px window (emulation only; the real window stops at 500).
+
+**Visible text on Today** (Portimão, about 1280 px, counted the same way before and after):
+
+| | Before | After |
+|---|---:|---:|
+| Text elements on the page | 32 | 14 |
+| Chart text elements | 35 | 20 |
+| **Today in all** | **67** | **34** |
+| Sidebar | 89 | 13 |
+
+What makes up the 34 after:
+- the 12 high/low labels on the temperature line, which are data;
+- 6 map-credit pieces;
+- the footer;
+- the values;
+- 5 day names and 3 mm ticks.
+
+**Kept / changed / rejected:**
+- **One shared rule:** the session rule, header, lights and status line all use the same 50 % rule. A session counts every window it overlaps.
+- **Status line:** dry weeks read "Dry all week", with no highest-chance clause.
+- **Header chance of rain:** removed from Today. The middle light already shows it, and the bars carry the chance on hover. That also removes the old risk of the header and the light disagreeing.
+- **Rain bars:** solid red where rain is likely, faint red where it is not. This replaces the dotted chance line and its second axis.
+- **Temperature:** read from labels on the line (each day's high and low), so its axis has no ticks. The cloud band has no axis.
+- **Wind map:**
+  - It is framed like the radar: the outline's bounds plus a margin.
+  - The 9 readings come from a grid a quarter wider than the outline on every side.
+  - The 25 arrows sit over the framed area, so none falls off the map.
+  - A failed grid point takes the average of the others.
+  - Without an outline, both maps frame a box sized from `length_km`, which replaces `zoom_for_length`.
+- **Sidebar rows:** two lines (name and chance, then day and times) after the one-line row overflowed the sidebar at narrow widths and scrolled it sideways. This was found in the browser.
+- **Credits:** OpenStreetMap and CARTO stay on each map, because ODbL asks for attribution with the displayed map. OpenWeatherMap, RainViewer and f1-circuits (MIT) moved to one footer line. MIT asks for the licence with copies of the data, which stays in `data/tracks/`. The `track_credit` column was removed.
+- **API calls:** only the selected track is fetched now, so a cold start makes 11 OpenWeatherMap calls instead of 45.
+- **Removed:**
+  - the 18 circuit cards and the phone circuit picker;
+  - the uppercase labels, the wind legend and the radar time stamp (failure words stay in the status group);
+  - the History section titles and legends;
+  - `zoom_for_length`, `track_credit`, and the selected-row style.
+- **Rubric note:** the session form adds real user-input validation with clear messages (empty name, name too long, end not after start). It is not the brief's bad-city item, which remains a known gap.
+
+### Be ready to explain: new forms not evidenced in class material
+
+`st.query_params`; `st.date_input`, `st.time_input(step=...)`, `st.form` with two submit buttons; `plotly.subplots.make_subplots(shared_xaxes=True, specs=[[{"secondary_y": True}], [{}]])`, `fig.add_vrect(row="all")`, `fig.add_annotation`, `ticklabelmode="period"`, `ticksuffix`, `hovertemplate` with `customdata`; `math.hypot`, `math.atan2`; `datetime.timedelta`, `date.isoformat()`, `datetime.weekday()`; `pd.Timestamp.now(tz=...)`; `read_csv(dtype=str)`; `list.pop(index)`; CSS `:has()` for the focus ring on a tappable row.

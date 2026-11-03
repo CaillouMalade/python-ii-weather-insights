@@ -163,3 +163,24 @@ Verified without a real key or live OpenWeatherMap call: 98 tests pass; real Chr
 Not verified yet: the real API and key, and real phones.
 
 `data/weather_log.csv` holds 36 real, uncommitted rows from the orchestrator's live checks, left as they were. Still open: the bad-city rubric gap, `__lt__` without a caller, a blank `straight_heading_deg`, and the 45-call cold start.
+
+## 3 November 2026 — sessions and legibility round (branch racetrack-mvp-build, not merged)
+
+Built on `6be16b3`.
+- **Track:** a dropdown at the top picks the track (`?track=`), and only that track is fetched (11 calls).
+- **Sidebar:** my sessions for that track, each with a status light. They can be added, filled with the default weekend, and edited in place; the selected one shows as a band on the charts. Sessions are saved in git-ignored `data/sessions.csv`.
+- **Today:** three groups, with one shared-time-axis forecast figure and direct labels.
+- **Wind map:** framed like the radar, with an interpolated 5×5 arrow field.
+- **Less text:** the Today page's visible text elements went from 67 to 34.
+- **Size:** app code is 1,882 lines.
+
+Verified without a real key or live OpenWeatherMap call:
+- 110 tests pass.
+- AppTest with no key.
+- Real Chrome against a throwaway fake server (dry Portimão, wet Spa) at a 1280 px window, a 500 px real window and 390 px emulation: sessions added, edited and highlighted; no key in the page.
+
+Not verified yet: the real API and key, and real phones.
+
+The README screenshots in `docs/screenshots/` show the previous design and should be retaken with real data.
+
+`data/weather_log.csv` has 54 real, uncommitted rows from the orchestrator's live checks, left as they were. Still open: the bad-city rubric gap, `__lt__` without a caller, and a blank `straight_heading_deg`.
