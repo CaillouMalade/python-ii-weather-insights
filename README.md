@@ -49,6 +49,13 @@ Each section starts with one finding computed from the data. Hours with no readi
 
 Each current-weather fetch for a circuit is added to `data/weather_log.csv` with a UTC timestamp. Readings are cached for 10 minutes, so ordinary page reruns do not add duplicate rows. Forecasts and the wind grid points are not logged.
 
+## Screenshots
+
+![Today at the Nürburgring Nordschleife](docs/screenshots/today.png)
+![Track map and wind at Spa-Francorchamps](docs/screenshots/track-map-spa.png)
+![Track map and wind at the Nordschleife](docs/screenshots/track-map-nordschleife.png)
+![Track map and wind at Le Mans](docs/screenshots/track-map-le-mans.png)
+
 ## Setup from a clean clone
 
 Requires Python 3.11 or newer and [uv](https://docs.astral.sh/uv/).
