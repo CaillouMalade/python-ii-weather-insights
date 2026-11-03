@@ -45,6 +45,31 @@ def today_high_low(windows, today, current_high, current_low):
     return max(today_rows["temperature"].max(), current_high), min(today_rows["temperature"].min(), current_low)
 
 
+def window_state(windows):
+    """"rain" if any of these windows has rain likely, "dry" if none has, None if there are none."""
+    if len(windows) == 0:
+        return None
+    if windows["pop"].max() >= RAIN_LIKELY:
+        return "rain"
+    return "dry"
+
+
+def status_lights(windows, now, today):
+    """The three track-status lights: now, the next 3 hours and later today.
+
+    Each is "rain", "dry" or None when no forecast window covers it, by the same rule as
+    rain_timing. now is the window running at this moment. The next 3 hours are the windows
+    that start within 3 hours. Later today is every window after that which starts today,
+    so late in the evening it has none. today is the local date as text.
+    """
+    left = upcoming(windows, now)
+    starts = left["dt"] - STEP_SECONDS
+    running = left[starts <= now]
+    soon = left[(starts > now) & (starts <= now + STEP_SECONDS)]
+    later = left[(starts > now + STEP_SECONDS) & (left["start"].dt.strftime("%Y-%m-%d") == today)]
+    return [window_state(running), window_state(soon), window_state(later)]
+
+
 def short_time(moment):
     """A time such as Wed 15:00."""
     return moment.strftime("%a %H:%M")

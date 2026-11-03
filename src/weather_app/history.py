@@ -8,8 +8,6 @@ import pandas as pd
 from .display import compass_direction
 from .models import METRES_PER_SECOND_TO_KMH
 
-# Readings are 30 minutes apart, so more than this between two means the collector missed some.
-GAP_HOURS = 2
 # A day with fewer hours of data than this is partial: its low and high are not the day's.
 FULL_DAY_HOURS = 20
 # OpenWeatherMap condition codes below 700 are thunderstorm, drizzle, rain and snow.
@@ -58,16 +56,6 @@ def hourly(readings):
     return out.resample("h").mean().reset_index()
 
 
-def gaps(readings):
-    """One row per stretch with no reading for more than GAP_HOURS: its start, end and hours."""
-    times = readings["time"].sort_values().reset_index(drop=True)
-    waits = times.diff()
-    found = waits > pd.to_timedelta(GAP_HOURS, unit="h")
-    out = pd.DataFrame({"start": times.shift(1)[found], "end": times[found]})
-    out["hours"] = (out["end"] - out["start"]).dt.total_seconds() / 3600
-    return out.reset_index(drop=True)
-
-
 def daily(hourly_values):
     """One row per local day: hours with data, hours with rain, and whether the day is full."""
     out = hourly_values.copy()
@@ -92,15 +80,6 @@ def daily_extremes(hourly_values, full_days):
 # One short finding per section, computed from the data
 
 
-def coverage_text(readings, gap_rows):
-    """The span of the history, and the longest stretch the collector missed."""
-    text = f"{len(readings)} readings, {moment_text(readings['time'].min())} – {moment_text(readings['time'].max())}"
-    if len(gap_rows) == 0:
-        return text
-    longest = gap_rows.sort_values("hours", ascending=False).to_dict("records")[0]
-    return f"{text} · no data {moment_text(longest['start'])} – {moment_text(longest['end'])}"
-
-
 def temperature_finding(highs, lows):
     """The warmest and coldest moments of the full days."""
     if len(highs) == 0:
@@ -118,9 +97,9 @@ def rain_finding(days):
     hours = int(days["hours"].sum())
     rain_hours = int(days["rain_hours"].sum())
     if rain_hours == 0:
-        return f"No rain in {hours} hours."
+        return f"No rain in the {hours} hours collected."
     names = [day_text(pd.to_datetime(day)) for day in days[days["rain_hours"] > 0]["day"]]
-    return f"Rain in {rain_hours} of {hours} hours ({rain_hours / hours * 100:.0f} %), on {', '.join(names)}."
+    return f"Rain in {rain_hours} of the {hours} hours collected ({rain_hours / hours * 100:.0f} %), on {', '.join(names)}."
 
 
 def wind_finding(readings):

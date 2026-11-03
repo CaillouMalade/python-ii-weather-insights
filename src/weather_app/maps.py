@@ -1,4 +1,4 @@
-"""The two maps: rain radar from stitched tiles, and wind arrows from a grid of points.
+"""The two maps: rain radar framed on the circuit, and wind arrows from a grid of points.
 
 The server fetches everything. The browser only receives the finished radar image, as a
 data URI, and the wind figures, so no URL with the key ever reaches the page.
@@ -14,25 +14,37 @@ from PIL import Image
 from .display import compass_direction
 
 MAP_HEIGHT = 320
+CIRCUIT_DOT_COLOR = "#E8EDEA"
 
 # Radar
 TILE_SIZE = 256
-GRID_COLUMNS = 5
-GRID_ROWS = 3
-# The tiles are sharp when the map itself is one zoom level further out. RainViewer stops at 7.
-TILE_ZOOM = 6
+# RainViewer's highest zoom: at 8 it answers with a "Zoom Level Not Supported" image.
+RADAR_ZOOM = 7
+# Radar pixels kept on each side of the circuit. At zoom 7 one pixel is about 1 km.
+RADAR_HALF_SIZE = 24
+# The kept square is enlarged this many times on the server, smoothly, so it is not blocky.
+RADAR_UPSCALE = 16
 RADAR_BOOST = 2
 # How strongly areas without radar are shaded, out of 255.
 NO_COVERAGE_OPACITY = 90
 
-# Wind: a 3 by 3 grid, so 9 calls, 0.2 degrees of latitude (about 22 km) apart.
+# Wind: a 3 by 3 grid, so 9 calls, 0.15 degrees of latitude (about 17 km) apart.
 WIND_GRID_SIZE = 3
-WIND_GRID_STEP = 0.2
-# Arrow length in degrees of latitude.
-ARROW_LENGTH = 0.1
-WIND_MAP_ZOOM = 7.9
-# (lowest speed in km/h, colour). The legend under the map is drawn from this list too.
-WIND_BANDS = [(0, "#8fc7e8"), (10, "#6fd3a0"), (20, "#f2d13c"), (30, "#ef8a3a"), (40, "#e0455a")]
+WIND_GRID_STEP = 0.15
+ARROW_LENGTH = WIND_GRID_STEP / 2
+WIND_MAP_ZOOM = 8.3
+# (lowest speed in km/h, colour), from muted green-grey to the red flag. The legend uses this list too.
+WIND_BANDS = [(0, "#7F9A8A"), (10, "#8E7F78"), (20, "#AD6966"), (30, "#C95A5B"), (40, "#E5484D")]
+
+
+# Framing
+
+
+def zoom_for_length(length_km):
+    """The map zoom that frames a circuit: 13 for a 4 km track, one level further out each time
+    the length doubles, kept between 10 and 13.5."""
+    zoom = 13 - math.log2(length_km / 4)
+    return round(max(10, min(13.5, zoom)), 1)
 
 
 # Tile maths
@@ -48,38 +60,45 @@ def lat_lon_to_tile(latitude, longitude, zoom):
 
 
 def tile_to_lat_lon(x, y, zoom):
-    """Return the (latitude, longitude) of the top-left corner of tile (x, y)."""
+    """Return the (latitude, longitude) of a tile position. Whole numbers give a tile's top-left corner."""
     tiles_per_side = 2**zoom
     longitude = x / tiles_per_side * 360 - 180
     latitude = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / tiles_per_side))))
     return latitude, longitude
 
 
-def tile_grid(latitude, longitude, zoom):
-    """Return the tile grid around a point as a dictionary.
+def radar_area(latitude, longitude):
+    """The square of radar pixels around a place at RADAR_ZOOM, as a dictionary.
 
-    rows: lists of (x, y) tile numbers to download. Tile numbers wrap around the
-    date line. bounds: the grid's corners, in the order the Plotly image layer wants:
-    top-left, top-right, bottom-right, bottom-left, each as [longitude, latitude].
+    rows: lists of (x, y) tiles that hold the square, wrapping around the date line.
+    crop: the square's (left, top, right, bottom) in pixels, once those tiles are joined.
+    bounds: its corners as [longitude, latitude], in the order the Plotly image layer wants:
+    top-left, top-right, bottom-right, bottom-left.
     """
-    tiles_per_side = 2**zoom
-    x, y = lat_lon_to_tile(latitude, longitude, zoom)
-
-    first_x = int(x) - GRID_COLUMNS // 2
-    # Keep the grid on the map: there are no tiles above the top or below the bottom.
-    first_y = max(0, min(int(y) - GRID_ROWS // 2, tiles_per_side - GRID_ROWS))
+    x, y = lat_lon_to_tile(latitude, longitude, RADAR_ZOOM)
+    # Pixel positions on the whole world map, rounded so the crop is on whole pixels.
+    left = round(x * TILE_SIZE) - RADAR_HALF_SIZE
+    top = round(y * TILE_SIZE) - RADAR_HALF_SIZE
+    size = 2 * RADAR_HALF_SIZE
+    first_x = left // TILE_SIZE
+    first_y = top // TILE_SIZE
 
     rows = []
-    for row_number in range(GRID_ROWS):
+    for tile_y in range(first_y, (top + size - 1) // TILE_SIZE + 1):
         row = []
-        for column_number in range(GRID_COLUMNS):
-            row.append(((first_x + column_number) % tiles_per_side, first_y + row_number))
+        for tile_x in range(first_x, (left + size - 1) // TILE_SIZE + 1):
+            row.append((tile_x % 2**RADAR_ZOOM, tile_y))
         rows.append(row)
 
-    north, west = tile_to_lat_lon(first_x, first_y, zoom)
-    south, east = tile_to_lat_lon(first_x + GRID_COLUMNS, first_y + GRID_ROWS, zoom)
-    bounds = [[west, north], [east, north], [east, south], [west, south]]
-    return {"rows": rows, "bounds": bounds, "first_x": first_x, "first_y": first_y}
+    crop_left = left - first_x * TILE_SIZE
+    crop_top = top - first_y * TILE_SIZE
+    north, west = tile_to_lat_lon(left / TILE_SIZE, top / TILE_SIZE, RADAR_ZOOM)
+    south, east = tile_to_lat_lon((left + size) / TILE_SIZE, (top + size) / TILE_SIZE, RADAR_ZOOM)
+    return {
+        "rows": rows,
+        "crop": (crop_left, crop_top, crop_left + size, crop_top + size),
+        "bounds": [[west, north], [east, north], [east, south], [west, south]],
+    }
 
 
 # Radar image
@@ -111,12 +130,9 @@ def boost_opacity(image, factor):
     return Image.merge("RGBA", (red, green, blue, alpha))
 
 
-def has_radar_coverage(coverage_image, latitude, longitude, zoom, grid):
-    """Read the coverage image at a place. RainViewer draws it black where there is no radar."""
-    x, y = lat_lon_to_tile(latitude, longitude, zoom)
-    pixel_x = int((x - grid["first_x"]) * TILE_SIZE)
-    pixel_y = int((y - grid["first_y"]) * TILE_SIZE)
-    return coverage_image.getpixel((pixel_x, pixel_y))[3] < 128
+def has_radar_coverage(coverage_square):
+    """Read the coverage square at its centre, the circuit. RainViewer draws it black where there is no radar."""
+    return coverage_square.getpixel((RADAR_HALF_SIZE, RADAR_HALF_SIZE))[3] < 128
 
 
 def radar_over_coverage(radar_image, coverage_image):
@@ -125,6 +141,13 @@ def radar_over_coverage(radar_image, coverage_image):
     alpha = alpha.point(lambda value: min(value, NO_COVERAGE_OPACITY))
     shaded = Image.merge("RGBA", (red, green, blue, alpha))
     return Image.alpha_composite(shaded, radar_image)
+
+
+def enlarge(image):
+    """Enlarge the radar smoothly (bicubic). In RGBa mode the colours are multiplied by their
+    opacity first, so see-through pixels do not leave dark edges around the rain."""
+    size = (image.width * RADAR_UPSCALE, image.height * RADAR_UPSCALE)
+    return image.convert("RGBa").resize(size, Image.Resampling.BICUBIC).convert("RGBA")
 
 
 def image_to_data_uri(image):
@@ -220,7 +243,7 @@ def wind_label(point):
 
 
 def circuit_dot(latitude, longitude):
-    return go.Scattermap(lat=[latitude], lon=[longitude], mode="markers", marker=dict(size=11, color="white"), hoverinfo="skip")
+    return go.Scattermap(lat=[latitude], lon=[longitude], mode="markers", marker=dict(size=10, color=CIRCUIT_DOT_COLOR), hoverinfo="skip")
 
 
 def map_layout(fig, latitude, longitude, zoom, layers):
@@ -235,9 +258,9 @@ def map_layout(fig, latitude, longitude, zoom, layers):
     return fig
 
 
-def radar_figure(image_uri, bounds, latitude, longitude):
+def radar_figure(image_uri, bounds, latitude, longitude, zoom):
     layers = [dict(sourcetype="image", source=image_uri, coordinates=bounds, opacity=1)]
-    return map_layout(go.Figure(circuit_dot(latitude, longitude)), latitude, longitude, TILE_ZOOM - 1, layers)
+    return map_layout(go.Figure(circuit_dot(latitude, longitude)), latitude, longitude, zoom, layers)
 
 
 def wind_figure(points, latitude, longitude):

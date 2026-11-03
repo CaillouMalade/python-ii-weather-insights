@@ -8,19 +8,22 @@ import traceback
 import pytest
 from PIL import Image
 
-from weather_app.cards import circuit_card, header, wind_legend
+from weather_app.cards import circuit_card, header, light, radar_text, status_strip, wind_legend
 from weather_app.client import APIClient, RainViewerClient, WeatherClient, validate_location
-from weather_app.display import BACKGROUNDS, background_for, compass_direction, format_local_time, high_low_text, is_night
+from weather_app.display import compass_direction, format_local_time, high_low_text
 from weather_app.maps import (
+    RADAR_HALF_SIZE,
+    RADAR_UPSCALE,
     WIND_BANDS,
     boost_opacity,
+    enlarge,
     has_radar_coverage,
     image_to_data_uri,
     lat_lon_to_tile,
+    radar_area,
     radar_figure,
     radar_over_coverage,
     stitch_tiles,
-    tile_grid,
     tile_to_lat_lon,
     wind_arrow,
     wind_arrow_lines,
@@ -28,6 +31,7 @@ from weather_app.maps import (
     wind_figure,
     wind_grid_points,
     wind_label,
+    zoom_for_length,
 )
 from weather_app.models import WeatherReading
 
@@ -170,13 +174,6 @@ def test_format_local_time_applies_the_offset():
     assert format_local_time(MONDAY, -3600, "%Y-%m-%d %H:%M") == "2026-01-04 23:00"
 
 
-def test_is_night():
-    assert is_night(50, 100, 200) is True
-    assert is_night(150, 100, 200) is False
-    assert is_night(200, 100, 200) is True
-    assert is_night(150, None, None) is False
-
-
 def test_compass_direction():
     assert compass_direction(0) == "N"
     assert compass_direction(90) == "E"
@@ -184,41 +181,63 @@ def test_compass_direction():
     assert compass_direction(359) == "N"
 
 
-def test_background_for_conditions_and_time_of_day():
-    assert background_for(800, False) == BACKGROUNDS["clear_day"]
-    assert background_for(800, True) == BACKGROUNDS["clear_night"]
-    assert background_for(501, False) == BACKGROUNDS["rain_day"]
-    assert background_for(211, True) == BACKGROUNDS["storm"]
-    assert background_for(None, False) == BACKGROUNDS["none"]
-
-
 def test_high_low_text_hides_a_misleading_equal_pair():
     assert high_low_text(15.4, 11.6) == "High 15°  Low 12°"
     assert high_low_text(31.2, 30.9) == ""
 
 
-# Cards
+# Cards and lights
 
 
-def test_circuit_card_escapes_text_and_shows_wind():
+def test_light_says_its_meaning_in_words():
+    assert light("dry", "Now") == '<span class="light dry" role="img" aria-label="Now: dry" title="Now: dry"></span>'
+    assert 'class="light rain"' in light("rain", "Later today")
+    assert 'aria-label="Later today: rain likely"' in light("rain", "Later today")
+    assert 'class="light off"' in light(None, "Later today")
+    assert "no forecast" in light(None, "Later today")
+
+
+def test_status_strip_has_three_named_lights_the_sentence_and_the_radar():
+    html = status_strip(["rain", "dry", None], "Rain likely <now>.", "Radar 07:50")
+    assert html.count('class="light ') == 3
+    assert "Now: rain likely" in html
+    assert "Next 3 hours: dry" in html
+    assert "Later today: no forecast" in html
+    assert "Rain likely &lt;now&gt;." in html
+    assert "Radar 07:50" in html
+
+
+def test_radar_text_says_why_the_radar_cannot_be_trusted():
+    good = {"time": MONDAY, "complete": True, "covered": True}
+    assert radar_text(good, 3600) == "Radar 01:00"
+    assert radar_text(dict(good, covered=False), 0) == "No radar here"
+    assert radar_text(dict(good, complete=False), 0) == "Radar incomplete"
+    assert radar_text(None, 0) == "Radar unavailable"
+
+
+def test_circuit_card_escapes_text_and_shows_its_light_and_wind():
     circuit = dict(SPA, location="<b>Spa</b>")
-    html = circuit_card(circuit, make_reading(wind_deg=225), "", True, MONDAY)
+    html = circuit_card(circuit, make_reading(wind_deg=225), "rain", "", True, MONDAY)
     assert "<b>Spa</b>" not in html
     assert "&lt;b&gt;Spa&lt;/b&gt;" in html
+    assert "Next 3 hours: rain likely" in html
     assert "36 km/h SW" in html
     assert "selected" in html
 
 
-def test_circuit_card_without_a_reading_shows_the_escaped_note():
-    html = circuit_card(SPA, None, "Bad <key>", False, MONDAY)
+def test_circuit_card_without_a_reading_shows_the_escaped_note_and_an_unlit_light():
+    html = circuit_card(SPA, None, None, "Bad <key>", False, MONDAY)
     assert "Bad &lt;key&gt;" in html
-    assert "Belgium" in html
+    assert 'class="light off"' in html
+    assert "selected" not in html
 
 
-def test_header_shows_the_circuit_and_units():
+def test_header_shows_the_circuit_time_and_units_but_no_subtitle():
     html = header(SPA, make_reading(wind_gust=12.5, wind_deg=270), 22.0, 14.0, 0.4, MONDAY)
     assert "Spa-Francorchamps" in html
-    assert "Belgium · 7.0 km" in html
+    assert "Belgium" not in html
+    assert "7.0 km" not in html
+    assert "Mon 00:00" in html
     assert "36 km/h W" in html
     assert "Gusts 45 km/h" in html
     assert "40 %" in html
@@ -236,7 +255,21 @@ def test_wind_legend_labels_each_band_once_with_the_unit_last():
     assert "<span>40+ km/h</span>" in html
 
 
-# Map maths
+# Map framing and maths
+
+
+def test_zoom_for_length_frames_the_circuit():
+    # 13 for a 4 km track, one level out each time the length doubles.
+    assert zoom_for_length(4) == 13
+    assert zoom_for_length(8) == 12
+    assert zoom_for_length(16) == 11
+    # Real circuits: Spa 7.004 km, Le Mans 13.626 km, the Nordschleife 20.832 km.
+    assert zoom_for_length(7.004) == 12.2
+    assert zoom_for_length(13.626) == 11.2
+    assert zoom_for_length(20.832) == 10.6
+    # Kept between 10 and 13.5.
+    assert zoom_for_length(1) == 13.5
+    assert zoom_for_length(100) == 10
 
 
 def test_lat_lon_to_tile_known_points():
@@ -253,25 +286,31 @@ def test_tile_to_lat_lon_reverses_lat_lon_to_tile():
     assert longitude == pytest.approx(2.35)
 
 
-def test_tile_grid_size_and_centre():
-    grid = tile_grid(0.1, 0.1, 4)
-    assert len(grid["rows"]) == 3
-    assert len(grid["rows"][0]) == 5
-    # (0.1, 0.1) is in tile x=8, y=7 at zoom 4, and that tile is the grid's middle.
-    assert grid["rows"][1][2] == (8, 7)
+def test_radar_area_is_a_square_around_the_place():
+    area = radar_area(0.0, 0.0)
+    # At zoom 7 the point (0, 0) is the corner of four tiles: pixel 16384 both ways.
+    assert area["rows"] == [[(63, 63), (64, 63)], [(63, 64), (64, 64)]]
+    size = 2 * RADAR_HALF_SIZE
+    assert area["crop"] == (256 - RADAR_HALF_SIZE, 256 - RADAR_HALF_SIZE, 256 + RADAR_HALF_SIZE, 256 + RADAR_HALF_SIZE)
+    assert area["crop"][2] - area["crop"][0] == size
+    west, north = area["bounds"][0]
+    east, south = area["bounds"][2]
+    assert west == pytest.approx(-east)
+    assert north == pytest.approx(-south)
+    assert west < 0 < east and south < 0 < north
 
 
-def test_tile_grid_bounds_contain_the_point():
-    grid = tile_grid(48.85, 2.35, 5)
-    west, north = grid["bounds"][0]
-    east, south = grid["bounds"][2]
-    assert west < 2.35 < east
-    assert south < 48.85 < north
+def test_radar_area_inside_one_tile_needs_one_tile():
+    # The middle of tile (66, 43) at zoom 7.
+    latitude, longitude = tile_to_lat_lon(66.5, 43.5, 7)
+    area = radar_area(latitude, longitude)
+    assert area["rows"] == [[(66, 43)]]
+    assert area["crop"] == (128 - RADAR_HALF_SIZE, 128 - RADAR_HALF_SIZE, 128 + RADAR_HALF_SIZE, 128 + RADAR_HALF_SIZE)
 
 
-def test_tile_grid_wraps_at_the_date_line():
-    rows = tile_grid(0.1, 179.0, 2)["rows"]
-    assert rows[0] == [(1, 0), (2, 0), (3, 0), (0, 0), (1, 0)]
+def test_radar_area_wraps_at_the_date_line():
+    area = radar_area(0.0, 180.0)
+    assert [x for x, _ in area["rows"][0]] == [127, 0]
 
 
 def solid_png(color):
@@ -300,12 +339,10 @@ def test_boost_opacity_multiplies_and_keeps_colours():
     assert boost_opacity(image, 10).getpixel((0, 0))[3] == 255
 
 
-def test_has_radar_coverage_reads_the_right_pixel():
-    grid = tile_grid(0.1, 0.1, 4)
-    image = Image.new("RGBA", (5 * 256, 3 * 256), (0, 0, 0, 0))
-    assert has_radar_coverage(image, 0.1, 0.1, 4, grid) is True
-    black = Image.new("RGBA", (5 * 256, 3 * 256), (0, 0, 0, 255))
-    assert has_radar_coverage(black, 0.1, 0.1, 4, grid) is False
+def test_has_radar_coverage_reads_the_centre():
+    size = 2 * RADAR_HALF_SIZE
+    assert has_radar_coverage(Image.new("RGBA", (size, size), (0, 0, 0, 0))) is True
+    assert has_radar_coverage(Image.new("RGBA", (size, size), (0, 0, 0, 255))) is False
 
 
 def test_radar_over_coverage_shades_lightly_and_keeps_radar_on_top():
@@ -317,15 +354,28 @@ def test_radar_over_coverage_shades_lightly_and_keeps_radar_on_top():
     assert result.getpixel((1, 0))[3] == 0
 
 
+def test_enlarge_is_smooth_and_leaves_no_dark_edge():
+    image = Image.new("RGBA", (2, 1), (0, 0, 0, 0))
+    image.putpixel((0, 0), (0, 120, 255, 255))
+    big = enlarge(image)
+    assert big.size == (2 * RADAR_UPSCALE, RADAR_UPSCALE)
+    # Smooth: the middle is part-way see-through, not a hard step from solid to clear.
+    middle = big.getpixel((RADAR_UPSCALE, RADAR_UPSCALE // 2))
+    assert 0 < middle[3] < 255
+    # No dark edge: where it fades, the colour stays the rain's blue instead of turning black.
+    assert middle[2] > 200
+
+
 def test_image_to_data_uri():
     assert image_to_data_uri(Image.new("RGBA", (1, 1))).startswith("data:image/png;base64,")
 
 
-def test_radar_figure_puts_the_image_on_the_map():
-    grid = tile_grid(50.4, 5.97, 6)
-    fig = radar_figure("data:,", grid["bounds"], 50.4, 5.97)
+def test_radar_figure_frames_the_circuit():
+    area = radar_area(50.4372, 5.9714)
+    fig = radar_figure("data:,", area["bounds"], 50.4372, 5.9714, 12.2)
     assert fig.layout.map.layers[0].source == "data:,"
-    assert fig.layout.map.center.lat == 50.4
+    assert fig.layout.map.center.lat == 50.4372
+    assert fig.layout.map.zoom == 12.2
 
 
 # Wind grid and arrows
@@ -336,15 +386,15 @@ def test_wind_grid_is_nine_points_centred_on_the_circuit_north_row_first():
     assert len(points) == 9
     assert points[4] == (0.0, 10.0)
     # At the equator one degree of longitude is as long as one of latitude.
-    assert points[0] == (0.2, 9.8)
-    assert points[8] == (-0.2, 10.2)
+    assert points[0] == (0.15, 9.85)
+    assert points[8] == (-0.15, 10.15)
 
 
 def test_wind_grid_widens_longitude_steps_away_from_the_equator():
     points = wind_grid_points(60.0, 0.0)
-    # cos(60°) = 0.5, so 0.2 degrees of latitude match 0.4 degrees of longitude.
-    assert points[3] == (60.0, -0.4)
-    assert points[1] == (60.2, 0.0)
+    # cos(60°) = 0.5, so 0.15 degrees of latitude match 0.3 degrees of longitude.
+    assert points[3] == (60.0, -0.3)
+    assert points[1] == (60.15, 0.0)
 
 
 def test_wind_band_boundaries():
@@ -355,15 +405,20 @@ def test_wind_band_boundaries():
     assert wind_band(120) == len(WIND_BANDS) - 1
 
 
+def test_wind_scale_runs_from_green_grey_to_the_red_flag():
+    assert WIND_BANDS[-1][1] == "#E5484D"
+
+
 def test_wind_arrow_points_where_the_wind_blows_to():
     # Wind from the north blows south: the tip is south of the middle and the tail north.
+    # Arrows are half a grid step long, so the tip is a quarter step from the middle.
     latitudes, longitudes = wind_arrow(0.0, 0.0, 0)
-    assert latitudes[1] == pytest.approx(-0.05)
-    assert latitudes[0] == pytest.approx(0.05)
+    assert latitudes[1] == pytest.approx(-0.0375)
+    assert latitudes[0] == pytest.approx(0.0375)
     assert longitudes[1] == pytest.approx(0.0)
     # Wind from the west blows east.
     _, longitudes = wind_arrow(0.0, 0.0, 270)
-    assert longitudes[1] == pytest.approx(0.05)
+    assert longitudes[1] == pytest.approx(0.0375)
 
 
 def test_wind_arrow_breaks_the_line_between_shaft_and_head():

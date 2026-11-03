@@ -1,8 +1,8 @@
-# Known-answer tests for the collected history: local time, hourly values, gaps and findings.
+# Known-answer tests for the collected history: local time, hourly values with gaps, and findings.
 
 import pandas as pd
 
-from weather_app.history import circuit_readings, coverage_text, daily, daily_extremes, gaps, hourly, rain_finding, temperature_finding, wind_finding
+from weather_app.history import circuit_readings, daily, daily_extremes, hourly, rain_finding, temperature_finding, wind_finding
 from weather_app.storage import load_circuits, load_history
 
 
@@ -61,15 +61,6 @@ def test_a_gap_stays_empty_in_the_hourly_values():
     assert values["temperature_c"].to_list()[7] == 21.0
 
 
-def test_gaps_lists_only_stretches_over_two_hours():
-    times = ["2026-11-02T00:00:00Z", "2026-11-02T01:30:00Z", "2026-11-02T03:30:00Z", "2026-11-02T08:00:00Z"]
-    readings = circuit_readings(make_history(times, [10.0] * 4), "spa", "UTC")
-    found = gaps(readings)
-    assert len(found) == 1
-    assert found["start"].to_list() == [pd.Timestamp("2026-11-02 03:30")]
-    assert found["hours"].to_list() == [4.5]
-
-
 def test_daily_counts_hours_with_data_and_rain_and_marks_full_days():
     times = every_half_hour("2026-11-01 00:00", 48) + every_half_hour("2026-11-02 00:00", 6)
     codes = [800] * 48 + [500, 500, 800, 800, 800, 800]
@@ -102,9 +93,9 @@ def test_temperature_finding_without_a_full_day():
 
 def test_rain_finding():
     days = pd.DataFrame({"day": ["2026-10-31", "2026-11-01", "2026-11-02"], "hours": [24, 24, 12], "rain_hours": [3, 0, 3]})
-    assert rain_finding(days) == "Rain in 6 of 60 hours (10 %), on Sat 31 Oct, Mon 2 Nov."
+    assert rain_finding(days) == "Rain in 6 of the 60 hours collected (10 %), on Sat 31 Oct, Mon 2 Nov."
     days["rain_hours"] = [0, 0, 0]
-    assert rain_finding(days) == "No rain in 60 hours."
+    assert rain_finding(days) == "No rain in the 60 hours collected."
 
 
 def test_wind_finding_names_the_gust_and_the_usual_direction():
@@ -118,23 +109,15 @@ def test_wind_finding_when_calm_and_without_gusts():
     assert wind_finding(readings) == "Average 2 km/h."
 
 
-def test_coverage_text_names_the_longest_gap():
-    times = ["2026-11-02T00:00:00Z", "2026-11-02T03:00:00Z", "2026-11-02T03:30:00Z", "2026-11-02T13:30:00Z"]
-    readings = circuit_readings(make_history(times, [10.0] * 4), "spa", "UTC")
-    assert coverage_text(readings, gaps(readings)) == "4 readings, Mon 2 Nov 00:00 – Mon 2 Nov 13:30 · no data Mon 2 Nov 03:30 – Mon 2 Nov 13:30"
-    no_gap = readings.head(1)
-    assert coverage_text(no_gap, gaps(no_gap)) == "1 readings, Mon 2 Nov 00:00 – Mon 2 Nov 00:00"
-
-
 def test_the_real_snapshot_shows_the_2_to_3_november_gap():
     circuits = load_circuits()
     assert len(circuits) == 18
     spa = circuits[[circuit["id"] for circuit in circuits].index("spa")]
     readings = circuit_readings(load_history(), "spa", spa["timezone"])
-    longest = gaps(readings).sort_values("hours").to_dict("records")[-1]
-    assert longest["start"].strftime("%Y-%m-%d") == "2026-11-02"
-    assert longest["end"].strftime("%Y-%m-%d") == "2026-11-03"
     values = hourly(readings)
-    gap_hours = values[(values["time"] > longest["start"]) & (values["time"] < longest["end"].floor("h"))]
-    assert len(gap_hours) > 10
-    assert gap_hours["temperature_c"].isna().all()
+    # The collector stopped after 13:21 on 2 November and restarted at 07:10 on 3 November, Spa time.
+    hours = values.set_index("time")["temperature_c"]
+    assert hours["2026-11-02 14:00":"2026-11-03 06:00"].isna().all()
+    assert len(hours["2026-11-02 14:00":"2026-11-03 06:00"]) == 17
+    assert pd.notna(hours["2026-11-02 13:00"])
+    assert pd.notna(hours["2026-11-03 07:00"])

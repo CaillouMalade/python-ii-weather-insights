@@ -1,8 +1,8 @@
-# Known-answer tests for the forecast windows and the rain-timing sentence.
+# Known-answer tests for the forecast windows, the rain-timing sentence and the status lights.
 
 import pandas as pd
 
-from weather_app.forecast import forecast_windows, rain_timing, today_high_low, upcoming
+from weather_app.forecast import forecast_windows, rain_timing, status_lights, today_high_low, upcoming
 
 MONDAY = 1767571200  # 2026-01-05 00:00 UTC, a Monday
 HOUR = 3600
@@ -79,3 +79,33 @@ def test_no_rain_at_all():
 def test_windows_already_over_are_ignored():
     windows = make_windows([0.9, 0, 0])
     assert rain_timing(windows, MONDAY + 3 * HOUR) == "No rain likely before Mon 09:00, the end of the forecast."
+
+
+# Status lights: now, the next 3 hours, later today. Windows run 00-03, 03-06 ... on Monday.
+
+
+def test_lights_for_now_next_three_hours_and_later_today():
+    # Rain likely from 00 to 03 and from 09 to 12, and again on Tuesday from 00 to 03.
+    windows = make_windows([0.7, 0, 0, 0.6, 0, 0, 0, 0, 0.9])
+    # At 01:00 the running window is 00-03, the next one 03-06, and later today 06-24.
+    assert status_lights(windows, MONDAY + HOUR, "2026-01-05") == ["rain", "dry", "rain"]
+
+
+def test_later_today_is_unlit_late_in_the_evening():
+    windows = make_windows([0, 0, 0, 0, 0, 0, 0, 0, 0.9])
+    # At 22:00 the running window is 21-24 and the next starts at midnight, still within 3 hours.
+    assert status_lights(windows, MONDAY + 22 * HOUR, "2026-01-05") == ["dry", "rain", None]
+
+
+def test_lights_use_the_same_threshold_as_the_sentence():
+    assert status_lights(make_windows([0.5, 0.49, 0.49]), MONDAY + HOUR, "2026-01-05") == ["rain", "dry", "dry"]
+    assert rain_timing(make_windows([0.5, 0.49, 0.49]), MONDAY + HOUR).startswith("Rain likely now")
+
+
+def test_a_dry_forecast_lights_all_green():
+    assert status_lights(make_windows([0.1] * 8), MONDAY + HOUR, "2026-01-05") == ["dry", "dry", "dry"]
+
+
+def test_a_forecast_starting_later_leaves_now_unlit():
+    # The first window runs from 00 to 03, but it is not yet midnight, so nothing covers now.
+    assert status_lights(make_windows([0, 0]), MONDAY - HOUR, "2026-01-04") == [None, "dry", None]
