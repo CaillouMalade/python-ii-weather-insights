@@ -54,20 +54,38 @@ def window_state(windows):
     return "dry"
 
 
+def next_three_hours(windows, now):
+    """The windows that overlap the next 3 hours: the one running now and the next one.
+
+    The header's chance of rain and the middle status light both come from these windows,
+    so the two can never disagree.
+    """
+    left = upcoming(windows, now)
+    return left[left["dt"] - STEP_SECONDS < now + STEP_SECONDS]
+
+
 def status_lights(windows, now, today):
     """The three track-status lights: now, the next 3 hours and later today.
 
     Each is "rain", "dry" or None when no forecast window covers it, by the same rule as
     rain_timing. now is the window running at this moment. The next 3 hours are the windows
-    that start within 3 hours. Later today is every window after that which starts today,
-    so late in the evening it has none. today is the local date as text.
+    from next_three_hours. Later today is every window that starts after that and still
+    today, so late in the evening it has none. today is the local date as text.
     """
     left = upcoming(windows, now)
     starts = left["dt"] - STEP_SECONDS
     running = left[starts <= now]
-    soon = left[(starts > now) & (starts <= now + STEP_SECONDS)]
-    later = left[(starts > now + STEP_SECONDS) & (left["start"].dt.strftime("%Y-%m-%d") == today)]
-    return [window_state(running), window_state(soon), window_state(later)]
+    later = left[(starts >= now + STEP_SECONDS) & (left["start"].dt.strftime("%Y-%m-%d") == today)]
+    return [window_state(running), window_state(next_three_hours(windows, now)), window_state(later)]
+
+
+def calm_clouds(windows):
+    """Cloud cover averaged over 5 windows (15 hours) around each one, for a calm band on the chart.
+
+    Only that chart uses it. min_periods=1 keeps the first and last windows, which have
+    fewer neighbours.
+    """
+    return windows["clouds"].rolling(5, center=True, min_periods=1).mean()
 
 
 def short_time(moment):

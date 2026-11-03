@@ -10,10 +10,10 @@ from . import cards
 from .config import SETUP_MESSAGE
 from .display import format_local_time
 from .fetching import fetch_radar_image, fetch_wind_grid, now_seconds
-from .forecast import STEP_HOURS, rain_timing, status_lights, today_high_low
+from .forecast import STEP_HOURS, calm_clouds, next_three_hours, rain_timing, status_lights, today_high_low
 from .history import circuit_readings, daily, daily_extremes, hourly, rain_finding, temperature_finding, wind_finding
-from .maps import radar_figure, wind_figure, zoom_for_length
-from .storage import load_history
+from .maps import radar_figure, wind_figure
+from .storage import load_history, load_track
 
 # The same tokens as style.py. Red only ever means rain.
 TEXT = "#E8EDEA"
@@ -66,6 +66,12 @@ def lights_for(loaded):
     return status_lights(loaded["windows"], now_seconds(), local_today(loaded))
 
 
+@st.cache_data(show_spinner=False)
+def circuit_track(track_file):
+    """The outline's segments, read once per file: they never change while the app runs."""
+    return load_track(track_file)
+
+
 # Sidebar
 
 
@@ -105,7 +111,7 @@ def show_phone_picker(circuits, selected_id):
 def show_trend(windows):
     """Temperature as the line, cloud cover as a quiet smoothed band behind it."""
     fig = go.Figure()
-    fig.add_scatter(x=windows["end"], y=windows["clouds"], name="Cloud cover", yaxis="y2", fill="tozeroy", mode="lines", line=dict(width=0, shape="spline", smoothing=1.3), fillcolor=CLOUD_BAND)
+    fig.add_scatter(x=windows["end"], y=calm_clouds(windows), name="Cloud cover", yaxis="y2", fill="tozeroy", mode="lines", line=dict(width=0, shape="spline", smoothing=1.3), fillcolor=CLOUD_BAND)
     fig.add_scatter(x=windows["end"], y=windows["temperature"], name="Temperature", mode="lines", line=dict(color=TEXT, width=2))
     with st.container(key="panel-trend"):
         show_chart(fig, "°C", "Cloud %")
@@ -116,7 +122,7 @@ def show_radar(circuit, radar):
     if radar is None:
         st.warning("Radar unavailable.")
         return
-    fig = radar_figure(radar["uri"], radar["bounds"], circuit["latitude"], circuit["longitude"], zoom_for_length(circuit["length_km"]))
+    fig = radar_figure(radar["uri"], radar["bounds"], circuit, circuit_track(circuit["track_file"]))
     st.plotly_chart(fig, config={"displayModeBar": False})
 
 
@@ -127,7 +133,7 @@ def show_wind(circuit):
     if len(points) == 0:
         st.warning("Wind unavailable.")
         return
-    st.plotly_chart(wind_figure(points, circuit["latitude"], circuit["longitude"]), config={"displayModeBar": False})
+    st.plotly_chart(wind_figure(points, circuit, circuit_track(circuit["track_file"])), config={"displayModeBar": False})
     st.html(cards.wind_legend())
 
 
@@ -174,7 +180,7 @@ def show_today(loaded):
     rain_chance = None
     if windows is not None:
         high, low = today_high_low(windows, local_today(loaded), high, low)
-        rain_chance = windows["pop"].to_list()[0]
+        rain_chance = next_three_hours(windows, now)["pop"].max()
     st.html(cards.header(circuit, reading, high, low, rain_chance, now))
 
     radar = None
@@ -224,7 +230,6 @@ def show_rain_history(days):
 def show_wind_history(values, readings):
     fig = go.Figure()
     fig.add_scatter(x=values["time"], y=values["wind_kmh"], name="Wind", mode="lines", line=dict(color=TEXT, width=1.5))
-    fig.add_scatter(x=values["time"], y=values["gust_kmh"], name="Gusts", mode="lines", line=dict(color=MUTED, width=1, dash="dot"))
     with st.container(key="panel-history-wind"):
         show_finding(wind_finding(readings))
         show_chart(fig, "km/h")

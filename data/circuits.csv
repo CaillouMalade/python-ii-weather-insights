@@ -1,19 +1,19 @@
-id,name,country,latitude,longitude,timezone,length_km,straight_heading_deg,track_file
-portimao,Portimão,Portugal,37.2319,-8.6267,Europe/Lisbon,4.653,,pt-2008.geojson
-nogaro,Nogaro,France,43.77006,-0.04033,Europe/Paris,3.636,,nogaro.geojson
-spa,Spa-Francorchamps,Belgium,50.4372,5.9714,Europe/Brussels,7.004,,be-1925.geojson
-paul-ricard,Paul Ricard,France,43.2506,5.7917,Europe/Paris,5.842,,fr-1969.geojson
-nurburgring,Nürburgring GP,Germany,50.3356,6.9475,Europe/Berlin,5.148,,de-1927.geojson
-nordschleife,Nürburgring Nordschleife,Germany,50.3566,6.9689,Europe/Berlin,20.832,,nordschleife.geojson
-lemans,Le Mans · La Sarthe,France,47.9497,0.2192,Europe/Paris,13.626,,lemans.geojson
-lemans-bugatti,Le Mans · Bugatti,France,47.953,0.212,Europe/Paris,4.185,,lemans-bugatti.geojson
-barcelona,Barcelona-Catalunya,Spain,41.57,2.2611,Europe/Madrid,4.657,,es-1991.geojson
-silverstone,Silverstone,United Kingdom,52.0733,-1.0147,Europe/London,5.891,,gb-1948.geojson
-monza,Monza,Italy,45.6191,9.2822,Europe/Rome,5.793,,it-1922.geojson
-imola,Imola,Italy,44.3439,11.7167,Europe/Rome,4.909,,it-1953.geojson
-magny-cours,Magny-Cours,France,46.8642,3.1636,Europe/Paris,4.411,,fr-1960.geojson
-alcaniz,MotorLand Aragón,Spain,41.0786,-0.2033,Europe/Madrid,5.344,,alcaniz.geojson
-jarama,Jarama,Spain,40.617,-3.5855,Europe/Madrid,3.85,,jarama.geojson
-dijon-prenois,Dijon-Prenois,France,47.3625,4.8992,Europe/Paris,3.801,,dijon-prenois.geojson
-jerez,Jerez,Spain,36.7083,-6.0342,Europe/Madrid,4.428,,jerez.geojson
-estoril,Estoril,Portugal,38.7509,-9.3947,Europe/Lisbon,4.182,,estoril.geojson
+id,name,country,latitude,longitude,timezone,length_km,straight_heading_deg,track_file,track_credit
+portimao,Portimão,Portugal,37.2319,-8.6267,Europe/Lisbon,4.653,,pt-2008.geojson,f1-circuits (MIT)
+nogaro,Nogaro,France,43.77006,-0.04033,Europe/Paris,3.636,,nogaro.geojson,
+spa,Spa-Francorchamps,Belgium,50.4372,5.9714,Europe/Brussels,7.004,,be-1925.geojson,f1-circuits (MIT)
+paul-ricard,Paul Ricard,France,43.2506,5.7917,Europe/Paris,5.842,,fr-1969.geojson,f1-circuits (MIT)
+nurburgring,Nürburgring GP,Germany,50.3356,6.9475,Europe/Berlin,5.148,,de-1927.geojson,f1-circuits (MIT)
+nordschleife,Nürburgring Nordschleife,Germany,50.3566,6.9689,Europe/Berlin,20.832,,nordschleife.geojson,
+lemans,Le Mans · La Sarthe,France,47.9497,0.2192,Europe/Paris,13.626,,lemans.geojson,
+lemans-bugatti,Le Mans · Bugatti,France,47.953,0.212,Europe/Paris,4.185,,lemans-bugatti.geojson,
+barcelona,Barcelona-Catalunya,Spain,41.57,2.2611,Europe/Madrid,4.657,,es-1991.geojson,f1-circuits (MIT)
+silverstone,Silverstone,United Kingdom,52.0733,-1.0147,Europe/London,5.891,,gb-1948.geojson,f1-circuits (MIT)
+monza,Monza,Italy,45.6191,9.2822,Europe/Rome,5.793,,it-1922.geojson,f1-circuits (MIT)
+imola,Imola,Italy,44.3439,11.7167,Europe/Rome,4.909,,it-1953.geojson,f1-circuits (MIT)
+magny-cours,Magny-Cours,France,46.8642,3.1636,Europe/Paris,4.411,,fr-1960.geojson,f1-circuits (MIT)
+alcaniz,MotorLand Aragón,Spain,41.0786,-0.2033,Europe/Madrid,5.344,,alcaniz.geojson,
+jarama,Jarama,Spain,40.617,-3.5855,Europe/Madrid,3.85,,jarama.geojson,
+dijon-prenois,Dijon-Prenois,France,47.3625,4.8992,Europe/Paris,3.801,,dijon-prenois.geojson,
+jerez,Jerez,Spain,36.7083,-6.0342,Europe/Madrid,4.428,,jerez.geojson,
+estoril,Estoril,Portugal,38.7509,-9.3947,Europe/Lisbon,4.182,,estoril.geojson,

@@ -1,4 +1,4 @@
-"""The two maps: rain radar framed on the circuit, and wind arrows from a grid of points.
+"""The two maps: rain radar framed on the track outline, and wind arrows from a grid of points.
 
 The server fetches everything. The browser only receives the finished radar image, as a
 data URI, and the wind figures, so no URL with the key ever reaches the page.
@@ -14,7 +14,14 @@ from PIL import Image
 from .display import compass_direction
 
 MAP_HEIGHT = 320
-CIRCUIT_DOT_COLOR = "#E8EDEA"
+TEXT_COLOR = "#E8EDEA"
+BACKGROUND_COLOR = "#0E1110"
+
+# Track outline. The framing assumes the narrowest map, about 340 px wide on a phone,
+# and leaves this share of the map free on every side.
+FRAME_WIDTH = 340
+FRAME_MARGIN = 0.08
+MAX_ZOOM = 16
 
 # Radar
 TILE_SIZE = 256
@@ -45,6 +52,36 @@ def zoom_for_length(length_km):
     the length doubles, kept between 10 and 13.5."""
     zoom = 13 - math.log2(length_km / 4)
     return round(max(10, min(13.5, zoom)), 1)
+
+
+def track_bounds(segments):
+    """The outline's edges: a dictionary with west, south, east and north in degrees."""
+    longitudes = []
+    latitudes = []
+    for segment in segments:
+        for point in segment:
+            longitudes.append(point[0])
+            latitudes.append(point[1])
+    return {"west": min(longitudes), "south": min(latitudes), "east": max(longitudes), "north": max(latitudes)}
+
+
+def track_view(bounds):
+    """The map centre and zoom that fit a track's bounds, with a margin on every side.
+
+    Positions are taken on the web map's own grid (lat_lon_to_tile at zoom 0, from 0 to 1),
+    because latitudes are not evenly spaced there. The basemap draws 512-pixel tiles, so
+    at zoom z the whole world is 512 * 2**z pixels across.
+    """
+    west, north = lat_lon_to_tile(bounds["north"], bounds["west"], 0)
+    east, south = lat_lon_to_tile(bounds["south"], bounds["east"], 0)
+    usable = 1 - 2 * FRAME_MARGIN
+    # max() keeps a single point from dividing by zero.
+    zoom_across = math.log2(FRAME_WIDTH * usable / (512 * max(east - west, 1e-9)))
+    zoom_down = math.log2(MAP_HEIGHT * usable / (512 * max(south - north, 1e-9)))
+    latitude, longitude = tile_to_lat_lon((west + east) / 2, (north + south) / 2, 0)
+    # Rounded down, so the whole track still fits.
+    zoom = math.floor(min(zoom_across, zoom_down, MAX_ZOOM) * 10) / 10
+    return {"latitude": latitude, "longitude": longitude, "zoom": zoom}
 
 
 # Tile maths
@@ -243,11 +280,29 @@ def wind_label(point):
 
 
 def circuit_dot(latitude, longitude):
-    return go.Scattermap(lat=[latitude], lon=[longitude], mode="markers", marker=dict(size=10, color=CIRCUIT_DOT_COLOR), hoverinfo="skip")
+    return go.Scattermap(lat=[latitude], lon=[longitude], mode="markers", marker=dict(size=10, color=TEXT_COLOR), hoverinfo="skip")
+
+
+def track_layer(segments, color, width, opacity, credit):
+    """One line layer drawn from the outline. Every segment stays separate, as in the file.
+    below="traces" keeps it under the arrows and dots; later layers sit above earlier ones."""
+    layer = dict(
+        sourcetype="geojson",
+        source={"type": "Feature", "properties": {}, "geometry": {"type": "MultiLineString", "coordinates": segments}},
+        type="line",
+        color=color,
+        opacity=opacity,
+        line=dict(width=width),
+        below="traces",
+    )
+    # The map adds this to its small attribution text. OpenStreetMap is credited there already.
+    if credit != "":
+        layer["sourceattribution"] = credit
+    return layer
 
 
 def map_layout(fig, latitude, longitude, zoom, layers):
-    """The look both maps share: free dark basemap, centred on the circuit, no margins."""
+    """The look both maps share: free dark basemap, no margins."""
     fig.update_layout(
         map=dict(style="carto-darkmatter", center=dict(lat=latitude, lon=longitude), zoom=zoom, layers=layers),
         margin=dict(l=0, r=0, t=0, b=0),
@@ -258,13 +313,27 @@ def map_layout(fig, latitude, longitude, zoom, layers):
     return fig
 
 
-def radar_figure(image_uri, bounds, latitude, longitude, zoom):
-    layers = [dict(sourcetype="image", source=image_uri, coordinates=bounds, opacity=1)]
-    return map_layout(go.Figure(circuit_dot(latitude, longitude)), latitude, longitude, zoom, layers)
+def radar_figure(image_uri, image_bounds, circuit, segments):
+    """The radar under the track outline, framed to fill the map.
+
+    The outline has a dark casing under a crisp line, so it reads over any rain colour.
+    Without an outline, a dot marks the circuit and the zoom comes from its length.
+    """
+    layers = [dict(sourcetype="image", source=image_uri, coordinates=image_bounds, opacity=1, below="traces")]
+    if len(segments) == 0:
+        fig = go.Figure(circuit_dot(circuit["latitude"], circuit["longitude"]))
+        return map_layout(fig, circuit["latitude"], circuit["longitude"], zoom_for_length(circuit["length_km"]), layers)
+
+    layers.append(track_layer(segments, BACKGROUND_COLOR, 6, 0.8, circuit["track_credit"]))
+    layers.append(track_layer(segments, TEXT_COLOR, 3, 1, ""))
+    view = track_view(track_bounds(segments))
+    # A map needs at least one trace, even an empty one.
+    fig = go.Figure(go.Scattermap(lat=[], lon=[]))
+    return map_layout(fig, view["latitude"], view["longitude"], view["zoom"], layers)
 
 
-def wind_figure(points, latitude, longitude):
-    """Arrows coloured by speed. Invisible markers on the points give each one hover text."""
+def wind_figure(points, circuit, segments):
+    """Arrows coloured by speed over a faint outline. Invisible markers give each point hover text."""
     fig = go.Figure()
     for line in wind_arrow_lines(points):
         fig.add_trace(go.Scattermap(lat=line["latitudes"], lon=line["longitudes"], mode="lines", line=dict(width=3, color=line["color"]), hoverinfo="skip"))
@@ -278,5 +347,9 @@ def wind_figure(points, latitude, longitude):
             hoverinfo="text",
         )
     )
-    fig.add_trace(circuit_dot(latitude, longitude))
-    return map_layout(fig, latitude, longitude, WIND_MAP_ZOOM, [])
+    layers = []
+    if len(segments) == 0:
+        fig.add_trace(circuit_dot(circuit["latitude"], circuit["longitude"]))
+    else:
+        layers.append(track_layer(segments, TEXT_COLOR, 1.5, 0.45, circuit["track_credit"]))
+    return map_layout(fig, circuit["latitude"], circuit["longitude"], WIND_MAP_ZOOM, layers)

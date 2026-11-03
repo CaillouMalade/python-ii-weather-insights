@@ -1,6 +1,7 @@
-"""Files: the circuit list, the collected history, and the app's own weather log."""
+"""Files: the circuit list, the track outlines, the collected history, and the app's own weather log."""
 
 import csv
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from .models import READING_COLUMNS
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 CIRCUITS_PATH = DATA_DIR / "circuits.csv"
+# One GeoJSON outline per circuit: f1-circuits (MIT) or OpenStreetMap (ODbL).
+TRACKS_DIR = DATA_DIR / "tracks"
 # Collected every 30 minutes for every circuit since 29 October 2026, by a separate collector.
 HISTORY_PATH = DATA_DIR / "current_weather.csv"
 # Every reading the app itself fetches.
@@ -65,9 +68,35 @@ def load_circuits(path=CIRCUITS_PATH):
                 "longitude": float(row["longitude"]),
                 "timezone": row["timezone"],
                 "length_km": float(row["length_km"]),
+                # A blank cell is NaN: that circuit has no outline, or needs no extra credit.
+                "track_file": "" if pd.isna(row["track_file"]) else row["track_file"],
+                "track_credit": "" if pd.isna(row["track_credit"]) else row["track_credit"],
             }
         )
     return circuits
+
+
+def load_track(track_file, folder=TRACKS_DIR):
+    """Return a circuit's outline as a list of line segments, each a list of [longitude, latitude].
+
+    The f1-circuits files hold one line for the whole lap. The OpenStreetMap files hold
+    several ways, and each stays its own segment: they are drawn, not joined. A missing or
+    unreadable file gives an empty list, so that circuit simply has no outline.
+    """
+    if track_file == "":
+        return []
+    try:
+        with open(folder / track_file, encoding="utf-8") as f:
+            data = json.load(f)
+    except (FileNotFoundError, ValueError):
+        return []
+
+    segments = []
+    for feature in data.get("features", []):
+        geometry = feature.get("geometry") or {}
+        if geometry.get("type") == "LineString" and len(geometry.get("coordinates", [])) > 1:
+            segments.append(geometry["coordinates"])
+    return segments
 
 
 def load_history(path=HISTORY_PATH):

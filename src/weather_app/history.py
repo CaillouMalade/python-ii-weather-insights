@@ -52,7 +52,7 @@ def hourly(readings):
     """
     out = readings.copy()
     out["wet"] = out["wet"].astype(float)
-    out = out.set_index("time")[["temperature_c", "wind_kmh", "gust_kmh", "wet"]]
+    out = out.set_index("time")[["temperature_c", "wind_kmh", "wet"]]
     return out.resample("h").mean().reset_index()
 
 

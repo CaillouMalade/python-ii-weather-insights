@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from weather_app.forecast import forecast_windows, rain_timing, status_lights, today_high_low, upcoming
+from weather_app.forecast import RAIN_LIKELY, calm_clouds, forecast_windows, next_three_hours, rain_timing, status_lights, today_high_low, upcoming
 
 MONDAY = 1767571200  # 2026-01-05 00:00 UTC, a Monday
 HOUR = 3600
@@ -85,10 +85,36 @@ def test_windows_already_over_are_ignored():
 
 
 def test_lights_for_now_next_three_hours_and_later_today():
-    # Rain likely from 00 to 03 and from 09 to 12, and again on Tuesday from 00 to 03.
-    windows = make_windows([0.7, 0, 0, 0.6, 0, 0, 0, 0, 0.9])
-    # At 01:00 the running window is 00-03, the next one 03-06, and later today 06-24.
-    assert status_lights(windows, MONDAY + HOUR, "2026-01-05") == ["rain", "dry", "rain"]
+    # Rain likely from 06 to 09 and from 12 to 15, and again on Tuesday from 00 to 03.
+    windows = make_windows([0, 0, 0.7, 0, 0.6, 0, 0, 0, 0.9])
+    # At 01:00 the running window is 00-03, the next 3 hours reach into 03-06, and later today is 06-24.
+    assert status_lights(windows, MONDAY + HOUR, "2026-01-05") == ["dry", "dry", "rain"]
+    # At 04:00 the next 3 hours reach into 06-09, where rain is likely.
+    assert status_lights(windows, MONDAY + 4 * HOUR, "2026-01-05") == ["dry", "rain", "rain"]
+
+
+def test_next_three_hours_are_the_running_window_and_the_next_one():
+    windows = make_windows([0.1, 0.2, 0.3, 0.4])
+    assert next_three_hours(windows, MONDAY + HOUR)["pop"].to_list() == [0.1, 0.2]
+    # Exactly at a window's start, the next 3 hours are that window alone.
+    assert next_three_hours(windows, MONDAY + 3 * HOUR)["pop"].to_list() == [0.2]
+
+
+def test_header_chance_and_middle_light_always_agree():
+    # Le Mans in the live check: dry now, rain likely from 10:00. At 08:30 the header said 0 %
+    # (the running window only) while the light was red. Both now read the same windows.
+    # Windows end every 3 hours UTC; Le Mans is UTC+1, so 10:00 local is the 09-12 UTC window.
+    windows = make_windows([0, 0, 0, 0.8, 0.8], offset=HOUR)
+    now = MONDAY + 7 * HOUR + 1800
+    chance = next_three_hours(windows, now)["pop"].max()
+    assert chance == 0.8
+    assert status_lights(windows, now, "2026-01-05")[1] == "rain"
+    for pops in [[0, 0.49, 0.5, 0], [0.6, 0, 0, 0], [0, 0, 0, 0], [0.2, 0.9, 0.1, 0]]:
+        for hour in [0, 1, 2, 3, 4, 5]:
+            windows = make_windows(pops)
+            chance = next_three_hours(windows, MONDAY + hour * HOUR)["pop"].max()
+            light = status_lights(windows, MONDAY + hour * HOUR, "2026-01-05")[1]
+            assert (chance >= RAIN_LIKELY) == (light == "rain"), (pops, hour)
 
 
 def test_later_today_is_unlit_late_in_the_evening():
@@ -98,7 +124,7 @@ def test_later_today_is_unlit_late_in_the_evening():
 
 
 def test_lights_use_the_same_threshold_as_the_sentence():
-    assert status_lights(make_windows([0.5, 0.49, 0.49]), MONDAY + HOUR, "2026-01-05") == ["rain", "dry", "dry"]
+    assert status_lights(make_windows([0.5, 0.49, 0.49]), MONDAY + HOUR, "2026-01-05") == ["rain", "rain", "dry"]
     assert rain_timing(make_windows([0.5, 0.49, 0.49]), MONDAY + HOUR).startswith("Rain likely now")
 
 
@@ -109,3 +135,14 @@ def test_a_dry_forecast_lights_all_green():
 def test_a_forecast_starting_later_leaves_now_unlit():
     # The first window runs from 00 to 03, but it is not yet midnight, so nothing covers now.
     assert status_lights(make_windows([0, 0]), MONDAY - HOUR, "2026-01-04") == [None, "dry", None]
+
+
+def test_calm_clouds_is_a_centred_15_hour_mean():
+    steps = []
+    for number, clouds in enumerate([0, 100, 0, 100, 0, 100]):
+        steps.append({"dt": MONDAY + (number + 1) * 3 * HOUR, "temperature": 10, "clouds": clouds, "pop": 0, "rain_3h": 0, "snow_3h": 0})
+    windows = forecast_windows(pd.DataFrame(steps), 0)
+    # Each value averages up to two windows on either side; the ends have fewer neighbours.
+    assert calm_clouds(windows).round(1).to_list() == [33.3, 50.0, 40.0, 60.0, 50.0, 66.7]
+    # The table itself is left as it was.
+    assert windows["clouds"].to_list() == [0, 100, 0, 100, 0, 100]

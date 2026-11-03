@@ -32,11 +32,18 @@ from weather_app.maps import (
     wind_grid_points,
     wind_label,
     zoom_for_length,
+    track_bounds,
+    track_layer,
+    track_view,
+    FRAME_MARGIN,
+    FRAME_WIDTH,
+    MAP_HEIGHT,
 )
+from weather_app.storage import load_circuits, load_track
 from weather_app.models import WeatherReading
 
 MONDAY = 1767571200  # 2026-01-05 00:00 UTC
-SPA = {"id": "spa", "location": "Spa-Francorchamps", "country": "Belgium", "latitude": 50.4372, "longitude": 5.9714, "timezone": "Europe/Brussels", "length_km": 7.004}
+SPA = {"id": "spa", "location": "Spa-Francorchamps", "country": "Belgium", "latitude": 50.4372, "longitude": 5.9714, "timezone": "Europe/Brussels", "length_km": 7.004, "track_file": "be-1925.geojson", "track_credit": "f1-circuits (MIT)"}
 
 
 def make_reading(location="Spa-Francorchamps", temperature=20.0, feels_like=19.0, conditions="clear sky", wind_deg=None, wind_gust=None):
@@ -370,12 +377,81 @@ def test_image_to_data_uri():
     assert image_to_data_uri(Image.new("RGBA", (1, 1))).startswith("data:image/png;base64,")
 
 
-def test_radar_figure_frames_the_circuit():
+def test_radar_figure_without_an_outline_marks_the_circuit_and_uses_its_length():
     area = radar_area(50.4372, 5.9714)
-    fig = radar_figure("data:,", area["bounds"], 50.4372, 5.9714, 12.2)
+    fig = radar_figure("data:,", area["bounds"], dict(SPA, track_file=""), [])
     assert fig.layout.map.layers[0].source == "data:,"
+    assert len(fig.layout.map.layers) == 1
     assert fig.layout.map.center.lat == 50.4372
     assert fig.layout.map.zoom == 12.2
+    assert list(fig.data[0].lat) == [50.4372]
+
+
+def test_radar_figure_with_an_outline_frames_it_over_the_radar():
+    segments = [[[5.96, 50.43], [5.98, 50.44]], [[5.98, 50.44], [5.97, 50.45]]]
+    area = radar_area(50.4372, 5.9714)
+    fig = radar_figure("data:,", area["bounds"], SPA, segments)
+    layers = fig.layout.map.layers
+    # The radar first, then the dark casing, then the crisp line on top.
+    assert [layer.sourcetype for layer in layers] == ["image", "geojson", "geojson"]
+    assert layers[1].line.width == 6 and layers[2].line.width == 3
+    assert layers[2].color == "#E8EDEA"
+    assert layers[1].sourceattribution == "f1-circuits (MIT)"
+    view = track_view(track_bounds(segments))
+    assert fig.layout.map.zoom == view["zoom"]
+    assert fig.layout.map.center.lat == pytest.approx(view["latitude"])
+    # No dot where there is an outline.
+    assert len(fig.data[0].lat) == 0
+
+
+# Track outlines
+
+
+def test_track_bounds():
+    segments = [[[1.0, 40.0], [1.5, 40.2]], [[0.8, 39.9], [1.2, 40.1]]]
+    assert track_bounds(segments) == {"west": 0.8, "south": 39.9, "east": 1.5, "north": 40.2}
+
+
+def test_track_view_fits_a_square_track_by_its_height():
+    # 0.02 degrees square on the equator. The map is 340 by 320 pixels, so the height decides:
+    # log2(320 * 0.84 / (512 * 0.02 / 360)) = 13.21, rounded down.
+    view = track_view({"west": -0.01, "south": -0.01, "east": 0.01, "north": 0.01})
+    assert view["zoom"] == 13.2
+    assert view["latitude"] == pytest.approx(0.0, abs=1e-9)
+    assert view["longitude"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_track_view_fits_a_wide_track_by_its_width():
+    # log2(340 * 0.84 / (512 * 0.08 / 360)) = 11.29, rounded down.
+    view = track_view({"west": 2.0, "south": -0.005, "east": 2.08, "north": 0.005})
+    assert view["zoom"] == 11.2
+    assert view["longitude"] == pytest.approx(2.04)
+
+
+def test_track_view_stops_at_the_maximum_zoom():
+    assert track_view({"west": 0.0, "south": 0.0, "east": 0.0, "north": 0.0})["zoom"] == 16
+
+
+def test_every_real_track_fills_its_map():
+    for circuit in load_circuits():
+        segments = load_track(circuit["track_file"])
+        assert len(segments) > 0, circuit["id"]
+        bounds = track_bounds(segments)
+        view = track_view(bounds)
+        west, north = lat_lon_to_tile(bounds["north"], bounds["west"], view["zoom"])
+        east, south = lat_lon_to_tile(bounds["south"], bounds["east"], view["zoom"])
+        # In map pixels (512 per tile at this zoom), as a share of the map's width and height.
+        filled = max((east - west) * 512 / FRAME_WIDTH, (south - north) * 512 / MAP_HEIGHT)
+        assert 0.78 <= filled <= 1 - 2 * FRAME_MARGIN, (circuit["id"], filled)
+
+
+def test_track_layer_keeps_every_segment_and_credits_only_when_asked():
+    segments = [[[0, 0], [1, 1]], [[2, 2], [3, 3]]]
+    layer = track_layer(segments, "#E8EDEA", 3, 1, "")
+    assert layer["source"]["geometry"] == {"type": "MultiLineString", "coordinates": segments}
+    assert layer["below"] == "traces"
+    assert "sourceattribution" not in layer
+    assert track_layer(segments, "#E8EDEA", 3, 1, "f1-circuits (MIT)")["sourceattribution"] == "f1-circuits (MIT)"
 
 
 # Wind grid and arrows
@@ -446,7 +522,21 @@ def test_wind_label_and_figure():
     points = [{"latitude": 0.0, "longitude": 0.0, "speed_kmh": 23.4, "degrees": 225}, {"latitude": 0.2, "longitude": 0.0, "speed_kmh": 3, "degrees": None}]
     assert wind_label(points[0]) == "23 km/h SW"
     assert wind_label(points[1]) == "3 km/h"
-    fig = wind_figure(points, 0.0, 0.0)
+    circuit = {"latitude": 0.0, "longitude": 0.0, "track_credit": ""}
+    fig = wind_figure(points, circuit, [])
     # One line for the one band with an arrow, the hover points, and the circuit dot.
     assert len(fig.data) == 3
     assert list(fig.data[1].hovertext) == ["23 km/h SW", "3 km/h"]
+    assert len(fig.layout.map.layers) == 0
+
+
+def test_wind_figure_draws_the_outline_faintly_instead_of_the_dot():
+    points = [{"latitude": 0.0, "longitude": 0.0, "speed_kmh": 12, "degrees": 90}]
+    circuit = {"latitude": 0.0, "longitude": 0.0, "track_credit": "f1-circuits (MIT)"}
+    fig = wind_figure(points, circuit, [[[0, 0], [0.01, 0.01]]])
+    assert len(fig.data) == 2
+    layer = fig.layout.map.layers[0]
+    assert layer.opacity < 0.5 and layer.line.width < 3
+    assert layer.sourceattribution == "f1-circuits (MIT)"
+    # The wind map keeps its regional framing.
+    assert fig.layout.map.zoom == 8.3
