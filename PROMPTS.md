@@ -445,3 +445,73 @@ What makes up the 34 after:
 ### Be ready to explain: new forms not evidenced in class material
 
 `st.query_params`; `st.date_input`, `st.time_input(step=...)`, `st.form` with two submit buttons; `plotly.subplots.make_subplots(shared_xaxes=True, specs=[[{"secondary_y": True}], [{}]])`, `fig.add_vrect(row="all")`, `fig.add_annotation`, `ticklabelmode="period"`, `ticksuffix`, `hovertemplate` with `customdata`; `math.hypot`, `math.atan2`; `datetime.timedelta`, `date.isoformat()`, `datetime.weekday()`; `pd.Timestamp.now(tz=...)`; `read_csv(dtype=str)`; `list.pop(index)`; CSS `:has()` for the focus ring on a tappable row.
+
+## Colour and history round — 3 November 2026
+
+**Asked:** Arthur: "The graphs are pretty good. A bit more colour or weather-app-like stuff would be nice. The History visual is pretty tough to read." The orchestrator relayed it to Claude Code (Opus 5.5) with the `distinctive-frontend-design` method as the brief: ground the design in the subject and the job, define a compact direction, spend boldness in one place, let every choice encode something true, and critique the result in context. A new rule allowed colour to encode data.
+- **More colour:**
+  - a cool-to-warm temperature scale with no green or red, used everywhere a temperature appears;
+  - inline condition glyphs, one per forecast day and one in the header;
+  - wind arrows on a single-hue scale.
+- **History rebuilt** as weather-app daily rows (range bar, rain dot, wind with its direction), with partial days muted and at most one sentence. The brief also asked what the flat stretches in the Le Mans chart were.
+- **Pending fixes:**
+  - a compact session form with a "Fri 7 Nov" day picker;
+  - the session highlight as a full block;
+  - rain bars red only when rain is likely.
+
+**Direction (kept compact):**
+- **Subject and job:** the pit wall; will rain hit my session, and what is the track doing.
+- **Palette:** the graphite tokens, green for dry, red for rain, plus two data scales: temperature from muted blue (0°) through neutral (15°) to amber (25°), and wind in violet, brighter when stronger.
+- **Signature:** the status lights stay the one bold element.
+- **Weather-app cues:** monochrome condition glyphs, with only the sun warm.
+
+**Got:**
+- **Colour helpers:** `temperature_color`, `rain_bar_color` and `condition_kind` in `display.py`.
+- **Glyphs:** a new `icons.py`, with six condition glyphs and the wind arrow as SVG data URIs.
+- **Data:** `daily_conditions` in `forecast.py`, the forecast's `weather_id` kept by the client, `wind_color` and a violet `WIND_BANDS` in `maps.py`.
+- **History:** `daily_rows` and `usual_direction` in `history.py`, and `history_rows` in `cards.py`.
+- **Views:** the forecast line drawn in short coloured segments, glyphs above the days, the session as one block across both charts, the new session form, and History as rows.
+- **Tests:** 117 in all, with new known-answer tests for:
+  - the temperature colour mapping (stops, a mixed value, clamping, no green or red);
+  - the rain-bar rule;
+  - condition kinds and glyphs;
+  - wind colours getting brighter;
+  - the header colour and glyph;
+  - the History rows' HTML;
+  - `daily_rows` and `usual_direction`;
+  - the day conditions;
+  - the Le Mans frozen readings in the real snapshot.
+
+**What the flat stretches were:**
+- **The data:** at Le Mans La Sarthe, 40 of 165 collected readings are exactly 8.87 °C with 1.34 m/s wind from 230°; at Le Mans Bugatti, 44 are 8.8 °C with the same wind. They come mostly between midnight and 07:00, plus a few by day (for example Fri 30 Oct 17:45 and Mon 2 Nov 12:21). Humidity, pressure and cloud cover keep changing during them, and the provider's own observation times advance.
+- **The cause:** a frozen value in OpenWeatherMap's data for that point. It is not a collector repeat, a fill or an interpolation in our code. No other circuit has it: the next most repeated reading, at Dijon, appears 6 times.
+- **What the app does:** the data is kept as collected. Filtering it is Arthur's call. The daily ranges are barely affected, because the frozen value rarely sets a day's low or high.
+
+**Checked:**
+- `uv run pytest` passes with no key.
+- **Real Chrome against the throwaway fake server** (Portimão dry, Spa raining, with condition codes added to the fake forecast) and the real RainViewer service:
+  - Spa at 1280 px: blue-grey 9°, glyphs over the days, a temperature-coloured line, red bars only for likely rain, the Shakedown session as a green block across both charts, violet wind arrows, and the sidebar form reading "Tue 3 Nov" with tiny Start/End labels.
+  - Portimão: "Dry all week" with no red bar.
+  - History at Le Mans and Spa at 1280 px and at 390 px: no sideways scroll, partial days muted, arrows present.
+- **Contrast on the surface:** temperature colours 7.0–10.2:1, the sun 9.5:1, wind bands 3.2–12.6:1 (the calmest band was lifted from 2.6:1).
+- **Key:** not in the page, its 113 resources or the chart data.
+- **Data files:** the fake run logged to scratch. A git-ignored `data/sessions.csv` with Le Mans's default weekend, written at 13:06 by the orchestrator's live check, was left as it was.
+- **Not checked by the agent:** the real API and key, real condition codes from the real forecast, and real phones.
+
+**Kept / changed / rejected:**
+- **Glyphs as images:** Streamlit's HTML cleaner removed inline `<svg>`, which the browser check showed (no arrows, no header glyph). Glyphs are now `<img>` elements whose source is the SVG as a data URI, with alt text: still no network loads.
+- **Glyph placement:** a glyph goes only on days whose midday is at least 3 hours inside the forecast, after the first and last glyphs were cut off at the chart edges.
+- **Day-glyph ties:** 12:00 and 15:00 are equally far from 13:00, so the earlier window wins, which makes the choice deterministic.
+- **Snow bars:** light grey, so they read apart from the neutral bars of unlikely rain.
+- **The session form:** days are a select box of the next 14 days ("Fri 7 Nov"), because `st.date_input` only offers numeric formats; a saved day outside that range is still offered. The name has a placeholder; Start and End have tiny labels.
+- **The session block:** one shape over the whole plotting height, with green edges. A 1-hour session on a 5-day axis is still narrow, but it now crosses both charts and the gap between them.
+- **History:**
+  - No hourly sparkline: with the Le Mans frozen value it would show the same flat stretches.
+  - The single sentence is the rain finding, the racetrack question.
+  - Day labels are "Fri 30", which fits a phone.
+  - Removed: `temperature_finding`, `wind_finding`, `daily_extremes`, `moment_text` and the unused gust column.
+- **Rubric charts:** the brief's two labelled charts are the forecast figure's temperature and rain rows, plus History's daily ranges with ° labels.
+
+### Be ready to explain: new forms not evidenced in class material
+
+The `:02X` hex format; chained assignment (`low = high = ...`); `base64.b64encode` for SVG data URIs; `fig.add_layout_image` with `xref="x"` and `yref="paper"`; `fig.add_shape(type="rect", yref="paper")`; `st.selectbox(index=..., format_func=...)` over dates; `pd.isna` on a single value; CSS grid columns for the History rows.

@@ -184,3 +184,25 @@ Not verified yet: the real API and key, and real phones.
 The README screenshots in `docs/screenshots/` show the previous design and should be retaken with real data.
 
 `data/weather_log.csv` has 54 real, uncommitted rows from the orchestrator's live checks, left as they were. Still open: the bad-city rubric gap, `__lt__` without a caller, and a blank `straight_heading_deg`.
+
+## 3 November 2026 — colour and history round (branch racetrack-mvp-build, not merged)
+
+Built on `cc1daa0`.
+- **Colour:** colour now encodes data. One cool-to-warm temperature scale (no green or red) colours the header, the forecast line and the History ranges; wind is violet, brighter when stronger.
+- **Glyphs:** condition glyphs (SVG data URIs) sit in the header and above each forecast day.
+- **Rain bars:** red only when rain is likely.
+- **History:** one row per collected day (rain dot, low-to-high range, wind with its direction), partial days muted, one sentence.
+- **Sessions:** the form picks days as "Fri 7 Nov"; the selected session is one block across both charts.
+- **Size:** app code is 2,061 lines.
+
+The flat stretches in Le Mans's History were a frozen OpenWeatherMap value at that point (8.87 °C at La Sarthe, 8.8 °C at Bugatti, both with 1.34 m/s from 230°), in about a quarter of the readings, mostly overnight. It is kept as collected; filtering is Arthur's decision.
+
+Verified without a real key or live OpenWeatherMap call:
+- 117 tests pass.
+- Real Chrome at 1280 and 390 px against a throwaway fake server (dry Portimão, wet Spa), plus History at Le Mans and Spa.
+- Contrast checked.
+- No key in the page.
+
+Not verified yet: the real API's condition codes and real phones.
+
+`data/weather_log.csv` (real, uncommitted) and the git-ignored `data/sessions.csv` come from the orchestrator's live checks and were left as they were. The README screenshots still show an older design.
