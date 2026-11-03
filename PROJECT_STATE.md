@@ -109,4 +109,8 @@ Verified: all tests pass with no key; real Chrome at 1280 and 390 px against a t
 
 Not verified by the agent: the softer layers on real tiles, whether CARTO keeps the layer name `waterway_label`, and real phones.
 
-Still open: `data/weather_log.csv` is uncommitted and the orchestrator handles it. The orchestrator also pushes and merges. The brief requires commits from every team member, and Team is still to be filled in. `PROJECT_BOT.md` is staying for now.
+Still open at the time: `data/weather_log.csv` was uncommitted and the orchestrator handled it. The brief requires commits from every team member, and Team is still to be filled in. `PROJECT_BOT.md` is staying for now.
+
+## 3 November 2026 — v0.1 merged into main
+
+The orchestrator committed the real log (tag `v0.1` holds 45 rows; later real rows were added before the merge), pushed `release/v0.1` and tag `v0.1`, and, with Arthur's approval, fast-forwarded `main` to it. The README clone line now uses the default branch. An independent re-audit of `v0.1` found no banned construct, no secret and no regression, and estimated 9–9.5/10. Open: commits from every team member, the Team section, a team walkthrough of the README's hardest parts, and more logged days. The racetrack collector still lives untracked in the main checkout and on the `data-collection` branch; it comes into the app in V2.

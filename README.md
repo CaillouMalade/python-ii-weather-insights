@@ -25,7 +25,7 @@ Each successful current-weather fetch is added to `data/weather_log.csv` with a 
 Requires Python 3.11 or newer and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-git clone --branch release/v0.1 https://github.com/CaillouMalade/python-ii-weather-insights.git
+git clone https://github.com/CaillouMalade/python-ii-weather-insights.git
 cd python-ii-weather-insights
 uv sync
 ```
