@@ -1,6 +1,49 @@
 ﻿# Weather Insights
 
-Python II group assignment: an object-oriented weather app built on OpenWeatherMap and Streamlit. This is v0.1, a general weather app.
+Python II group assignment: an object-oriented weather app built on OpenWeatherMap and Streamlit.
+
+## Racetrack MVP (branch `racetrack-mvp`, in progress)
+
+This branch turns the v0.1 general weather app into a racetrack weather monitor. It is deliberately an **MVP**: a small, clean and working app with one weather provider, not a feature-complete product. Features are added only once the existing ones work well.
+
+### Why
+
+Anyone heading to a circuit, whether driving, working in a team or watching, asks the same questions: is it going to rain during my session, when, how hard, and what is the wind doing? General weather apps answer for the nearest town and in broad terms. They don't show the circuit itself, and they mix today's conditions with everything else.
+
+### The problem it solves
+
+One page per circuit that answers "what is happening at this track today and in the next hours", using real data and being honest about what that data can and can't tell you. Our own collected history of every circuit then shows how each track's weather really behaves over time.
+
+### What the MVP will include
+
+- **Circuits from a CSV**, like the city list: the 18 circuits we already collect, easy to extend.
+- **A main page about today** at the selected circuit:
+  - a full-width pane with the temperature trend and cloud cover;
+  - two maps side by side: rain (radar) and wind with its direction;
+  - a precipitation histogram, as fine-grained as the data allows.
+- **Rain timing:** the radar for the next hour or so, then rain risk per forecast window.
+- **Analytics built on our collected history**, the readings gathered every 30 minutes for each circuit since 29 October 2026.
+- **One provider, OpenWeatherMap**, done well.
+
+### Deliberately left out
+
+- Circuit comparison.
+- Track temperature, grip, and slick/wet tyre calls: they can't be estimated honestly from forecast data.
+- Several providers and a settings pane to choose them: planned for a later version.
+
+### Known data limits
+
+- Our free OpenWeatherMap key only gives forecasts in 3-hour steps, so exact rain timing is limited to the radar's short range. OpenWeatherMap's free student plan lists an hourly 4-day forecast, so applying for it would give hourly steps.
+- Wind direction comes from forecast points, not from the wind map, which only shows speed. The app fetches a small grid of points around the circuit for the arrows.
+- One weather point can't capture rain on only part of a very large circuit, such as Spa, the Nordschleife or Le Mans.
+
+### Still to decide
+
+- Whether the app knows real race weekend dates.
+- Whether track outlines are drawn on the map (easy for the 9 F1 circuits only).
+- The main audience: fans, teams, or both.
+
+The rest of this README describes v0.1, the general weather app this branch builds on.
 
 ## What it does
 
