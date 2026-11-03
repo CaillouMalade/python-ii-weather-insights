@@ -1,46 +1,31 @@
-﻿# Weather Insights
+# Weather Insights
 
 Python II group assignment: an object-oriented weather app built on OpenWeatherMap and Streamlit.
 
-## Racetrack MVP (branch `racetrack-mvp`, in progress)
+## Racetrack MVP
 
-This branch turns the v0.1 general weather app into a racetrack weather monitor. It is deliberately an **MVP**: a small, clean and working app with one weather provider, not a feature-complete product. Features are added only once the existing ones work well.
+This branch turns the v0.1 weather app into a racetrack weather monitor. It is an MVP on purpose: one provider, a few things done properly, and features only get added once the existing ones work.
 
 ### Why
 
-Anyone heading to a circuit, whether driving, working in a team or watching, asks the same questions: is it going to rain during my session, when, how hard, and what is the wind doing? General weather apps answer for the nearest town and in broad terms. They don't show the circuit itself, and they mix today's conditions with everything else.
+When you go to a circuit, whether you drive, work in a team or just watch, the questions are always the same: will it rain during my session, when, how much, and what is the wind doing. Stock weather apps answer for the nearest town, and mix today with everything else.
 
-### The problem it solves
+### What it does
 
-One page per circuit that answers "what is happening at this track today and in the next hours", using real data and being honest about what that data can and can't tell you. Our own collected history of every circuit then shows how each track's weather really behaves over time.
+One page per circuit about today (current conditions, temperature and cloud cover over the next days, rain radar and wind direction side by side, rain per forecast window with a one line "dry until…"), and a History tab built on our own readings, collected every 30 minutes for each circuit since 29 October 2026. Circuits come from a CSV, so adding one is a single line.
 
-### What the MVP will include
-
-- **Circuits from a CSV**, like the city list: the 18 circuits we already collect, easy to extend.
-- **A main page about today** at the selected circuit:
-  - a full-width pane with the temperature trend and cloud cover;
-  - two maps side by side: rain (radar) and wind with its direction;
-  - a precipitation histogram, as fine-grained as the data allows.
-- **Rain timing:** the radar for the next hour or so, then rain risk per forecast window.
-- **Analytics built on our collected history**, the readings gathered every 30 minutes for each circuit since 29 October 2026.
-- **One provider, OpenWeatherMap**, done well.
-
-### Deliberately left out
+### Left out on purpose
 
 - Circuit comparison.
-- Track temperature, grip, and slick/wet tyre calls: they can't be estimated honestly from forecast data.
-- Several providers and a settings pane to choose them: planned for a later version.
+- Track temperature, grip and tyre calls, which can't be estimated honestly from forecast data.
+- Several providers and a settings pane to pick them (planned for a later version).
+- Race calendar and track outlines.
 
-### Known data limits
+### Data limits
 
-- Our free OpenWeatherMap key only gives forecasts in 3-hour steps, so exact rain timing is limited to the radar's short range. OpenWeatherMap's free student plan lists an hourly 4-day forecast, so applying for it would give hourly steps.
-- Wind direction comes from forecast points, not from the wind map, which only shows speed. The app fetches a small grid of points around the circuit for the arrows.
-- One weather point can't capture rain on only part of a very large circuit, such as Spa, the Nordschleife or Le Mans.
-
-### Still to decide
-
-- Decided for the MVP: no race calendar and no track outlines.
-- Decided for the MVP: fans first.
+- The free OpenWeatherMap key only gives the forecast in 3 hour steps, so rain timing is per window, and the radar shows the latest image only. OpenWeatherMap's student plan has an hourly 4-day forecast, applying for it would give hourly steps.
+- The wind map only shows speed, so the arrows come from current weather at a 3 by 3 grid of points around the circuit.
+- One weather point per circuit can't catch rain falling on only part of a big track (Spa, the Nordschleife, Le Mans).
 
 The rest of this README describes the app as it is now.
 
