@@ -30,7 +30,7 @@ WIND_GRID_SIZE = 3
 WIND_GRID_STEP = 0.2
 # Arrow length in degrees of latitude.
 ARROW_LENGTH = 0.1
-WIND_MAP_ZOOM = 8.3
+WIND_MAP_ZOOM = 7.9
 # (lowest speed in km/h, colour). The legend under the map is drawn from this list too.
 WIND_BANDS = [(0, "#8fc7e8"), (10, "#6fd3a0"), (20, "#f2d13c"), (30, "#ef8a3a"), (40, "#e0455a")]
 

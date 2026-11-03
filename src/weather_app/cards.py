@@ -2,13 +2,14 @@
 
 from html import escape
 
-from .display import METRES_PER_SECOND_TO_KMH, background_for, compass_direction, format_local_time, high_low_text, is_night
+from .display import background_for, compass_direction, format_local_time, high_low_text, is_night
 from .maps import WIND_BANDS
+from .models import METRES_PER_SECOND_TO_KMH
 
 
 def wind_text(reading):
     """Such as 12 km/h SW."""
-    text = f"{reading.wind_speed * METRES_PER_SECOND_TO_KMH:.0f} km/h"
+    text = f"{reading.wind_kmh:.0f} km/h"
     if reading.wind_deg is not None:
         text = f"{text} {compass_direction(reading.wind_deg)}"
     return text

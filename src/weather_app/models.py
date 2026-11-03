@@ -1,5 +1,6 @@
 """The data class for one weather reading."""
 
+METRES_PER_SECOND_TO_KMH = 3.6
 
 # The fields of a reading. The log's columns come from this list too.
 READING_COLUMNS = [
@@ -64,9 +65,9 @@ class WeatherReading:
         self.sunset = sunset
 
     @property
-    def feels_like_delta(self):
-        """How much warmer (+) or colder (-) it feels than the actual temperature, in °C."""
-        return round(self.feels_like - self.temperature, 2)
+    def wind_kmh(self):
+        """Wind speed in km/h. OpenWeatherMap sends m/s, and the page shows km/h."""
+        return self.wind_speed * METRES_PER_SECOND_TO_KMH
 
     def __repr__(self):
         return f"WeatherReading({self.location!r}, {self.temperature}°C)"

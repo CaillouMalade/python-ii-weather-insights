@@ -3,7 +3,6 @@
 from datetime import datetime, timedelta, timezone
 
 COMPASS_POINTS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-METRES_PER_SECOND_TO_KMH = 3.6
 
 # CSS gradients only: fixed text that never contains data from the API.
 BACKGROUNDS = {

@@ -40,7 +40,7 @@ def show_chart(fig, y_title, y2_title=None):
         plot_bgcolor="rgba(0,0,0,0)",
     )
     if y2_title is not None:
-        fig.update_layout(yaxis2=dict(title=y2_title, overlaying="y", side="right", range=[0, 100], showgrid=False))
+        fig.update_layout(yaxis2=dict(title=y2_title, overlaying="y", side="right", range=[0, 100], tickvals=[0, 25, 50, 75, 100], showgrid=False))
     st.plotly_chart(fig, config={"displayModeBar": False})
 
 

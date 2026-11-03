@@ -6,7 +6,6 @@ import streamlit as st
 
 from .client import RainViewerClient, WeatherClient
 from .config import API_KEY
-from .display import METRES_PER_SECOND_TO_KMH
 from .maps import RADAR_BOOST, TILE_ZOOM, boost_opacity, has_radar_coverage, image_to_data_uri, radar_over_coverage, stitch_tiles, tile_grid, wind_grid_points
 from .storage import append_reading
 
@@ -37,7 +36,7 @@ def fetch_forecast(latitude, longitude):
 @st.cache_data(ttl=TEN_MINUTES, show_spinner=False)
 def fetch_wind_point(latitude, longitude):
     reading = WeatherClient(API_KEY).current({"location": "Wind grid point", "latitude": latitude, "longitude": longitude})
-    return {"latitude": latitude, "longitude": longitude, "speed_kmh": reading.wind_speed * METRES_PER_SECOND_TO_KMH, "degrees": reading.wind_deg}
+    return {"latitude": latitude, "longitude": longitude, "speed_kmh": reading.wind_kmh, "degrees": reading.wind_deg}
 
 
 @st.cache_data(ttl=FIVE_MINUTES, show_spinner=False)

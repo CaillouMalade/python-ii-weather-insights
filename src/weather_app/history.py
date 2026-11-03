@@ -5,7 +5,8 @@ Each function takes a DataFrame and returns a new one, or returns a sentence for
 
 import pandas as pd
 
-from .display import METRES_PER_SECOND_TO_KMH, compass_direction
+from .display import compass_direction
+from .models import METRES_PER_SECOND_TO_KMH
 
 # Readings are 30 minutes apart, so more than this between two means the collector missed some.
 GAP_HOURS = 2

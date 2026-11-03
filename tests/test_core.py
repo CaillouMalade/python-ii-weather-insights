@@ -42,8 +42,8 @@ def make_reading(location="Spa-Francorchamps", temperature=20.0, feels_like=19.0
 # Reading class
 
 
-def test_feels_like_delta_property():
-    assert make_reading(temperature=20.0, feels_like=18.5).feels_like_delta == -1.5
+def test_wind_kmh_property():
+    assert make_reading().wind_kmh == 36.0
 
 
 def test_sorted_orders_readings_by_temperature():

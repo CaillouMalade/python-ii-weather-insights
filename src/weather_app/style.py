@@ -48,7 +48,6 @@ CSS = """
 .city-name { font-weight: 600; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .city-temp { font-size: 1.7rem; font-weight: 300; text-align: right; }
 .city-small { font-size: 0.76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.city-small.city-note { white-space: normal; }
 [class*="st-key-city-"] [class*="st-key-open-"] { position: absolute; inset: 0; z-index: 1; }
 [class*="st-key-open-"] button { width: 100%; height: 100%; opacity: 0; }
 .credit { font-size: 0.7rem; opacity: 0.5; text-align: center; }
