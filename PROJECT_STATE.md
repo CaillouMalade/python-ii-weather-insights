@@ -206,3 +206,19 @@ Verified without a real key or live OpenWeatherMap call:
 Not verified yet: the real API's condition codes and real phones.
 
 `data/weather_log.csv` (real, uncommitted) and the git-ignored `data/sessions.csv` come from the orchestrator's live checks and were left as they were. The README screenshots still show an older design.
+
+## 3 November 2026 — polish round (branch racetrack-mvp-build, not merged)
+
+Built on `40d3454`.
+- **Stuck readings:** History drops them (3 or more in a row with the same temperature, wind speed and direction keep only the first), so 86 of 2,971 readings leave the analysis. `data/current_weather.csv` is unchanged.
+- **Thin days:** days with fewer than 12 hours are hidden.
+- **Wind:** a 3×3 field of large arrows.
+- **Temperature:** the scale now has a stop every 5° from -5° to 30°.
+- **Screenshots:** the README shows current screenshots from a fake-data run.
+- **Size:** app code is 2,111 lines.
+
+Verified without a real key or live OpenWeatherMap call: 124 tests pass; real Chrome at a 1280 px window and 390 px emulation, cold and warm cases.
+
+Not verified yet: real API data and real phones.
+
+`data/weather_log.csv` (real, uncommitted) and the git-ignored `data/sessions.csv` come from the orchestrator's live checks and were left as they were.

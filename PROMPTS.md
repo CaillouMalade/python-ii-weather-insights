@@ -515,3 +515,48 @@ What makes up the 34 after:
 ### Be ready to explain: new forms not evidenced in class material
 
 The `:02X` hex format; chained assignment (`low = high = ...`); `base64.b64encode` for SVG data URIs; `fig.add_layout_image` with `xref="x"` and `yref="paper"`; `fig.add_shape(type="rect", yref="paper")`; `st.selectbox(index=..., format_func=...)` over dates; `pd.isna` on a single value; CSS grid columns for the History rows.
+
+## Polish round — 3 November 2026
+
+**Asked:** Arthur approved the colour and history round. The orchestrator relayed five polish items to Claude Code (Opus 5.5), keeping the design direction and method:
+1. Filter the provider's stuck readings in the analysis only (a run of 3 or more with identical temperature, wind speed and direction keeps its first reading), with known-answer tests.
+2. Fewer, larger wind arrows: a 3×3 field, keeping the interpolation.
+3. A temperature scale that still shows a cold week: absolute, with clearer steps between -5° and 30°, checked for contrast, at Le Mans and in a warm case.
+4. Hide History days with too few hours to give a real range, with the threshold as a tested constant.
+5. Replace the README screenshots with current ones from the fake-server run at 1280 px.
+
+**Got:**
+- **Stuck readings:** `drop_stuck` and `STUCK_RUN = 3` in `history.py`, used by the History view only. It walks each location's readings in time order, counts runs of identical (location, temperature, wind speed, wind direction), and keeps the first reading of any run of 3 or more.
+- **Thin days:** `shown_days` and `SHOWN_DAY_HOURS = 12` in `history.py`.
+- **Wind:** `WIND_FIELD_SIZE = 3` and 5 px arrows in `maps.py`.
+- **Temperature:** eight `TEMPERATURE_STOPS` in `display.py`, one every 5° from -5° (periwinkle) through sky, light cyan, blue-grey and sand to orange at 30°.
+- **Screenshots:** three new files in `docs/screenshots/` (today, maps, history); the three older track-map images were removed.
+- **Tests:** 124 in all, with new known-answer tests for:
+  - a run of 3 dropped to 1;
+  - a repeat of 2 kept;
+  - a run that needs the same wind too;
+  - other locations unaffected;
+  - the raw history untouched;
+  - the hidden-day threshold;
+  - the new colour stops, a cold week's range, and contrast on graphite for every degree from -5° to 30°;
+  - the 3×3 field.
+
+**Checked:**
+- `uv run pytest` passes with no key.
+- **The filter on the real snapshot:** 86 of 2,971 readings drop (Le Mans Bugatti 38, Le Mans La Sarthe 28, Magny-Cours 8, Nürburgring GP 8, a few elsewhere), and `data/current_weather.csv` is unchanged.
+- **Real Chrome against the throwaway fake server and the real RainViewer service:**
+  - a 1280 px real window: Spa with a session block, Le Mans (cool) and Jerez (warm, made 14° warmer in the fake server for this check), and History at Le Mans;
+  - 390 px emulation: Le Mans maps and History, with no sideways scroll.
+- **Contrast on the surface:** temperature colours 6.4–11.4:1.
+- **Not checked by the agent:** real data from the API, and real phones.
+
+**Kept / changed / rejected:**
+- **Le Mans History now shows Fri 30 Oct to Mon 2 Nov.** The 1-hour and 2-hour part-days at either end are hidden. Fri 30 and Mon 2 are muted, because dropping the stuck night readings leaves them under 20 hours.
+- **What the rule also catches:** it removes repeats at Magny-Cours and the Nürburgring GP too (8 each): 3 or more identical readings in a row there as well. They are dropped by the same rule; Arthur may want to look at those.
+- **What is kept:** a single frozen reading (the first of a run) is kept, as the rule asks.
+- **Contrast pick:** the 30° stop was chosen as a deep orange that clears the "no red" check, and stays apart from the rain red.
+- **Screenshot honesty:** the README notes that the screenshots come from a test run with invented forecast data and the real radar.
+
+### Be ready to explain: new forms not evidenced in class material
+
+`zip` over four columns in `drop_stuck`; list repetition (`[False] * (length - 1)`); `Page.captureScreenshot` with a clip, used only by the agent's checking script, not the app.
