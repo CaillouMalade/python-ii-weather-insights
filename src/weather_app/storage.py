@@ -1,4 +1,4 @@
-"""Files: the circuit list, the track outlines, the collected history, and the app's own weather log."""
+"""Files: the circuit list, the track outlines, the collected history, my sessions, and the app's own weather log."""
 
 import csv
 import json
@@ -17,6 +17,9 @@ TRACKS_DIR = DATA_DIR / "tracks"
 HISTORY_PATH = DATA_DIR / "current_weather.csv"
 # Every reading the app itself fetches.
 LOG_PATH = DATA_DIR / "weather_log.csv"
+# The sessions added in the sidebar, for every track. Git ignores it: it is each person's own.
+SESSIONS_PATH = DATA_DIR / "sessions.csv"
+SESSION_COLUMNS = ["track", "name", "day", "start", "end"]
 
 LOG_COLUMNS = ["timestamp_utc"] + READING_COLUMNS
 
@@ -68,9 +71,8 @@ def load_circuits(path=CIRCUITS_PATH):
                 "longitude": float(row["longitude"]),
                 "timezone": row["timezone"],
                 "length_km": float(row["length_km"]),
-                # A blank cell is NaN: that circuit has no outline, or needs no extra credit.
+                # A blank cell is NaN: that circuit has no outline.
                 "track_file": "" if pd.isna(row["track_file"]) else row["track_file"],
-                "track_credit": "" if pd.isna(row["track_credit"]) else row["track_credit"],
             }
         )
     return circuits
@@ -105,3 +107,17 @@ def load_history(path=HISTORY_PATH):
         return pd.read_csv(path, encoding="utf-8")
     except FileNotFoundError:
         return pd.DataFrame()
+
+
+def load_sessions(path=SESSIONS_PATH):
+    """Return every saved session as a list of dictionaries, or an empty list if there are none yet."""
+    if _read_header(path) == "":
+        return []
+    # dtype=str keeps "09:00" and "2026-11-06" as text.
+    return pd.read_csv(path, encoding="utf-8", dtype=str, keep_default_na=False).to_dict("records")
+
+
+def save_sessions(sessions, path=SESSIONS_PATH):
+    """Write every session. An empty list still writes the header, so a removal sticks."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(sessions, columns=SESSION_COLUMNS).to_csv(path, index=False, encoding="utf-8")

@@ -46,39 +46,35 @@ def test_today_high_low_falls_back_when_nothing_is_left_today():
     assert today_high_low(windows, "2026-01-06", 7, 3) == (7, 3)
 
 
-def test_dry_until_then_rain_likely_for_six_hours():
+def test_dry_until_then_rain_until():
     windows = make_windows([0, 0, 0.8, 0.9, 0.2, 0])
     # The third window runs from 06:00 to 09:00 and the fourth ends at 12:00.
-    assert rain_timing(windows, MONDAY) == "Dry until Mon 06:00, then rain likely for about 6 hours, until Mon 12:00."
+    assert rain_timing(windows, MONDAY) == "Dry until Mon 06:00, then rain until Mon 12:00"
 
 
-def test_rain_unlikely_when_earlier_windows_have_a_little_rain():
+def test_mostly_dry_when_earlier_windows_have_a_little_rain():
     windows = make_windows([0.3, 0.6, 0], [0.2, 1.0, 0])
-    assert rain_timing(windows, MONDAY) == "Rain unlikely until Mon 03:00, then rain likely for about 3 hours, until Mon 06:00."
+    assert rain_timing(windows, MONDAY) == "Mostly dry until Mon 03:00, then rain until Mon 06:00"
 
 
-def test_rain_likely_now_when_the_current_window_is_wet():
+def test_rain_likely_now_until_it_stops():
     windows = make_windows([0.7, 0.7, 0.1])
-    assert rain_timing(windows, MONDAY + HOUR) == "Rain likely now, for about 6 hours, until Mon 06:00."
+    assert rain_timing(windows, MONDAY + HOUR) == "Rain likely until Mon 06:00"
 
 
-def test_rain_to_the_end_of_the_forecast_says_at_least():
-    windows = make_windows([0, 0.5, 0.5])
-    assert rain_timing(windows, MONDAY) == "Dry until Mon 03:00, then rain likely for at least 6 hours, to the end of the forecast."
+def test_rain_to_the_end_of_the_forecast():
+    assert rain_timing(make_windows([0, 0.5, 0.5]), MONDAY) == "Dry until Mon 03:00, then rain"
+    assert rain_timing(make_windows([0.6, 0.5, 0.5]), MONDAY + HOUR) == "Rain likely all week"
 
 
-def test_no_rain_likely_names_the_highest_chance():
-    windows = make_windows([0.1, 0.3, 0.3, 0])
-    assert rain_timing(windows, MONDAY) == "No rain likely before Mon 12:00, the end of the forecast. Highest chance 30 %, Mon 03:00–06:00."
-
-
-def test_no_rain_at_all():
-    assert rain_timing(make_windows([0, 0]), MONDAY) == "No rain likely before Mon 06:00, the end of the forecast."
+def test_a_dry_forecast_is_one_short_line_even_with_small_chances():
+    assert rain_timing(make_windows([0.1, 0.3, 0.3, 0]), MONDAY) == "Dry all week"
+    assert rain_timing(make_windows([0, 0]), MONDAY) == "Dry all week"
 
 
 def test_windows_already_over_are_ignored():
     windows = make_windows([0.9, 0, 0])
-    assert rain_timing(windows, MONDAY + 3 * HOUR) == "No rain likely before Mon 09:00, the end of the forecast."
+    assert rain_timing(windows, MONDAY + 3 * HOUR) == "Dry all week"
 
 
 # Status lights: now, the next 3 hours, later today. Windows run 00-03, 03-06 ... on Monday.
@@ -125,7 +121,7 @@ def test_later_today_is_unlit_late_in_the_evening():
 
 def test_lights_use_the_same_threshold_as_the_sentence():
     assert status_lights(make_windows([0.5, 0.49, 0.49]), MONDAY + HOUR, "2026-01-05") == ["rain", "rain", "dry"]
-    assert rain_timing(make_windows([0.5, 0.49, 0.49]), MONDAY + HOUR).startswith("Rain likely now")
+    assert rain_timing(make_windows([0.5, 0.49, 0.49]), MONDAY + HOUR).startswith("Rain likely")
 
 
 def test_a_dry_forecast_lights_all_green():

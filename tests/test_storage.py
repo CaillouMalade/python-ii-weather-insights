@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from weather_app.models import WeatherReading
-from weather_app.storage import LOG_COLUMNS, append_reading, load_circuits, load_history, load_track
+from weather_app.storage import LOG_COLUMNS, SESSION_COLUMNS, append_reading, load_circuits, load_history, load_sessions, load_track, save_sessions
 
 
 def test_append_writes_header_once():
@@ -54,7 +54,6 @@ def test_circuits_are_location_dictionaries():
         "timezone": "Europe/Brussels",
         "length_km": 7.004,
         "track_file": "be-1925.geojson",
-        "track_credit": "f1-circuits (MIT)",
     }
 
 
@@ -94,4 +93,37 @@ def test_real_outlines_one_f1_line_or_several_openstreetmap_ways():
         by_id[circuit["id"]] = circuit
     assert len(load_track(by_id["spa"]["track_file"])) == 1
     assert len(load_track(by_id["nordschleife"]["track_file"])) == 53
-    assert by_id["nordschleife"]["track_credit"] == ""
+
+
+FP1 = {"track": "spa", "name": "FP1", "day": "2026-01-09", "start": "09:00", "end": "10:00"}
+RACE = {"track": "spa", "name": "Race", "day": "2026-01-11", "start": "14:00", "end": "16:00"}
+
+
+def test_sessions_round_trip_as_text():
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "sessions.csv"
+        assert load_sessions(path) == []
+        save_sessions([FP1, RACE], path)
+        assert load_sessions(path) == [FP1, RACE]
+        assert path.read_text(encoding="utf-8").splitlines()[0] == ",".join(SESSION_COLUMNS)
+
+
+def test_editing_a_session_updates_its_row_without_duplicating_it():
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "sessions.csv"
+        save_sessions([FP1, RACE], path)
+        sessions = load_sessions(path)
+        sessions[0] = dict(FP1, name="FP1 long run", start="09:30", end="10:30")
+        save_sessions(sessions, path)
+        lines = path.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 3
+        assert lines[1] == "spa,FP1 long run,2026-01-09,09:30,10:30"
+        assert load_sessions(path)[1] == RACE
+
+
+def test_removing_the_last_session_sticks():
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "sessions.csv"
+        save_sessions([FP1], path)
+        save_sessions([], path)
+        assert load_sessions(path) == []

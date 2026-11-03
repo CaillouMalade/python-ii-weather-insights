@@ -8,42 +8,50 @@ import traceback
 import pytest
 from PIL import Image
 
-from weather_app.cards import circuit_card, header, light, radar_text, status_strip, wind_legend
+from weather_app.cards import light, now_group, radar_problem, session_row
 from weather_app.client import APIClient, RainViewerClient, WeatherClient, validate_location
 from weather_app.display import compass_direction, format_local_time, high_low_text
 from weather_app.maps import (
+    FRAME_MARGIN,
+    FRAME_WIDTH,
+    MAP_HEIGHT,
     RADAR_HALF_SIZE,
     RADAR_UPSCALE,
     WIND_BANDS,
+    WIND_FIELD_SIZE,
     boost_opacity,
+    circuit_bounds,
     enlarge,
+    grid_vectors,
     has_radar_coverage,
     image_to_data_uri,
+    interpolate_wind,
     lat_lon_to_tile,
+    outline_layers,
     radar_area,
     radar_figure,
     radar_over_coverage,
     stitch_tiles,
     tile_to_lat_lon,
-    wind_arrow,
-    wind_arrow_lines,
-    wind_band,
-    wind_figure,
-    wind_grid_points,
-    wind_label,
-    zoom_for_length,
     track_bounds,
     track_layer,
     track_view,
-    FRAME_MARGIN,
-    FRAME_WIDTH,
-    MAP_HEIGHT,
+    vector_to_wind,
+    wind_arrow,
+    wind_arrow_lines,
+    wind_band,
+    wind_field,
+    wind_figure,
+    wind_grid_bounds,
+    wind_grid_points,
+    wind_label,
+    wind_vector,
 )
 from weather_app.storage import load_circuits, load_track
 from weather_app.models import WeatherReading
 
 MONDAY = 1767571200  # 2026-01-05 00:00 UTC
-SPA = {"id": "spa", "location": "Spa-Francorchamps", "country": "Belgium", "latitude": 50.4372, "longitude": 5.9714, "timezone": "Europe/Brussels", "length_km": 7.004, "track_file": "be-1925.geojson", "track_credit": "f1-circuits (MIT)"}
+SPA = {"id": "spa", "location": "Spa-Francorchamps", "country": "Belgium", "latitude": 50.4372, "longitude": 5.9714, "timezone": "Europe/Brussels", "length_km": 7.004, "track_file": "be-1925.geojson"}
 
 
 def make_reading(location="Spa-Francorchamps", temperature=20.0, feels_like=19.0, conditions="clear sky", wind_deg=None, wind_gust=None):
@@ -204,79 +212,46 @@ def test_light_says_its_meaning_in_words():
     assert "no forecast" in light(None, "Later today")
 
 
-def test_status_strip_has_three_named_lights_the_sentence_and_the_radar():
-    html = status_strip(["rain", "dry", None], "Rain likely <now>.", "Radar 07:50")
-    assert html.count('class="light ') == 3
-    assert "Now: rain likely" in html
-    assert "Next 3 hours: dry" in html
-    assert "Later today: no forecast" in html
-    assert "Rain likely &lt;now&gt;." in html
-    assert "Radar 07:50" in html
-
-
-def test_radar_text_says_why_the_radar_cannot_be_trusted():
+def test_radar_problem_only_speaks_when_the_radar_cannot_be_trusted():
     good = {"time": MONDAY, "complete": True, "covered": True}
-    assert radar_text(good, 3600) == "Radar 01:00"
-    assert radar_text(dict(good, covered=False), 0) == "No radar here"
-    assert radar_text(dict(good, complete=False), 0) == "Radar incomplete"
-    assert radar_text(None, 0) == "Radar unavailable"
+    assert radar_problem(good) == ""
+    assert radar_problem(dict(good, covered=False)) == "No radar here"
+    assert radar_problem(dict(good, complete=False)) == "Radar incomplete"
+    assert radar_problem(None) == "Radar unavailable"
 
 
-def test_circuit_card_escapes_text_and_shows_its_light_and_wind():
-    circuit = dict(SPA, location="<b>Spa</b>")
-    html = circuit_card(circuit, make_reading(wind_deg=225), "rain", "", True, MONDAY)
-    assert "<b>Spa</b>" not in html
-    assert "&lt;b&gt;Spa&lt;/b&gt;" in html
-    assert "Next 3 hours: rain likely" in html
-    assert "36 km/h SW" in html
-    assert "selected" in html
-
-
-def test_circuit_card_without_a_reading_shows_the_escaped_note_and_an_unlit_light():
-    html = circuit_card(SPA, None, None, "Bad <key>", False, MONDAY)
-    assert "Bad &lt;key&gt;" in html
-    assert 'class="light off"' in html
-    assert "selected" not in html
-
-
-def test_header_shows_the_circuit_time_and_units_but_no_subtitle():
-    html = header(SPA, make_reading(wind_gust=12.5, wind_deg=270), 22.0, 14.0, 0.4, MONDAY)
-    assert "Spa-Francorchamps" in html
-    assert "Belgium" not in html
-    assert "7.0 km" not in html
+def test_now_group_folds_labels_into_values_and_has_three_named_lights():
+    html = now_group(make_reading(wind_gust=12.5, wind_deg=270, conditions="light <rain>"), 22.0, 14.0, MONDAY, ["rain", "dry", None], "Rain likely <now>", "")
+    assert "Light &lt;rain&gt;" in html
     assert "Mon 00:00" in html
-    assert "36 km/h W" in html
-    assert "Gusts 45 km/h" in html
-    assert "40 %" in html
-    assert "High 22°  Low 14°" in html
+    assert '<span class="fact">High 22°  Low 14°</span> · <span class="fact">Feels 19°</span>' in html
+    assert '<span class="fact">36 km/h W</span> · <span class="fact">Gusts 45</span> · <span class="fact">Humidity 50 %</span>' in html
+    assert html.count('class="light ') == 3
+    assert "Next 3 hours: dry" in html
+    assert "Rain likely &lt;now&gt;" in html
+    # No uppercase micro-labels and no radar stamp when the radar is fine.
+    assert "FEELS" not in html and "Radar" not in html
 
 
-def test_header_without_a_forecast_shows_a_dash_for_rain():
-    assert "–" in header(SPA, make_reading(), 20.0, 20.0, None, MONDAY)
+def test_now_group_without_a_range_starts_with_feels_and_shows_a_radar_problem():
+    html = now_group(make_reading(), 20.0, 20.0, MONDAY, [None, None, None], "Dry all week", "No radar here")
+    assert '<div><span class="fact">Feels 19°</span></div>' in html
+    assert "No radar here" in html
 
 
-def test_wind_legend_labels_each_band_once_with_the_unit_last():
-    html = wind_legend()
-    assert html.count("<span>") == len(WIND_BANDS)
-    assert "<span>0</span>" in html
-    assert "<span>40+ km/h</span>" in html
+def test_session_row_shows_light_name_times_and_chance():
+    session = {"track": "spa", "name": "<FP1>", "day": "2026-01-09", "start": "09:00", "end": "10:00"}
+    html = session_row(session, "rain", 0.7)
+    assert "&lt;FP1&gt;" in html and "<FP1>" not in html
+    assert "Fri 09:00–10:00" in html
+    assert "70 %" in html
+    assert "&lt;FP1&gt;: rain likely" in html
+    # Beyond the forecast: unlit, and no value at all.
+    beyond = session_row(session, None, None)
+    assert 'class="light off"' in beyond and "%" not in beyond
 
 
 # Map framing and maths
-
-
-def test_zoom_for_length_frames_the_circuit():
-    # 13 for a 4 km track, one level out each time the length doubles.
-    assert zoom_for_length(4) == 13
-    assert zoom_for_length(8) == 12
-    assert zoom_for_length(16) == 11
-    # Real circuits: Spa 7.004 km, Le Mans 13.626 km, the Nordschleife 20.832 km.
-    assert zoom_for_length(7.004) == 12.2
-    assert zoom_for_length(13.626) == 11.2
-    assert zoom_for_length(20.832) == 10.6
-    # Kept between 10 and 13.5.
-    assert zoom_for_length(1) == 13.5
-    assert zoom_for_length(100) == 10
 
 
 def test_lat_lon_to_tile_known_points():
@@ -377,14 +352,21 @@ def test_image_to_data_uri():
     assert image_to_data_uri(Image.new("RGBA", (1, 1))).startswith("data:image/png;base64,")
 
 
-def test_radar_figure_without_an_outline_marks_the_circuit_and_uses_its_length():
+def test_circuit_bounds_from_the_outline_or_from_the_length():
+    segments = [[[5.96, 50.43], [5.98, 50.44]]]
+    assert circuit_bounds(SPA, segments) == track_bounds(segments)
+    # Without an outline, a box reaching length / 6 km each way: 7.004 / 6 / 111.32 degrees north and south.
+    box = circuit_bounds({"latitude": 0.0, "longitude": 10.0, "length_km": 6.6792}, [])
+    assert box["north"] == pytest.approx(0.01)
+    assert box["west"] == pytest.approx(9.99)
+
+
+def test_radar_figure_without_an_outline_marks_the_circuit():
     area = radar_area(50.4372, 5.9714)
     fig = radar_figure("data:,", area["bounds"], dict(SPA, track_file=""), [])
     assert fig.layout.map.layers[0].source == "data:,"
     assert len(fig.layout.map.layers) == 1
-    assert fig.layout.map.center.lat == 50.4372
-    assert fig.layout.map.zoom == 12.2
-    assert list(fig.data[0].lat) == [50.4372]
+    assert list(fig.data[-1].lat) == [50.4372]
 
 
 def test_radar_figure_with_an_outline_frames_it_over_the_radar():
@@ -396,7 +378,6 @@ def test_radar_figure_with_an_outline_frames_it_over_the_radar():
     assert [layer.sourcetype for layer in layers] == ["image", "geojson", "geojson"]
     assert layers[1].line.width == 6 and layers[2].line.width == 3
     assert layers[2].color == "#E8EDEA"
-    assert layers[1].sourceattribution == "f1-circuits (MIT)"
     view = track_view(track_bounds(segments))
     assert fig.layout.map.zoom == view["zoom"]
     assert fig.layout.map.center.lat == pytest.approx(view["latitude"])
@@ -445,32 +426,87 @@ def test_every_real_track_fills_its_map():
         assert 0.78 <= filled <= 1 - 2 * FRAME_MARGIN, (circuit["id"], filled)
 
 
-def test_track_layer_keeps_every_segment_and_credits_only_when_asked():
+def test_track_layer_keeps_every_segment():
     segments = [[[0, 0], [1, 1]], [[2, 2], [3, 3]]]
-    layer = track_layer(segments, "#E8EDEA", 3, 1, "")
+    layer = track_layer(segments, "#E8EDEA", 3)
     assert layer["source"]["geometry"] == {"type": "MultiLineString", "coordinates": segments}
     assert layer["below"] == "traces"
-    assert "sourceattribution" not in layer
-    assert track_layer(segments, "#E8EDEA", 3, 1, "f1-circuits (MIT)")["sourceattribution"] == "f1-circuits (MIT)"
+    assert outline_layers([]) == []
+    assert len(outline_layers(segments)) == 2
 
 
-# Wind grid and arrows
+# Wind field
 
 
-def test_wind_grid_is_nine_points_centred_on_the_circuit_north_row_first():
-    points = wind_grid_points(0.0, 10.0)
+BOX = {"west": 0.0, "south": 0.0, "east": 1.0, "north": 1.0}
+
+
+def test_wind_grid_bounds_widen_the_outline_by_a_quarter_each_side():
+    assert wind_grid_bounds(BOX) == {"west": -0.25, "south": -0.25, "east": 1.25, "north": 1.25}
+
+
+def test_wind_grid_points_span_the_grid_bounds_north_row_first():
+    points = wind_grid_points(wind_grid_bounds(BOX))
     assert len(points) == 9
-    assert points[4] == (0.0, 10.0)
-    # At the equator one degree of longitude is as long as one of latitude.
-    assert points[0] == (0.15, 9.85)
-    assert points[8] == (-0.15, 10.15)
+    assert points[0] == (1.25, -0.25)
+    assert points[4] == (0.5, 0.5)
+    assert points[8] == (-0.25, 1.25)
 
 
-def test_wind_grid_widens_longitude_steps_away_from_the_equator():
-    points = wind_grid_points(60.0, 0.0)
-    # cos(60°) = 0.5, so 0.15 degrees of latitude match 0.3 degrees of longitude.
-    assert points[3] == (60.0, -0.3)
-    assert points[1] == (60.15, 0.0)
+def test_wind_grid_from_a_real_outline_surrounds_it():
+    circuit = load_circuits()[[circuit["id"] for circuit in load_circuits()].index("lemans")]
+    bounds = circuit_bounds(circuit, load_track(circuit["track_file"]))
+    points = wind_grid_points(wind_grid_bounds(bounds))
+    assert points[0][0] > bounds["north"] and points[8][0] < bounds["south"]
+    assert points[0][1] < bounds["west"] and points[8][1] > bounds["east"]
+
+
+def test_wind_vector_and_back():
+    # From the west at 10 km/h: it blows east.
+    east, north = wind_vector(10, 270)
+    assert east == pytest.approx(10) and north == pytest.approx(0, abs=1e-9)
+    assert vector_to_wind(east, north) == (pytest.approx(10), pytest.approx(270))
+    assert wind_vector(10, None) == (0.0, 0.0)
+    assert vector_to_wind(0.0, 0.0) == (0.0, None)
+
+
+def test_interpolation_is_exact_on_grid_points_and_bilinear_between():
+    grid = {"west": 0.0, "south": 0.0, "east": 2.0, "north": 2.0}
+    # East parts 0..8 across the grid, north parts all 1.
+    vectors = [(value, 1.0) for value in [0, 1, 2, 3, 4, 5, 6, 7, 8]]
+    assert interpolate_wind(vectors, grid, 2.0, 0.0) == (0, 1)
+    assert interpolate_wind(vectors, grid, 0.0, 2.0) == (8, 1)
+    # Halfway between the four north-west points (0, 1, 3, 4): their average, 2.
+    assert interpolate_wind(vectors, grid, 1.5, 0.5) == (pytest.approx(2.0), pytest.approx(1.0))
+    # A quarter of the way east from the centre point (4) towards the next (5).
+    assert interpolate_wind(vectors, grid, 1.0, 1.25)[0] == pytest.approx(4.25)
+
+
+def test_interpolating_two_directions_averages_their_vectors_not_their_angles():
+    grid = {"west": 0.0, "south": 0.0, "east": 2.0, "north": 2.0}
+    west_wind = {"speed_kmh": 10, "degrees": 270}
+    south_wind = {"speed_kmh": 10, "degrees": 180}
+    readings = [west_wind, west_wind, west_wind, south_wind, south_wind, south_wind, south_wind, south_wind, south_wind]
+    east, north = interpolate_wind(grid_vectors(readings), grid, 1.5, 1.0)
+    speed, degrees = vector_to_wind(east, north)
+    # Halfway between a west and a south wind is a south-west wind, slower than either.
+    assert degrees == pytest.approx(225)
+    assert speed == pytest.approx(10 / 2**0.5)
+
+
+def test_a_failed_grid_point_takes_the_average_of_the_others():
+    readings = [{"speed_kmh": 10, "degrees": 270}] * 8 + [None]
+    assert grid_vectors(readings)[8] == (pytest.approx(10), pytest.approx(0, abs=1e-9))
+
+
+def test_wind_field_is_an_even_five_by_five_over_the_framed_area():
+    readings = [{"speed_kmh": 20, "degrees": 0}] * 9
+    field = wind_field(readings, wind_grid_bounds(BOX), BOX)
+    assert len(field) == WIND_FIELD_SIZE * WIND_FIELD_SIZE
+    assert field[0]["latitude"] == pytest.approx(0.9) and field[0]["longitude"] == pytest.approx(0.1)
+    assert field[24]["latitude"] == pytest.approx(0.1) and field[24]["longitude"] == pytest.approx(0.9)
+    # A uniform wind stays the same everywhere.
+    assert field[12]["speed_kmh"] == pytest.approx(20) and field[12]["degrees"] == pytest.approx(0)
 
 
 def test_wind_band_boundaries():
@@ -481,28 +517,15 @@ def test_wind_band_boundaries():
     assert wind_band(120) == len(WIND_BANDS) - 1
 
 
-def test_wind_scale_runs_from_green_grey_to_the_red_flag():
-    assert WIND_BANDS[-1][1] == "#E5484D"
-
-
 def test_wind_arrow_points_where_the_wind_blows_to():
     # Wind from the north blows south: the tip is south of the middle and the tail north.
-    # Arrows are half a grid step long, so the tip is a quarter step from the middle.
-    latitudes, longitudes = wind_arrow(0.0, 0.0, 0)
-    assert latitudes[1] == pytest.approx(-0.0375)
-    assert latitudes[0] == pytest.approx(0.0375)
+    latitudes, longitudes = wind_arrow(0.0, 0.0, 0, 0.1)
+    assert latitudes[1] == pytest.approx(-0.05)
+    assert latitudes[0] == pytest.approx(0.05)
     assert longitudes[1] == pytest.approx(0.0)
     # Wind from the west blows east.
-    _, longitudes = wind_arrow(0.0, 0.0, 270)
-    assert longitudes[1] == pytest.approx(0.0375)
-
-
-def test_wind_arrow_breaks_the_line_between_shaft_and_head():
-    latitudes, longitudes = wind_arrow(45.0, 7.0, 90)
-    assert len(latitudes) == len(longitudes) == 8
-    assert latitudes[2] is None and latitudes[7] is None
-    # Both sides of the head end at the tip.
-    assert latitudes[4] == latitudes[1] and latitudes[6] == latitudes[1]
+    _, longitudes = wind_arrow(0.0, 0.0, 270, 0.1)
+    assert longitudes[1] == pytest.approx(0.05)
 
 
 def test_wind_arrow_lines_group_by_band_and_skip_points_without_direction():
@@ -512,31 +535,27 @@ def test_wind_arrow_lines_group_by_band_and_skip_points_without_direction():
         {"latitude": 0.4, "longitude": 0.0, "speed_kmh": 45, "degrees": 180},
         {"latitude": 0.6, "longitude": 0.0, "speed_kmh": 25, "degrees": None},
     ]
-    lines = wind_arrow_lines(points)
+    lines = wind_arrow_lines(points, 0.05)
     assert [line["color"] for line in lines] == [WIND_BANDS[0][1], WIND_BANDS[4][1]]
     assert len(lines[0]["latitudes"]) == 16
     assert len(lines[1]["latitudes"]) == 8
 
 
-def test_wind_label_and_figure():
-    points = [{"latitude": 0.0, "longitude": 0.0, "speed_kmh": 23.4, "degrees": 225}, {"latitude": 0.2, "longitude": 0.0, "speed_kmh": 3, "degrees": None}]
-    assert wind_label(points[0]) == "23 km/h SW"
-    assert wind_label(points[1]) == "3 km/h"
-    circuit = {"latitude": 0.0, "longitude": 0.0, "track_credit": ""}
-    fig = wind_figure(points, circuit, [])
-    # One line for the one band with an arrow, the hover points, and the circuit dot.
-    assert len(fig.data) == 3
-    assert list(fig.data[1].hovertext) == ["23 km/h SW", "3 km/h"]
-    assert len(fig.layout.map.layers) == 0
+def test_wind_label():
+    assert wind_label({"speed_kmh": 23.4, "degrees": 225}) == "23 km/h SW"
+    assert wind_label({"speed_kmh": 3, "degrees": None}) == "3 km/h"
 
 
-def test_wind_figure_draws_the_outline_faintly_instead_of_the_dot():
-    points = [{"latitude": 0.0, "longitude": 0.0, "speed_kmh": 12, "degrees": 90}]
-    circuit = {"latitude": 0.0, "longitude": 0.0, "track_credit": "f1-circuits (MIT)"}
-    fig = wind_figure(points, circuit, [[[0, 0], [0.01, 0.01]]])
-    assert len(fig.data) == 2
-    layer = fig.layout.map.layers[0]
-    assert layer.opacity < 0.5 and layer.line.width < 3
-    assert layer.sourceattribution == "f1-circuits (MIT)"
-    # The wind map keeps its regional framing.
-    assert fig.layout.map.zoom == 8.3
+def test_wind_figure_is_framed_exactly_like_the_radar_with_the_full_outline():
+    segments = [[[5.96, 50.43], [5.98, 50.44]], [[5.98, 50.44], [5.97, 50.45]]]
+    grid = wind_grid_bounds(circuit_bounds(SPA, segments))
+    field = wind_field([{"speed_kmh": 12, "degrees": 90}] * 9, grid, circuit_bounds(SPA, segments))
+    wind = wind_figure(field, SPA, segments)
+    radar = radar_figure("data:,", radar_area(50.4372, 5.9714)["bounds"], SPA, segments)
+    assert wind.layout.map.zoom == radar.layout.map.zoom
+    assert wind.layout.map.center.lat == radar.layout.map.center.lat
+    # The same full-strength outline as the radar, not a faint one.
+    assert [layer.line.width for layer in wind.layout.map.layers] == [6, 3]
+    # One arrow line for the one speed band, then the 25 hover points.
+    assert len(wind.data) == 2
+    assert len(wind.data[1].hovertext) == 25

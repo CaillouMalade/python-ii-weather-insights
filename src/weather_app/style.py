@@ -1,7 +1,8 @@
 """The app's one CSS block. No JavaScript. Streamlit adds a class st-key-NAME to st.container(key=NAME).
 
-The look is a pit wall's timing screen: flat graphite, green for dry and the selected item,
+The look is a pit wall's timing screen: flat graphite, green for dry and the selection,
 red only for rain and failures. The theme in .streamlit/config.toml uses the same colours.
+Groups are separated by space and one surface each, not by borders and labels.
 """
 
 import streamlit as st
@@ -26,67 +27,51 @@ CSS = """
 }
 :focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 
-/* One surface style for the header and every panel */
-.header, [class*="st-key-panel"] { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
-.label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+/* One surface per group */
+[class*="st-key-panel"] { background: var(--surface); border-radius: 12px; padding: 16px 18px; }
 .muted { color: var(--muted); }
-.small { font-size: 0.82rem; }
-.high-low { white-space: pre; }
-.finding { font-size: 1rem; font-weight: 600; }
+.finding { font-size: 1rem; font-weight: 600; margin-top: 4px; }
+.credit { font-size: 0.68rem; color: var(--muted); text-align: center; margin-top: 8px; }
 
-/* Header: name, time and temperature on the left, key figures beside or below */
-.header { display: flex; flex-wrap: wrap; gap: 16px 40px; align-items: center; justify-content: space-between; }
-.header-main { flex: 1 1 240px; }
-.header-name { font-size: 1.8rem; font-weight: 600; line-height: 1.2; }
-.header-temp { font-size: 4.6rem; font-weight: 200; line-height: 1.1; margin-top: 4px; }
-.header-stats { flex: 2 1 320px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.stat-value { font-size: 1.45rem; font-weight: 300; line-height: 1.25; }
+/* Now: the big temperature with its facts close beside it, then the status lights below */
+.now { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; }
+.now-temp { font-size: 4.2rem; font-weight: 200; line-height: 1; }
+.now-facts { flex: 1 1 240px; line-height: 1.5; }
+.now-facts div:first-child { font-weight: 600; }
+.now-facts div + div { color: var(--muted); }
+.fact { white-space: pre; }
 
 /* Status lights: small filled circles with a faint glow, like track-status lights. No animation. */
 .light { display: inline-block; flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--border); }
 .light.dry { background: var(--green); box-shadow: 0 0 6px rgba(47, 210, 122, 0.55); }
 .light.rain { background: var(--red); box-shadow: 0 0 6px rgba(229, 72, 77, 0.55); }
-
-/* The track-status strip: the page's one bold element. It wraps on a phone. */
-.status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 14px 18px; border: 1px solid var(--border); border-radius: 12px; }
+.status { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 12px; }
 .lights { display: flex; gap: 8px; }
 .lights .light { width: 18px; height: 18px; }
-.status-text { flex: 1 1 260px; font-size: 1.05rem; font-weight: 600; }
+.status-text { font-size: 1.05rem; font-weight: 600; }
 
-/* Map attribution: still shown, as it must be, but as quiet as the rest */
-.maplibregl-ctrl.maplibregl-ctrl-attrib { background: rgba(14, 17, 16, 0.7); font-size: 0.65rem; }
+/* Map attribution: still shown on the map, as OpenStreetMap and CARTO require, but quiet */
+.maplibregl-ctrl.maplibregl-ctrl-attrib { background: rgba(14, 17, 16, 0.7); font-size: 0.62rem; }
 .maplibregl-ctrl-attrib a { color: var(--muted); }
 .maplibregl-ctrl-attrib-button { filter: invert(1) opacity(0.5); background-color: transparent; }
 
-/* Wind legend: one label at the start of each speed band */
-.legend-bar { height: 6px; border-radius: 3px; margin-top: 8px; }
-.legend-labels { display: flex; font-size: 0.72rem; margin-top: 3px; }
-.legend-labels span { flex: 1; }
-
-/* Sidebar circuit cards: an invisible button is stretched over the whole card */
-[class*="st-key-circuit-"] { position: relative; }
-[class*="st-key-circuit-"] [data-testid="stElementContainer"] { position: static; }
-.circuit { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; height: 64px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; }
-.circuit.selected { border-color: var(--green); }
-[class*="st-key-circuit-"]:has(button:focus-visible) .circuit { outline: 2px solid var(--green); outline-offset: 2px; }
-.card-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
-.card-row span { overflow: hidden; text-overflow: ellipsis; }
-.card-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 600; }
-.card-name span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-temp { font-size: 1.3rem; font-weight: 300; }
-.circuit .small.muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-[class*="st-key-circuit-"] [class*="st-key-open-"] { position: absolute; inset: 0; z-index: 1; }
+/* Session rows: an invisible button is stretched over the whole row, so it is tappable */
+[class*="st-key-session-"] { position: relative; }
+[class*="st-key-session-"] [data-testid="stElementContainer"] { position: static; }
+/* Two short lines, so a row always fits the sidebar: name and chance, then day and times */
+.session { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; background: var(--surface); line-height: 1.3; }
+.session-main { flex: 1 1 auto; min-width: 0; }
+.session-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-main .muted { font-size: 0.85rem; white-space: nowrap; }
+.session-value { flex: none; }
+[class*="st-key-session-"]:has(button:focus-visible) .session { outline: 2px solid var(--green); outline-offset: 2px; }
+[class*="st-key-session-"] [class*="st-key-open-"] { position: absolute; inset: 0; z-index: 1; }
 [class*="st-key-open-"] button { width: 100%; height: 100%; opacity: 0; }
-.credit { font-size: 0.68rem; color: var(--muted); text-align: center; }
-
-/* On a phone the sidebar starts closed, so a circuit picker appears in the page */
-.st-key-phone-circuit { display: none; }
-@media (max-width: 768px) { .st-key-phone-circuit { display: block; } }
 
 /* Narrow main column: the two maps stack */
 @container (max-width: 700px) {
-  .st-key-maps [data-testid="stHorizontalBlock"] { flex-direction: column; }
-  .st-key-maps [data-testid="stColumn"] { width: 100%; flex: 1 1 100%; }
+  .st-key-panel-maps [data-testid="stHorizontalBlock"] { flex-direction: column; }
+  .st-key-panel-maps [data-testid="stColumn"] { width: 100%; flex: 1 1 100%; }
 }
 </style>
 """

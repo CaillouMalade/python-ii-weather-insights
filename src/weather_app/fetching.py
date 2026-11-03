@@ -8,7 +8,7 @@ import streamlit as st
 from .client import RainViewerClient, WeatherClient
 from .config import API_KEY
 from .forecast import forecast_windows, upcoming
-from .maps import RADAR_BOOST, RADAR_ZOOM, boost_opacity, enlarge, has_radar_coverage, image_to_data_uri, radar_area, radar_over_coverage, stitch_tiles, wind_grid_points
+from .maps import RADAR_BOOST, RADAR_ZOOM, boost_opacity, enlarge, has_radar_coverage, image_to_data_uri, radar_area, radar_over_coverage, stitch_tiles
 from .storage import append_reading
 
 FIVE_MINUTES = 300
@@ -80,15 +80,16 @@ def load_circuit(circuit):
     return result
 
 
-def fetch_wind_grid(latitude, longitude):
-    """Wind at every grid point. A failed point is skipped, so the rest still show."""
-    points = []
-    for point_latitude, point_longitude in wind_grid_points(latitude, longitude):
+def fetch_wind_grid(points):
+    """Wind at each (latitude, longitude) point, in order. A failed point stays as None,
+    so the rest still show and the interpolation knows which corner is missing."""
+    readings = []
+    for latitude, longitude in points:
         try:
-            points.append(fetch_wind_point(point_latitude, point_longitude))
+            readings.append(fetch_wind_point(latitude, longitude))
         except ValueError:
-            continue
-    return points
+            readings.append(None)
+    return readings
 
 
 def collect_tiles(rows, fetch_one):

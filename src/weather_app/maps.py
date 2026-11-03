@@ -1,4 +1,4 @@
-"""The two maps: rain radar framed on the track outline, and wind arrows from a grid of points.
+"""The two maps, framed the same way on the track outline: rain radar, and a field of wind arrows.
 
 The server fetches everything. The browser only receives the finished radar image, as a
 data URI, and the wind figures, so no URL with the key ever reaches the page.
@@ -22,6 +22,7 @@ BACKGROUND_COLOR = "#0E1110"
 FRAME_WIDTH = 340
 FRAME_MARGIN = 0.08
 MAX_ZOOM = 16
+KM_PER_DEGREE = 111.32
 
 # Radar
 TILE_SIZE = 256
@@ -35,23 +36,16 @@ RADAR_BOOST = 2
 # How strongly areas without radar are shaded, out of 255.
 NO_COVERAGE_OPACITY = 90
 
-# Wind: a 3 by 3 grid, so 9 calls, 0.15 degrees of latitude (about 17 km) apart.
+# Wind: a 3 by 3 grid of real readings (9 calls) over the outline, widened by this share of
+# its size on every side, then a 5 by 5 field of arrows interpolated from them.
 WIND_GRID_SIZE = 3
-WIND_GRID_STEP = 0.15
-ARROW_LENGTH = WIND_GRID_STEP / 2
-WIND_MAP_ZOOM = 8.3
-# (lowest speed in km/h, colour), from muted green-grey to the red flag. The legend uses this list too.
+WIND_GRID_MARGIN = 0.25
+WIND_FIELD_SIZE = 5
+# (lowest speed in km/h, colour), from muted green-grey to the red flag.
 WIND_BANDS = [(0, "#7F9A8A"), (10, "#8E7F78"), (20, "#AD6966"), (30, "#C95A5B"), (40, "#E5484D")]
 
 
 # Framing
-
-
-def zoom_for_length(length_km):
-    """The map zoom that frames a circuit: 13 for a 4 km track, one level further out each time
-    the length doubles, kept between 10 and 13.5."""
-    zoom = 13 - math.log2(length_km / 4)
-    return round(max(10, min(13.5, zoom)), 1)
 
 
 def track_bounds(segments):
@@ -63,6 +57,23 @@ def track_bounds(segments):
             longitudes.append(point[0])
             latitudes.append(point[1])
     return {"west": min(longitudes), "south": min(latitudes), "east": max(longitudes), "north": max(latitudes)}
+
+
+def circuit_bounds(circuit, segments):
+    """The area both maps frame: the outline's edges, or without one, a box around the circuit.
+
+    A lap of L km spans roughly L / 3 km across, so the box reaches L / 6 km each way.
+    """
+    if len(segments) > 0:
+        return track_bounds(segments)
+    half = circuit["length_km"] / 6 / KM_PER_DEGREE
+    widen = 1 / math.cos(math.radians(circuit["latitude"]))
+    return {
+        "west": circuit["longitude"] - half * widen,
+        "south": circuit["latitude"] - half,
+        "east": circuit["longitude"] + half * widen,
+        "north": circuit["latitude"] + half,
+    }
 
 
 def track_view(bounds):
@@ -195,23 +206,107 @@ def image_to_data_uri(image):
     return f"data:image/png;base64,{encoded}"
 
 
-# Wind arrows
+# Wind field
 
 
-def wind_grid_points(latitude, longitude):
-    """A square grid of points centred on the circuit, north row first, as (latitude, longitude) pairs.
+def wind_grid_bounds(bounds):
+    """The framed bounds widened by WIND_GRID_MARGIN of their size on every side."""
+    across = (bounds["east"] - bounds["west"]) * WIND_GRID_MARGIN
+    down = (bounds["north"] - bounds["south"]) * WIND_GRID_MARGIN
+    return {"west": bounds["west"] - across, "south": bounds["south"] - down, "east": bounds["east"] + across, "north": bounds["north"] + down}
 
-    Longitude lines get closer towards the poles, so the longitude step is widened by
-    1 / cos(latitude) to keep the points about as far apart both ways. Rounding keeps
-    each point identical between reruns, so the cache finds it.
-    """
-    longitude_step = WIND_GRID_STEP / math.cos(math.radians(latitude))
-    middle = WIND_GRID_SIZE // 2
+
+def wind_grid_points(grid_bounds):
+    """The 3 by 3 points where wind is fetched, north row first, as (latitude, longitude) pairs.
+    Rounding keeps each point identical between reruns, so the cache finds it."""
+    last = WIND_GRID_SIZE - 1
     points = []
     for row in range(WIND_GRID_SIZE):
         for column in range(WIND_GRID_SIZE):
-            points.append((round(latitude + (middle - row) * WIND_GRID_STEP, 4), round(longitude + (column - middle) * longitude_step, 4)))
+            latitude = grid_bounds["north"] - (grid_bounds["north"] - grid_bounds["south"]) * row / last
+            longitude = grid_bounds["west"] + (grid_bounds["east"] - grid_bounds["west"]) * column / last
+            points.append((round(latitude, 4), round(longitude, 4)))
     return points
+
+
+def wind_vector(speed_kmh, from_degrees):
+    """The wind as (east, north) parts of the way it blows, in km/h.
+
+    Directions cannot be averaged as numbers (350° and 10° would give 180°), so the field
+    is interpolated on these two parts instead. No direction counts as no wind.
+    """
+    if from_degrees is None:
+        return 0.0, 0.0
+    to_radians = math.radians(from_degrees + 180)
+    return speed_kmh * math.sin(to_radians), speed_kmh * math.cos(to_radians)
+
+
+def vector_to_wind(east, north):
+    """Back from (east, north) parts to (speed in km/h, the direction the wind comes from)."""
+    speed = math.hypot(east, north)
+    if speed < 1e-9:
+        return 0.0, None
+    return speed, (math.degrees(math.atan2(east, north)) + 180) % 360
+
+
+def grid_vectors(readings):
+    """The 9 grid vectors in grid order. A failed point (None) takes the average of the others."""
+    known = []
+    for reading in readings:
+        if reading is not None:
+            known.append(wind_vector(reading["speed_kmh"], reading["degrees"]))
+    east_mean = sum([vector[0] for vector in known]) / len(known)
+    north_mean = sum([vector[1] for vector in known]) / len(known)
+    vectors = []
+    for reading in readings:
+        if reading is None:
+            vectors.append((east_mean, north_mean))
+        else:
+            vectors.append(wind_vector(reading["speed_kmh"], reading["degrees"]))
+    return vectors
+
+
+def interpolate_wind(vectors, grid_bounds, latitude, longitude):
+    """Bilinear interpolation of the 3 by 3 grid vectors at a place inside the grid.
+
+    The place's position is measured in grid steps from the north-west point (0 to 2 each
+    way). The four grid points around it are weighted by how close they are on each axis.
+    """
+    last = WIND_GRID_SIZE - 1
+    across = (longitude - grid_bounds["west"]) / (grid_bounds["east"] - grid_bounds["west"]) * last
+    down = (grid_bounds["north"] - latitude) / (grid_bounds["north"] - grid_bounds["south"]) * last
+    column = min(int(across), last - 1)
+    row = min(int(down), last - 1)
+    x = across - column
+    y = down - row
+    corners = [
+        (vectors[row * WIND_GRID_SIZE + column], (1 - x) * (1 - y)),
+        (vectors[row * WIND_GRID_SIZE + column + 1], x * (1 - y)),
+        (vectors[(row + 1) * WIND_GRID_SIZE + column], (1 - x) * y),
+        (vectors[(row + 1) * WIND_GRID_SIZE + column + 1], x * y),
+    ]
+    east = sum([vector[0] * weight for vector, weight in corners])
+    north = sum([vector[1] * weight for vector, weight in corners])
+    return east, north
+
+
+def wind_field(readings, grid_bounds, area):
+    """An even 5 by 5 field of arrows over the framed area, each at the centre of its cell.
+
+    readings holds the 9 grid readings in grid order, None where a call failed; the wider
+    grid only feeds the interpolation, so no arrow falls off the map. Each arrow is a
+    dictionary with latitude, longitude, speed_kmh and degrees.
+    """
+    vectors = grid_vectors(readings)
+    field = []
+    for row in range(WIND_FIELD_SIZE):
+        for column in range(WIND_FIELD_SIZE):
+            latitude = area["north"] - (area["north"] - area["south"]) * (row + 0.5) / WIND_FIELD_SIZE
+            longitude = area["west"] + (area["east"] - area["west"]) * (column + 0.5) / WIND_FIELD_SIZE
+            east, north = interpolate_wind(vectors, grid_bounds, latitude, longitude)
+            speed, degrees = vector_to_wind(east, north)
+            field.append({"latitude": latitude, "longitude": longitude, "speed_kmh": speed, "degrees": degrees})
+    return field
 
 
 def wind_band(speed_kmh):
@@ -223,16 +318,16 @@ def wind_band(speed_kmh):
     return band
 
 
-def wind_arrow(latitude, longitude, from_degrees):
+def wind_arrow(latitude, longitude, from_degrees, length):
     """One arrow centred on a place, as a list of latitudes and a list of longitudes.
 
     Wind direction says where the wind comes from (0 = from the north), so the arrow points
-    the opposite way. The line runs from tail to tip, then along the two sides of the head;
-    None lifts the pen between them.
+    the opposite way. length is in degrees of latitude. The line runs from tail to tip, then
+    along the two sides of the head; None lifts the pen between them.
     """
     to_radians = math.radians((from_degrees + 180) % 360)
     longitude_scale = 1 / math.cos(math.radians(latitude))
-    half = ARROW_LENGTH / 2
+    half = length / 2
     north = math.cos(to_radians) * half
     east = math.sin(to_radians) * half * longitude_scale
     tip_latitude = latitude + north
@@ -247,7 +342,7 @@ def wind_arrow(latitude, longitude, from_degrees):
     return latitudes + [None], longitudes + [None]
 
 
-def wind_arrow_lines(points):
+def wind_arrow_lines(points, length):
     """Join the arrows of each speed band into one line, so each band is one colour.
 
     points is a list of dictionaries with latitude, longitude, speed_kmh and degrees. A point
@@ -260,7 +355,7 @@ def wind_arrow_lines(points):
         for point in points:
             if point["degrees"] is None or wind_band(point["speed_kmh"]) != number:
                 continue
-            arrow_latitudes, arrow_longitudes = wind_arrow(point["latitude"], point["longitude"], point["degrees"])
+            arrow_latitudes, arrow_longitudes = wind_arrow(point["latitude"], point["longitude"], point["degrees"], length)
             latitudes = latitudes + arrow_latitudes
             longitudes = longitudes + arrow_longitudes
         if len(latitudes) > 0:
@@ -269,7 +364,7 @@ def wind_arrow_lines(points):
 
 
 def wind_label(point):
-    """Hover text for one grid point, such as 23 km/h SW."""
+    """Hover text for one arrow, such as 23 km/h SW."""
     label = f"{point['speed_kmh']:.0f} km/h"
     if point["degrees"] is not None:
         label = f"{label} {compass_direction(point['degrees'])}"
@@ -283,28 +378,34 @@ def circuit_dot(latitude, longitude):
     return go.Scattermap(lat=[latitude], lon=[longitude], mode="markers", marker=dict(size=10, color=TEXT_COLOR), hoverinfo="skip")
 
 
-def track_layer(segments, color, width, opacity, credit):
+def track_layer(segments, color, width):
     """One line layer drawn from the outline. Every segment stays separate, as in the file.
-    below="traces" keeps it under the arrows and dots; later layers sit above earlier ones."""
-    layer = dict(
+    below="traces" keeps it under the arrows; later layers sit above earlier ones."""
+    return dict(
         sourcetype="geojson",
         source={"type": "Feature", "properties": {}, "geometry": {"type": "MultiLineString", "coordinates": segments}},
         type="line",
         color=color,
-        opacity=opacity,
         line=dict(width=width),
         below="traces",
     )
-    # The map adds this to its small attribution text. OpenStreetMap is credited there already.
-    if credit != "":
-        layer["sourceattribution"] = credit
-    return layer
 
 
-def map_layout(fig, latitude, longitude, zoom, layers):
-    """The look both maps share: free dark basemap, no margins."""
+def outline_layers(segments):
+    """The outline as a dark casing under a crisp line, so it reads over rain and arrows alike."""
+    if len(segments) == 0:
+        return []
+    return [track_layer(segments, BACKGROUND_COLOR, 6), track_layer(segments, TEXT_COLOR, 3)]
+
+
+def map_layout(fig, circuit, segments, layers):
+    """The look and framing both maps share: dark basemap, no margins, the outline filling the map.
+    Without an outline, a dot marks the circuit."""
+    if len(segments) == 0:
+        fig.add_trace(circuit_dot(circuit["latitude"], circuit["longitude"]))
+    view = track_view(circuit_bounds(circuit, segments))
     fig.update_layout(
-        map=dict(style="carto-darkmatter", center=dict(lat=latitude, lon=longitude), zoom=zoom, layers=layers),
+        map=dict(style="carto-darkmatter", center=dict(lat=view["latitude"], lon=view["longitude"]), zoom=view["zoom"], layers=layers + outline_layers(segments)),
         margin=dict(l=0, r=0, t=0, b=0),
         height=MAP_HEIGHT,
         showlegend=False,
@@ -314,42 +415,27 @@ def map_layout(fig, latitude, longitude, zoom, layers):
 
 
 def radar_figure(image_uri, image_bounds, circuit, segments):
-    """The radar under the track outline, framed to fill the map.
-
-    The outline has a dark casing under a crisp line, so it reads over any rain colour.
-    Without an outline, a dot marks the circuit and the zoom comes from its length.
-    """
-    layers = [dict(sourcetype="image", source=image_uri, coordinates=image_bounds, opacity=1, below="traces")]
-    if len(segments) == 0:
-        fig = go.Figure(circuit_dot(circuit["latitude"], circuit["longitude"]))
-        return map_layout(fig, circuit["latitude"], circuit["longitude"], zoom_for_length(circuit["length_km"]), layers)
-
-    layers.append(track_layer(segments, BACKGROUND_COLOR, 6, 0.8, circuit["track_credit"]))
-    layers.append(track_layer(segments, TEXT_COLOR, 3, 1, ""))
-    view = track_view(track_bounds(segments))
+    """The radar under the track outline."""
     # A map needs at least one trace, even an empty one.
     fig = go.Figure(go.Scattermap(lat=[], lon=[]))
-    return map_layout(fig, view["latitude"], view["longitude"], view["zoom"], layers)
+    return map_layout(fig, circuit, segments, [dict(sourcetype="image", source=image_uri, coordinates=image_bounds, opacity=1, below="traces")])
 
 
-def wind_figure(points, circuit, segments):
-    """Arrows coloured by speed over a faint outline. Invisible markers give each point hover text."""
+def wind_figure(field, circuit, segments):
+    """The field of arrows over the outline, coloured by speed. Invisible markers give each arrow hover text."""
+    area = circuit_bounds(circuit, segments)
+    length = (area["north"] - area["south"]) / WIND_FIELD_SIZE * 0.7
     fig = go.Figure()
-    for line in wind_arrow_lines(points):
+    for line in wind_arrow_lines(field, length):
         fig.add_trace(go.Scattermap(lat=line["latitudes"], lon=line["longitudes"], mode="lines", line=dict(width=3, color=line["color"]), hoverinfo="skip"))
     fig.add_trace(
         go.Scattermap(
-            lat=[point["latitude"] for point in points],
-            lon=[point["longitude"] for point in points],
+            lat=[point["latitude"] for point in field],
+            lon=[point["longitude"] for point in field],
             mode="markers",
-            marker=dict(size=16, opacity=0),
-            hovertext=[wind_label(point) for point in points],
+            marker=dict(size=18, opacity=0),
+            hovertext=[wind_label(point) for point in field],
             hoverinfo="text",
         )
     )
-    layers = []
-    if len(segments) == 0:
-        fig.add_trace(circuit_dot(circuit["latitude"], circuit["longitude"]))
-    else:
-        layers.append(track_layer(segments, TEXT_COLOR, 1.5, 0.45, circuit["track_credit"]))
-    return map_layout(fig, circuit["latitude"], circuit["longitude"], WIND_MAP_ZOOM, layers)
+    return map_layout(fig, circuit, segments, [])

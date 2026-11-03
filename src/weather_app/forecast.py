@@ -94,39 +94,27 @@ def short_time(moment):
 
 
 def rain_timing(windows, now):
-    """One sentence on when rain is likely, from the windows that have not ended yet (at least one).
+    """One short line on when rain is likely, from the windows that have not ended yet (at least one).
 
     A window counts as wet when its chance of precipitation is at least RAIN_LIKELY.
-    "Dry until" is only said when no earlier window has any rain at all.
+    "Dry" is only said when no earlier window has any rain at all; otherwise "Mostly dry".
     """
     left = upcoming(windows, now)
     likely = (left["pop"] >= RAIN_LIKELY).to_list()
-    starts = left["start"].to_list()
-    ends = left["end"].to_list()
-
     if True not in likely:
-        sentence = f"No rain likely before {short_time(ends[-1])}, the end of the forecast."
-        highest = left["pop"].max()
-        if highest > 0:
-            top = left[left["pop"] == highest].head(1).to_dict("records")[0]
-            sentence = f"{sentence} Highest chance {highest * 100:.0f} %, {short_time(top['start'])}–{top['end'].strftime('%H:%M')}."
-        return sentence
+        return "Dry all week"
 
     first = likely.index(True)
     count = 0
     while first + count < len(likely) and likely[first + count]:
         count = count + 1
-
-    hours = count * STEP_HOURS
-    if first + count == len(likely):
-        duration = f"for at least {hours} hours, to the end of the forecast"
-    else:
-        duration = f"for about {hours} hours, until {short_time(ends[first + count - 1])}"
+    to_the_end = first + count == len(likely)
+    until = "" if to_the_end else f" until {short_time(left['end'].to_list()[first + count - 1])}"
 
     # The first window has started already when its start is before now.
     if first == 0 and left["dt"].to_list()[0] - STEP_SECONDS <= now:
-        return f"Rain likely now, {duration}."
+        return "Rain likely all week" if to_the_end else f"Rain likely{until}"
 
     earlier_rain = left["precipitation_mm"].to_list()[:first]
-    opening = "Dry" if sum(earlier_rain) == 0 else "Rain unlikely"
-    return f"{opening} until {short_time(starts[first])}, then rain likely {duration}."
+    opening = "Dry" if sum(earlier_rain) == 0 else "Mostly dry"
+    return f"{opening} until {short_time(left['start'].to_list()[first])}, then rain{until}"
