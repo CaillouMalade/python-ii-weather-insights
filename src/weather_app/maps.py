@@ -37,10 +37,10 @@ RADAR_BOOST = 2
 NO_COVERAGE_OPACITY = 90
 
 # Wind: a 3 by 3 grid of real readings (9 calls) over the outline, widened by this share of
-# its size on every side, then a 5 by 5 field of arrows interpolated from them.
+# its size on every side, then a 3 by 3 field of large arrows interpolated from them.
 WIND_GRID_SIZE = 3
 WIND_GRID_MARGIN = 0.25
-WIND_FIELD_SIZE = 5
+WIND_FIELD_SIZE = 3
 # (lowest speed in km/h, colour): one violet hue, dim when calm and brighter when stronger,
 # so it never reads as the green of dry, the red of rain or the temperature scale.
 WIND_BANDS = [(0, "#6A6488"), (10, "#7C73A6"), (20, "#9A8FD0"), (30, "#B8AEF0"), (40, "#DCD5FF")]
@@ -292,7 +292,7 @@ def interpolate_wind(vectors, grid_bounds, latitude, longitude):
 
 
 def wind_field(readings, grid_bounds, area):
-    """An even 5 by 5 field of arrows over the framed area, each at the centre of its cell.
+    """An even 3 by 3 field of arrows over the framed area, each at the centre of its cell.
 
     readings holds the 9 grid readings in grid order, None where a call failed; the wider
     grid only feeds the interpolation, so no arrow falls off the map. Each arrow is a
@@ -433,7 +433,7 @@ def wind_figure(field, circuit, segments):
     length = (area["north"] - area["south"]) / WIND_FIELD_SIZE * 0.7
     fig = go.Figure()
     for line in wind_arrow_lines(field, length):
-        fig.add_trace(go.Scattermap(lat=line["latitudes"], lon=line["longitudes"], mode="lines", line=dict(width=3, color=line["color"]), hoverinfo="skip"))
+        fig.add_trace(go.Scattermap(lat=line["latitudes"], lon=line["longitudes"], mode="lines", line=dict(width=5, color=line["color"]), hoverinfo="skip"))
     fig.add_trace(
         go.Scattermap(
             lat=[point["latitude"] for point in field],

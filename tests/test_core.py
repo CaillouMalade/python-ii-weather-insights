@@ -499,14 +499,15 @@ def test_a_failed_grid_point_takes_the_average_of_the_others():
     assert grid_vectors(readings)[8] == (pytest.approx(10), pytest.approx(0, abs=1e-9))
 
 
-def test_wind_field_is_an_even_five_by_five_over_the_framed_area():
+def test_wind_field_is_an_even_three_by_three_over_the_framed_area():
     readings = [{"speed_kmh": 20, "degrees": 0}] * 9
     field = wind_field(readings, wind_grid_bounds(BOX), BOX)
     assert len(field) == WIND_FIELD_SIZE * WIND_FIELD_SIZE
-    assert field[0]["latitude"] == pytest.approx(0.9) and field[0]["longitude"] == pytest.approx(0.1)
-    assert field[24]["latitude"] == pytest.approx(0.1) and field[24]["longitude"] == pytest.approx(0.9)
+    # Cell centres at a sixth, a half and five sixths of the area each way.
+    assert field[0]["latitude"] == pytest.approx(5 / 6) and field[0]["longitude"] == pytest.approx(1 / 6)
+    assert field[8]["latitude"] == pytest.approx(1 / 6) and field[8]["longitude"] == pytest.approx(5 / 6)
     # A uniform wind stays the same everywhere.
-    assert field[12]["speed_kmh"] == pytest.approx(20) and field[12]["degrees"] == pytest.approx(0)
+    assert field[4]["speed_kmh"] == pytest.approx(20) and field[4]["degrees"] == pytest.approx(0)
 
 
 def test_wind_band_boundaries():
@@ -556,9 +557,10 @@ def test_wind_figure_is_framed_exactly_like_the_radar_with_the_full_outline():
     assert wind.layout.map.center.lat == radar.layout.map.center.lat
     # The same full-strength outline as the radar, not a faint one.
     assert [layer.line.width for layer in wind.layout.map.layers] == [6, 3]
-    # One arrow line for the one speed band, then the 25 hover points.
+    # One arrow line for the one speed band, then the 9 hover points.
     assert len(wind.data) == 2
-    assert len(wind.data[1].hovertext) == 25
+    assert len(wind.data[1].hovertext) == 9
+    assert wind.data[0].line.width == 5
 
 
 # Colour that encodes data
@@ -566,13 +568,40 @@ def test_wind_figure_is_framed_exactly_like_the_radar_with_the_full_outline():
 
 def test_temperature_color_known_answers():
     from weather_app.display import temperature_color
-    assert temperature_color(-5) == "#6FA8DC"
-    assert temperature_color(0) == "#6FA8DC"
-    assert temperature_color(15) == "#C9C5B9"
-    # Halfway between the 10° and 15° stops: (159+201)/2, (183+197)/2, (201+185)/2.
-    assert temperature_color(12.5) == "#B4BEC1"
-    assert temperature_color(25) == "#F0A040"
-    assert temperature_color(40) == "#F0A040"
+    assert temperature_color(-10) == "#8A96F0"
+    assert temperature_color(-5) == "#8A96F0"
+    assert temperature_color(0) == "#6EB0E8"
+    # Halfway between the 0° and 5° stops: (110+120)/2, (176+200)/2, (232+214)/2.
+    assert temperature_color(2.5) == "#73BCDF"
+    assert temperature_color(15) == "#DAD0B0"
+    assert temperature_color(30) == "#EC8C3C"
+    assert temperature_color(40) == "#EC8C3C"
+
+
+def test_a_cold_week_still_shows_its_range():
+    # Le Mans this week, 2° to 13°: the two ends must look clearly different.
+    from weather_app.display import temperature_color
+    cold = temperature_color(2)
+    mild = temperature_color(13)
+    difference = 0
+    for start in [1, 3, 5]:
+        difference = difference + abs(int(cold[start:start + 2], 16) - int(mild[start:start + 2], 16))
+    assert difference > 120
+
+
+def test_every_temperature_colour_reads_on_graphite():
+    from weather_app.display import temperature_color
+
+    def luminance(color):
+        parts = []
+        for start in [1, 3, 5]:
+            value = int(color[start:start + 2], 16) / 255
+            parts.append(value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4)
+        return 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2]
+
+    for celsius in range(-5, 31):
+        contrast = (luminance(temperature_color(celsius)) + 0.05) / (luminance("#161A18") + 0.05)
+        assert contrast >= 4.5, celsius
 
 
 def test_temperature_scale_has_no_green_or_red():
@@ -617,7 +646,7 @@ def test_wind_colour_is_one_hue_getting_brighter():
 def test_now_group_colours_the_temperature_and_shows_a_glyph():
     reading = make_reading(temperature=25.0)
     html = now_group(reading, 26.0, 18.0, MONDAY, ["dry", "dry", "dry"], "Dry all week", "")
-    assert 'style="color:#F0A040"' in html
+    assert 'style="color:#F29648"' in html
     assert 'alt="Cloudy"' in html
 
 

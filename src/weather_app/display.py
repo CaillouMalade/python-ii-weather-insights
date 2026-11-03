@@ -26,10 +26,20 @@ def high_low_text(high, low):
     return f"High {round(high)}°  Low {round(low)}°"
 
 
-# Temperature colour: one cool-to-warm scale for every temperature on the page. It has no
-# green or red, which keep meaning dry and rain. (°C, red, green, blue); colours in between
-# are mixed in proportion, and the ends hold beyond 0° and 25°.
-TEMPERATURE_STOPS = [(0, 111, 168, 220), (10, 159, 183, 201), (15, 201, 197, 185), (20, 224, 184, 120), (25, 240, 160, 64)]
+# Temperature colour: one cool-to-warm scale for every temperature on the page, the same
+# meaning every week. A stop every 5° from -5° to 30°, so a cold week still shows its range.
+# It has no green or red, which keep meaning dry and rain. (°C, red, green, blue); colours
+# in between are mixed in proportion, and the ends hold beyond -5° and 30°.
+TEMPERATURE_STOPS = [
+    (-5, 138, 150, 240),
+    (0, 110, 176, 232),
+    (5, 120, 200, 214),
+    (10, 176, 196, 206),
+    (15, 218, 208, 176),
+    (20, 236, 184, 112),
+    (25, 242, 150, 72),
+    (30, 236, 140, 60),
+]
 RAIN_BAR_LIKELY = "#E5484D"
 RAIN_BAR_UNLIKELY = "rgba(138, 148, 143, 0.45)"
 
