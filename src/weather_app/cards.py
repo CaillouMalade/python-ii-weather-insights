@@ -47,11 +47,11 @@ def is_night(now, reading):
     return now < reading.sunrise or now >= reading.sunset
 
 
-def now_group(reading, high, low, now, states, sentence, problem):
+def now_group(reading, high, low, now, states, sentence, problem, theme):
     """Everything about now in one tight group: the temperature, the facts beside it, then the
     three status lights with the rain-timing line. Labels only where a value cannot say it alone."""
     lines = [
-        [icon_img(condition_kind(reading.weather_id, is_night(now, reading))) + " " + escape(reading.conditions.capitalize()), format_local_time(now, reading.timezone_offset or 0, "%a %H:%M")],
+        [icon_img(condition_kind(reading.weather_id, is_night(now, reading)), theme) + " " + escape(reading.conditions.capitalize()), format_local_time(now, reading.timezone_offset or 0, "%a %H:%M")],
         [high_low_text(high, low), f"Feels {round(reading.feels_like)}°"],
         [wind_text(reading), f"Humidity {reading.humidity} %"],
     ]
@@ -65,7 +65,7 @@ def now_group(reading, high, low, now, states, sentence, problem):
     problem_html = f'<span class="muted">{problem}</span>' if problem else ""
     return (
         '<div class="now">'
-        f'<div class="now-temp" style="color:{temperature_color(reading.temperature)}">{round(reading.temperature)}°</div>'
+        f'<div class="now-temp" style="color:{temperature_color(reading.temperature, theme)}">{round(reading.temperature)}°</div>'
         '<div class="now-facts">' + "".join([f"<div>{fact}</div>" for fact in facts]) + "</div>"
         f'<div class="status"><div class="lights">{lights}</div><div class="status-text">{escape(sentence)}</div>{problem_html}</div>'
         "</div>"
@@ -86,7 +86,7 @@ def session_row(session, state, chance):
     )
 
 
-def history_rows(rows):
+def history_rows(rows, theme):
     """The collected days as weather-app rows: day, rain, low, the low-to-high range on one shared
     scale coloured by temperature, high, then average wind with an arrow for its usual direction.
 
@@ -100,7 +100,7 @@ def history_rows(rows):
         width = max((row["high"] - row["low"]) / span * 100, 1)
         bar = (
             f'<div class="range"><div class="range-fill" style="left:{left:.1f}%;width:{width:.1f}%;'
-            f'background:linear-gradient(90deg, {temperature_color(row["low"])}, {temperature_color(row["high"])})"></div></div>'
+            f'background:linear-gradient(90deg, {temperature_color(row["low"], theme)}, {temperature_color(row["high"], theme)})"></div></div>'
         )
         if row["rain_hours"] > 0:
             rain = f'{light("rain", "Rain")}<span>{row["rain_hours"]} h</span>'
@@ -108,7 +108,7 @@ def history_rows(rows):
             rain = light("dry", "Dry")
         wind = f'{row["wind_kmh"]:.0f} km/h'
         if not pd.isna(row["direction"]):
-            wind = arrow_img(row["direction"], wind_color(row["wind_kmh"]), f"From the {compass_direction(row['direction'])}") + wind
+            wind = arrow_img(row["direction"], wind_color(row["wind_kmh"], theme), f"From the {compass_direction(row['direction'])}") + wind
         partial = "" if row["full"] else " partial"
         day = pd.to_datetime(row["day"])
         html = html + (

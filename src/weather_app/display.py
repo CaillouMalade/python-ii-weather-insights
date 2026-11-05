@@ -26,36 +26,21 @@ def high_low_text(high, low):
     return f"High {round(high)}°  Low {round(low)}°"
 
 
-# Temperature colour: one cool-to-warm scale for every temperature on the page, the same
-# meaning every week. A stop every 5° from -5° to 30°, so a cold week still shows its range.
-# It has no green or red, which keep meaning dry and rain. (°C, red, green, blue); colours
-# in between are mixed in proportion, and the ends hold beyond -5° and 30°.
-TEMPERATURE_STOPS = [
-    (-5, 138, 150, 240),
-    (0, 110, 176, 232),
-    (5, 120, 200, 214),
-    (10, 176, 196, 206),
-    (15, 218, 208, 176),
-    (20, 236, 184, 112),
-    (25, 242, 150, 72),
-    (30, 236, 140, 60),
-]
-RAIN_BAR_LIKELY = "#E5484D"
-RAIN_BAR_UNLIKELY = "rgba(138, 148, 143, 0.45)"
-
-
-def temperature_color(celsius):
-    """The colour of a temperature, as #RRGGBB, from TEMPERATURE_STOPS."""
-    if celsius <= TEMPERATURE_STOPS[0][0]:
-        low = high = TEMPERATURE_STOPS[0]
-    elif celsius >= TEMPERATURE_STOPS[-1][0]:
-        low = high = TEMPERATURE_STOPS[-1]
+def temperature_color(celsius, theme):
+    """The colour of a temperature, as #RRGGBB, from the theme's temperature_stops: one
+    cool-to-warm scale for every temperature on the page, the same meaning every week. Colours
+    between two stops are mixed in proportion, and the ends hold beyond the first and last stop."""
+    stops = theme["temperature_stops"]
+    if celsius <= stops[0][0]:
+        low = high = stops[0]
+    elif celsius >= stops[-1][0]:
+        low = high = stops[-1]
     else:
         number = 0
-        while TEMPERATURE_STOPS[number + 1][0] < celsius:
+        while stops[number + 1][0] < celsius:
             number = number + 1
-        low = TEMPERATURE_STOPS[number]
-        high = TEMPERATURE_STOPS[number + 1]
+        low = stops[number]
+        high = stops[number + 1]
     share = 0 if high[0] == low[0] else (celsius - low[0]) / (high[0] - low[0])
     parts = []
     for channel in [1, 2, 3]:
@@ -63,10 +48,10 @@ def temperature_color(celsius):
     return f"#{parts[0]:02X}{parts[1]:02X}{parts[2]:02X}"
 
 
-def rain_bar_color(chance, likely):
+def rain_bar_color(chance, likely, theme):
     """Red only when rain is likely (the status lights' rule); a quiet neutral otherwise,
     so a forecast that reads "Dry all week" never shows a red bar."""
-    return RAIN_BAR_LIKELY if chance >= likely else RAIN_BAR_UNLIKELY
+    return theme["red"] if chance >= likely else theme["rain_bar_unlikely"]
 
 
 def condition_kind(weather_id, night):

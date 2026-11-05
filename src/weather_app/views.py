@@ -17,15 +17,8 @@ from .icons import icon_uri
 from .maps import circuit_bounds, radar_figure, wind_field, wind_figure, wind_grid_bounds, wind_grid_points
 from .sessions import add_default_weekend, check_session, session_status, session_times
 from .storage import load_history, load_sessions, load_track, save_sessions
+from .theme import current_theme
 
-# The same tokens as style.py. Red only ever means rain; green marks the selection.
-TEXT = "#E8EDEA"
-MUTED = "#8A948F"
-BORDER = "#242A27"
-SURFACE = "#161A18"
-CLOUD_BAND = "rgba(138, 148, 143, 0.12)"
-SESSION_BLOCK = "rgba(47, 210, 122, 0.16)"
-SESSION_EDGE = "rgba(47, 210, 122, 0.6)"
 ONE_DAY_MS = 24 * 3600 * 1000
 # The day picker offers today and the next 13 days.
 PICKER_DAYS = 14
@@ -185,20 +178,20 @@ def show_sessions(loaded):
 # Charts
 
 
-def style_figure(fig, height):
+def style_figure(fig, height, theme):
     """The shared chart look: no gridlines, a faint baseline, day names on the time axis, no legend."""
     fig.update_layout(
-        template="plotly_dark",
+        template=theme["chart_template"],
         height=height,
         margin=dict(l=0, r=0, t=4, b=0),
         showlegend=False,
         hovermode="x unified",
-        font=dict(color=MUTED),
-        hoverlabel=dict(bgcolor=SURFACE, bordercolor=BORDER, font_color=TEXT),
+        font=dict(color=theme["muted"]),
+        hoverlabel=dict(bgcolor=theme["surface"], bordercolor=theme["border"], font_color=theme["text"]),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
     )
-    fig.update_xaxes(showgrid=False, zeroline=False, tickformat="%a", dtick=ONE_DAY_MS, ticklabelmode="period", hoverformat="%a %H:%M", showline=True, linecolor=BORDER)
+    fig.update_xaxes(showgrid=False, zeroline=False, tickformat="%a", dtick=ONE_DAY_MS, ticklabelmode="period", hoverformat="%a %H:%M", showline=True, linecolor=theme["border"])
     fig.update_yaxes(showgrid=False, zeroline=False, nticks=3)
 
 
@@ -207,10 +200,10 @@ def show_figure(fig):
     st.plotly_chart(fig, theme=None, config={"displayModeBar": False})
 
 
-def label_points(fig, rows, above):
+def label_points(fig, rows, above, theme):
     """Write each point's temperature next to it, such as 15°, above or below the line."""
     for point in rows.to_dict("records"):
-        fig.add_annotation(x=point["x"], y=point["y"], text=f"{round(point['y'])}°", showarrow=False, yshift=11 if above else -11, font=dict(color=TEXT, size=11), row=1, col=1)
+        fig.add_annotation(x=point["x"], y=point["y"], text=f"{round(point['y'])}°", showarrow=False, yshift=11 if above else -11, font=dict(color=theme["text"], size=11), row=1, col=1)
 
 
 def daily_high_low_points(times, temperatures):
@@ -222,18 +215,18 @@ def daily_high_low_points(times, temperatures):
     return highs, lows
 
 
-def add_temperature_line(fig, times, temperatures):
+def add_temperature_line(fig, times, temperatures, theme):
     """The temperature line, each short segment coloured by its temperature, so the line itself
     reads warm or cold. An invisible line on top carries the hover values."""
     times = list(times)
     temperatures = list(temperatures)
     for number in range(len(times) - 1):
         middle = (temperatures[number] + temperatures[number + 1]) / 2
-        fig.add_scatter(x=times[number:number + 2], y=temperatures[number:number + 2], mode="lines", line=dict(color=temperature_color(middle), width=2.5), hoverinfo="skip", row=1, col=1)
+        fig.add_scatter(x=times[number:number + 2], y=temperatures[number:number + 2], mode="lines", line=dict(color=temperature_color(middle, theme), width=2.5), hoverinfo="skip", row=1, col=1)
     fig.add_scatter(x=times, y=temperatures, mode="lines", line=dict(width=0), hovertemplate="%{y:.0f}°<extra></extra>", row=1, col=1)
 
 
-def add_day_icons(fig, windows):
+def add_day_icons(fig, windows, theme):
     """One condition glyph above each day, from the window closest to its midday. A day whose
     midday is not well inside the forecast (the rest of today, the last part-day) gets none,
     so no glyph is cut off at either end."""
@@ -244,37 +237,37 @@ def add_day_icons(fig, windows):
         if row["midday"] < first or row["midday"] > last:
             continue
         kind = condition_kind(row["weather_id"], False)
-        fig.add_layout_image(source=icon_uri(kind), xref="x", yref="paper", x=row["midday"], y=1.0, sizex=6 * 3600 * 1000, sizey=0.1, xanchor="center", yanchor="bottom", layer="above")
+        fig.add_layout_image(source=icon_uri(kind, theme), xref="x", yref="paper", x=row["midday"], y=1.0, sizex=6 * 3600 * 1000, sizey=0.1, xanchor="center", yanchor="bottom", layer="above")
 
 
-def forecast_figure(windows, session):
+def forecast_figure(windows, session, theme):
     """Temperature over a faint cloud band, and rain per 3-hour window below, on one time axis.
 
     Rain bars are red only when rain is likely (the status rule) and a quiet neutral otherwise.
     The selected session, if any, shows as one block across both charts.
     """
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.62, 0.38], vertical_spacing=0.08, specs=[[{"secondary_y": True}], [{}]])
-    fig.add_scatter(x=windows["end"], y=calm_clouds(windows), fill="tozeroy", mode="lines", line=dict(width=0, shape="spline", smoothing=1.3), fillcolor=CLOUD_BAND, hoverinfo="skip", row=1, col=1, secondary_y=True)
-    add_temperature_line(fig, windows["end"], windows["temperature"])
+    fig.add_scatter(x=windows["end"], y=calm_clouds(windows), fill="tozeroy", mode="lines", line=dict(width=0, shape="spline", smoothing=1.3), fillcolor=theme["cloud_band"], hoverinfo="skip", row=1, col=1, secondary_y=True)
+    add_temperature_line(fig, windows["end"], windows["temperature"], theme)
 
     highs, lows = daily_high_low_points(windows["end"], windows["temperature"])
-    label_points(fig, highs, True)
-    label_points(fig, lows, False)
-    add_day_icons(fig, windows)
+    label_points(fig, highs, True, theme)
+    label_points(fig, lows, False, theme)
+    add_day_icons(fig, windows, theme)
 
     middles = windows["start"] + pd.to_timedelta(STEP_HOURS / 2, unit="h")
-    colors = [rain_bar_color(pop, RAIN_LIKELY) for pop in windows["pop"]]
+    colors = [rain_bar_color(pop, RAIN_LIKELY, theme) for pop in windows["pop"]]
     chances = windows["pop"] * 100
     fig.add_bar(x=middles, y=windows["rain_3h"], width=STEP_HOURS * 3600 * 1000, marker_color=colors, customdata=chances, hovertemplate="%{y:.1f} mm · %{customdata:.0f} %<extra></extra>", row=2, col=1)
     if windows["snow_3h"].sum() > 0:
-        fig.add_bar(x=middles, y=windows["snow_3h"], width=STEP_HOURS * 3600 * 1000, marker_color=TEXT, opacity=0.6, hovertemplate="%{y:.1f} mm snow<extra></extra>", row=2, col=1)
+        fig.add_bar(x=middles, y=windows["snow_3h"], width=STEP_HOURS * 3600 * 1000, marker_color=theme["text"], opacity=0.6, hovertemplate="%{y:.1f} mm snow<extra></extra>", row=2, col=1)
 
     if session is not None:
         start, end = session_times(session)
         # One shape over the whole plotting height, so the block crosses both charts and the gap between them.
-        fig.add_shape(type="rect", xref="x", yref="paper", x0=start, x1=end, y0=0, y1=1, fillcolor=SESSION_BLOCK, line=dict(color=SESSION_EDGE, width=1), layer="below")
+        fig.add_shape(type="rect", xref="x", yref="paper", x0=start, x1=end, y0=0, y1=1, fillcolor=theme["session_block"], line=dict(color=theme["session_edge"], width=1), layer="below")
 
-    style_figure(fig, 360)
+    style_figure(fig, 360, theme)
     fig.update_layout(margin=dict(l=0, r=0, t=34, b=0))
     # Temperature is read from its labels, so its axis has no ticks; the cloud band has no axis at all.
     fig.update_yaxes(visible=False, row=1, col=1)
@@ -289,7 +282,7 @@ def forecast_figure(windows, session):
 # Today
 
 
-def show_maps(circuit, radar):
+def show_maps(circuit, radar, theme):
     segments = circuit_track(circuit["track_file"])
     with st.container(key="panel-maps"):
         radar_column, wind_column = st.columns(2)
@@ -297,7 +290,7 @@ def show_maps(circuit, radar):
             if radar is None:
                 st.warning("Radar unavailable.")
             else:
-                st.plotly_chart(radar_figure(radar["uri"], radar["bounds"], circuit, segments), config={"displayModeBar": False})
+                st.plotly_chart(radar_figure(radar["uri"], radar["bounds"], circuit, segments, theme), config={"displayModeBar": False})
         with wind_column:
             area = circuit_bounds(circuit, segments)
             grid_bounds = wind_grid_bounds(area)
@@ -306,7 +299,7 @@ def show_maps(circuit, radar):
             if readings.count(None) == len(readings):
                 st.warning("Wind unavailable.")
             else:
-                st.plotly_chart(wind_figure(wind_field(readings, grid_bounds, area), circuit, segments), config={"displayModeBar": False})
+                st.plotly_chart(wind_figure(wind_field(readings, grid_bounds, area), circuit, segments, theme), config={"displayModeBar": False})
 
 
 def show_today(loaded, session):
@@ -317,6 +310,7 @@ def show_today(loaded, session):
         return
 
     windows = loaded["windows"]
+    theme = current_theme()
     now = now_seconds()
     today = format_local_time(now, reading.timezone_offset or 0, "%Y-%m-%d")
     high = reading.temp_max if reading.temp_max is not None else reading.temperature
@@ -337,11 +331,11 @@ def show_today(loaded, session):
         states = status_lights(windows, now, today)
         sentence = rain_timing(windows, now)
     with st.container(key="panel-now"):
-        st.html(cards.now_group(reading, high, low, now, states, sentence, cards.radar_problem(radar)))
+        st.html(cards.now_group(reading, high, low, now, states, sentence, cards.radar_problem(radar), theme))
     if windows is not None:
         with st.container(key="panel-forecast"):
-            show_figure(forecast_figure(windows, session))
-    show_maps(circuit, radar)
+            show_figure(forecast_figure(windows, session, theme))
+    show_maps(circuit, radar, theme)
 
 
 # History
@@ -358,7 +352,7 @@ def show_history(circuit):
 
     rows = daily_rows(readings)
     with st.container(key="panel-history"):
-        st.html(f'<div class="finding">{escape(rain_finding(rows))}</div>' + cards.history_rows(shown_days(rows)))
+        st.html(f'<div class="finding">{escape(rain_finding(rows))}</div>' + cards.history_rows(shown_days(rows), current_theme()))
 
 
 def show_credits():

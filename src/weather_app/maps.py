@@ -14,8 +14,6 @@ from PIL import Image
 from .display import compass_direction
 
 MAP_HEIGHT = 320
-TEXT_COLOR = "#E8EDEA"
-BACKGROUND_COLOR = "#0E1110"
 
 # Track outline. The framing assumes the narrowest map, about 340 px wide on a phone,
 # and leaves this share of the map free on every side.
@@ -41,9 +39,10 @@ NO_COVERAGE_OPACITY = 90
 WIND_GRID_SIZE = 3
 WIND_GRID_MARGIN = 0.25
 WIND_FIELD_SIZE = 3
-# (lowest speed in km/h, colour): one violet hue, dim when calm and brighter when stronger,
-# so it never reads as the green of dry, the red of rain or the temperature scale.
-WIND_BANDS = [(0, "#6A6488"), (10, "#7C73A6"), (20, "#9A8FD0"), (30, "#B8AEF0"), (40, "#DCD5FF")]
+# The lowest speed of each wind band, in km/h. Each band has one colour in the theme's
+# wind_colors: one violet hue, standing out more when stronger, so it never reads as the
+# green of dry, the red of rain or the temperature scale.
+WIND_SPEEDS = [0, 10, 20, 30, 40]
 
 
 # Framing
@@ -311,17 +310,17 @@ def wind_field(readings, grid_bounds, area):
 
 
 def wind_band(speed_kmh):
-    """The position in WIND_BANDS of the band a wind speed falls in."""
+    """The position in WIND_SPEEDS of the band a wind speed falls in."""
     band = 0
-    for number in range(len(WIND_BANDS)):
-        if speed_kmh >= WIND_BANDS[number][0]:
+    for number in range(len(WIND_SPEEDS)):
+        if speed_kmh >= WIND_SPEEDS[number]:
             band = number
     return band
 
 
-def wind_color(speed_kmh):
+def wind_color(speed_kmh, theme):
     """The colour of a wind speed, from its band."""
-    return WIND_BANDS[wind_band(speed_kmh)][1]
+    return theme["wind_colors"][wind_band(speed_kmh)]
 
 
 def wind_arrow(latitude, longitude, from_degrees, length):
@@ -348,14 +347,14 @@ def wind_arrow(latitude, longitude, from_degrees, length):
     return latitudes + [None], longitudes + [None]
 
 
-def wind_arrow_lines(points, length):
+def wind_arrow_lines(points, length, theme):
     """Join the arrows of each speed band into one line, so each band is one colour.
 
     points is a list of dictionaries with latitude, longitude, speed_kmh and degrees. A point
     without a direction gets no arrow. Returns one dictionary per band that has arrows.
     """
     lines = []
-    for number in range(len(WIND_BANDS)):
+    for number in range(len(WIND_SPEEDS)):
         latitudes = []
         longitudes = []
         for point in points:
@@ -365,7 +364,7 @@ def wind_arrow_lines(points, length):
             latitudes = latitudes + arrow_latitudes
             longitudes = longitudes + arrow_longitudes
         if len(latitudes) > 0:
-            lines.append({"color": WIND_BANDS[number][1], "latitudes": latitudes, "longitudes": longitudes})
+            lines.append({"color": theme["wind_colors"][number], "latitudes": latitudes, "longitudes": longitudes})
     return lines
 
 
@@ -380,8 +379,8 @@ def wind_label(point):
 # Figures
 
 
-def circuit_dot(latitude, longitude):
-    return go.Scattermap(lat=[latitude], lon=[longitude], mode="markers", marker=dict(size=10, color=TEXT_COLOR), hoverinfo="skip")
+def circuit_dot(latitude, longitude, theme):
+    return go.Scattermap(lat=[latitude], lon=[longitude], mode="markers", marker=dict(size=10, color=theme["text"]), hoverinfo="skip")
 
 
 def track_layer(segments, color, width):
@@ -397,21 +396,22 @@ def track_layer(segments, color, width):
     )
 
 
-def outline_layers(segments):
-    """The outline as a dark casing under a crisp line, so it reads over rain and arrows alike."""
+def outline_layers(segments, theme):
+    """The outline as a casing in the page colour under a crisp line in the text colour, so it
+    reads over rain and arrows alike: light on the dark map, dark on the light one."""
     if len(segments) == 0:
         return []
-    return [track_layer(segments, BACKGROUND_COLOR, 6), track_layer(segments, TEXT_COLOR, 3)]
+    return [track_layer(segments, theme["background"], 6), track_layer(segments, theme["text"], 3)]
 
 
-def map_layout(fig, circuit, segments, layers):
-    """The look and framing both maps share: dark basemap, no margins, the outline filling the map.
-    Without an outline, a dot marks the circuit."""
+def map_layout(fig, circuit, segments, layers, theme):
+    """The look and framing both maps share: the theme's basemap, no margins, the outline filling
+    the map. Without an outline, a dot marks the circuit."""
     if len(segments) == 0:
-        fig.add_trace(circuit_dot(circuit["latitude"], circuit["longitude"]))
+        fig.add_trace(circuit_dot(circuit["latitude"], circuit["longitude"], theme))
     view = track_view(circuit_bounds(circuit, segments))
     fig.update_layout(
-        map=dict(style="carto-darkmatter", center=dict(lat=view["latitude"], lon=view["longitude"]), zoom=view["zoom"], layers=layers + outline_layers(segments)),
+        map=dict(style=theme["map_style"], center=dict(lat=view["latitude"], lon=view["longitude"]), zoom=view["zoom"], layers=layers + outline_layers(segments, theme)),
         margin=dict(l=0, r=0, t=0, b=0),
         height=MAP_HEIGHT,
         showlegend=False,
@@ -420,19 +420,19 @@ def map_layout(fig, circuit, segments, layers):
     return fig
 
 
-def radar_figure(image_uri, image_bounds, circuit, segments):
+def radar_figure(image_uri, image_bounds, circuit, segments, theme):
     """The radar under the track outline."""
     # A map needs at least one trace, even an empty one.
     fig = go.Figure(go.Scattermap(lat=[], lon=[]))
-    return map_layout(fig, circuit, segments, [dict(sourcetype="image", source=image_uri, coordinates=image_bounds, opacity=1, below="traces")])
+    return map_layout(fig, circuit, segments, [dict(sourcetype="image", source=image_uri, coordinates=image_bounds, opacity=1, below="traces")], theme)
 
 
-def wind_figure(field, circuit, segments):
+def wind_figure(field, circuit, segments, theme):
     """The field of arrows over the outline, coloured by speed. Invisible markers give each arrow hover text."""
     area = circuit_bounds(circuit, segments)
     length = (area["north"] - area["south"]) / WIND_FIELD_SIZE * 0.7
     fig = go.Figure()
-    for line in wind_arrow_lines(field, length):
+    for line in wind_arrow_lines(field, length, theme):
         fig.add_trace(go.Scattermap(lat=line["latitudes"], lon=line["longitudes"], mode="lines", line=dict(width=5, color=line["color"]), hoverinfo="skip"))
     fig.add_trace(
         go.Scattermap(
@@ -444,4 +444,4 @@ def wind_figure(field, circuit, segments):
             hoverinfo="text",
         )
     )
-    return map_layout(fig, circuit, segments, [])
+    return map_layout(fig, circuit, segments, [], theme)
