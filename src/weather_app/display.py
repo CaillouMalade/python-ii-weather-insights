@@ -2,6 +2,8 @@
 
 from datetime import datetime, timedelta, timezone
 
+from .theme import BACKGROUND_POSITIONS, background
+
 COMPASS_POINTS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 AQI_LABELS = {1: "Good", 2: "Fair", 3: "Moderate", 4: "Poor", 5: "Very poor"}
 
@@ -11,20 +13,11 @@ EMOJI = {
     "09": "🌧️", "10d": "🌦️", "10n": "🌧️", "11": "⛈️", "13": "❄️", "50": "🌫️",
 }
 
-# CSS gradients only: fixed text that never contains data from the API.
-BACKGROUNDS = {
-    "clear_day": "linear-gradient(180deg, #2f6fa8 0%, #5a93c0 55%, #41688a 100%)",
-    "clear_night": "linear-gradient(180deg, #0c1530 0%, #1a2747 55%, #243252 100%)",
-    "cloud_day": "linear-gradient(180deg, #5b6673 0%, #66717e 50%, #4b5561 100%)",
-    "cloud_night": "linear-gradient(180deg, #1c222b 0%, #2a323d 55%, #333c48 100%)",
-    "rain_day": "linear-gradient(180deg, #3d4a58 0%, #4e5c6b 55%, #38434f 100%)",
-    "rain_night": "linear-gradient(180deg, #141a22 0%, #222c37 55%, #2b3743 100%)",
-    "snow_day": "linear-gradient(180deg, #66788c 0%, #8596a8 55%, #5d6c7d 100%)",
-    "snow_night": "linear-gradient(180deg, #232d3b 0%, #3a4656 55%, #424f60 100%)",
-    "storm": "linear-gradient(180deg, #23222f 0%, #38374a 55%, #2c2c3b 100%)",
-    "fog": "linear-gradient(180deg, #6a6f75 0%, #7a7f85 55%, #55595e 100%)",
-    "none": "linear-gradient(180deg, #2b3440 0%, #35404d 100%)",
-}
+# CSS gradients only: fixed text that never contains data from the API. Each one
+# follows the theme (see theme.py).
+BACKGROUNDS = {}
+for _name in BACKGROUND_POSITIONS:
+    BACKGROUNDS[_name] = background(_name)
 
 
 def format_local_time(unix_seconds, timezone_offset, pattern="%H:%M"):

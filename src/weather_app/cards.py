@@ -19,8 +19,9 @@ from .display import (
 from .findings import POLLUTANTS, pollutant_text
 from .maps import LEGENDS
 
-RATING_COLORS = {"Great": "#3ec6a8", "Good": "#8fd14f", "OK": "#f2d13c", "Poor": "#ef8a3a"}
-BAND_COLORS = {"Good": "#3ec6a8", "Fair": "#8fd14f", "Moderate": "#f2d13c", "Poor": "#ef8a3a", "Very poor": "#d8324a"}
+# CSS variables from theme.py, so these colours follow the light or dark theme.
+RATING_COLORS = {"Great": "var(--great)", "Good": "var(--good)", "OK": "var(--ok)", "Poor": "var(--poor)"}
+BAND_COLORS = {"Good": "var(--great)", "Fair": "var(--good)", "Moderate": "var(--ok)", "Poor": "var(--poor)", "Very poor": "var(--very-poor)"}
 
 
 def city_card(name, reading, high, low, note, selected, now):
@@ -30,7 +31,7 @@ def city_card(name, reading, high, low, note, selected, now):
     if reading is None:
         place_line = f'<div class="city-small">{escape(place)}</div>' if place else ""
         return (
-            f'<div class="city{outline}" style="background:rgba(255,255,255,.08)">'
+            f'<div class="city{outline}" style="background:var(--empty-card)">'
             f'<div class="city-name">{escape(city)}</div>{place_line}'
             f'<div class="city-small city-note">{escape(note)}</div></div>'
         )
@@ -275,7 +276,7 @@ def air_outlook(days):
     """The next days in words. days is a list of (day, band) pairs."""
     items = ""
     for day, band in days:
-        items = items + f'<div class="card"><div class="card-title">{day}</div><div style="color:{BAND_COLORS.get(band, "#fff")}">{band}</div></div>'
+        items = items + f'<div class="card"><div class="card-title">{day}</div><div style="color:{BAND_COLORS.get(band, "inherit")}">{band}</div></div>'
     return f'<div class="card-title outlook-title">Coming days</div><div class="grid-4">{items}</div>'
 
 

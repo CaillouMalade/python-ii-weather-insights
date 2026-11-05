@@ -2,28 +2,32 @@
 
 import streamlit as st
 
+from .theme import css_variables
+
 CSS = """
 <style>
 /* Page. The main column is a size container, so its layout follows the space it really has,
    whether or not the sidebar is open. The background gradient is set in apply_style. */
 .stApp { background-attachment: fixed; }
 [data-testid="stHeader"] { background: transparent; }
-[data-testid="stSidebar"] { background: rgba(30, 36, 44, 0.92); }
+[data-testid="stSidebar"] { background: var(--sidebar); }
 [data-testid="stMainBlockContainer"] { container-type: inline-size; padding-top: 1.5rem; max-width: 1400px; }
 @media (max-width: 768px) { [data-testid="stMainBlockContainer"] { padding: 3.2rem 1rem 2rem; } }
 /* On a phone, a solid bar behind the sidebar arrow, so page content scrolls under it rather than behind the arrow */
-@media (max-width: 768px) { [data-testid="stHeader"] { background: #1e242c; } }
+@media (max-width: 768px) { [data-testid="stHeader"] { background: var(--header-bar); } }
 .stApp, .stApp button { font-family: -apple-system, "SF Pro Display", "Segoe UI", Roboto, sans-serif; }
 
 /* One card style everywhere: plain HTML cards and Streamlit containers holding widgets */
 .card, .st-key-next-hours, .st-key-daily-card, .st-key-map-card, [class*="st-key-panel"] {
-  background: rgba(40, 48, 58, 0.55); border-radius: 16px; padding: 16px 18px;
+  background: var(--card); border-radius: 16px; padding: 16px 18px;
 }
 .card-title { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; opacity: 0.7; text-transform: uppercase; margin-bottom: 6px; }
 .tile-value { font-size: 1.3rem; line-height: 1.25; }
 .small { font-size: 0.85rem; opacity: 0.85; margin-top: 4px; }
 .high-low { white-space: pre; }
 .finding { font-size: 1.05rem; font-weight: 600; margin-bottom: 4px; }
+[data-testid="stCaptionContainer"] { color: var(--caption-text); }
+[data-testid="stCaptionContainer"] a { color: var(--caption-link); }
 
 /* One grid: four across, two across when the main column is narrow */
 .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 14px; }
@@ -42,16 +46,16 @@ CSS = """
 .strip-item { text-align: center; font-size: 0.86rem; }
 .strip-icon { font-size: 1.5rem; margin: 2px 0; }
 .strip-value { font-weight: 600; white-space: nowrap; }
-.strip-small { font-size: 0.72rem; color: #7fd0f5; min-height: 1rem; white-space: nowrap; }
+.strip-small { font-size: 0.72rem; color: var(--accent-text); min-height: 1rem; white-space: nowrap; }
 
 /* Daily forecast: the rows share the card's height, to match the map beside it */
 .days { min-height: 510px; display: flex; flex-direction: column; }
-.day { flex: 1; display: grid; grid-template-columns: 3.2rem 3rem 2.4rem 1fr 2.4rem; gap: 8px; align-items: center; border-top: 1px solid rgba(255,255,255,.15); }
-.day-pop { font-size: 0.7rem; color: #7fd0f5; }
+.day { flex: 1; display: grid; grid-template-columns: 3.2rem 3rem 2.4rem 1fr 2.4rem; gap: 8px; align-items: center; border-top: 1px solid var(--line); }
+.day-pop { font-size: 0.7rem; color: var(--accent-text); }
 .day-icon { text-align: center; font-size: 1.25rem; line-height: 1.1; }
 .day-low { opacity: 0.7; text-align: right; }
-.bar { position: relative; height: 5px; border-radius: 3px; background: rgba(255,255,255,.15); }
-.bar-fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: linear-gradient(90deg, #6fd3c7, #8fc7e8); }
+.bar { position: relative; height: 5px; border-radius: 3px; background: var(--line); }
+.bar-fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: linear-gradient(90deg, var(--bar-fill-start), var(--bar-fill-end)); }
 .bar-dot { position: absolute; top: -2.5px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: #fff; border: 1px solid #333; }
 
 /* Air quality scale */
@@ -73,7 +77,7 @@ CSS = """
 .plan-summary { margin: 2px 0 10px; }
 .parts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .part { border-top: 3px solid; padding-top: 6px; font-size: 0.85rem; }
-.part-past { border-top-color: rgba(255,255,255,.15); opacity: 0.5; }
+.part-past { border-top-color: var(--line); opacity: 0.5; }
 .part-name { font-size: 0.72rem; opacity: 0.75; }
 .part-rating { font-weight: 700; font-size: 1.05rem; }
 
@@ -81,15 +85,15 @@ CSS = """
 .share-bar { display: flex; height: 18px; border-radius: 9px; overflow: hidden; margin: 6px 0 8px; }
 .share-labels { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.85rem; }
 .share-labels i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
-.pollutant { padding: 10px 0; border-top: 1px solid rgba(255,255,255,.15); }
-.days-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.15); margin-top: 6px; overflow: hidden; }
-.days-bar div { height: 100%; background: #ef8a3a; }
+.pollutant { padding: 10px 0; border-top: 1px solid var(--line); }
+.days-bar { height: 6px; border-radius: 3px; background: var(--line); margin-top: 6px; overflow: hidden; }
+.days-bar div { height: 100%; background: var(--poor); }
 .outlook-title { margin: 6px 0 8px; }
 
 /* Compare table: wraps instead of scrolling sideways */
 .cities { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .cities th { text-align: left; font-size: 0.72rem; font-weight: 600; opacity: 0.7; padding: 4px 6px 4px 0; }
-.cities td { padding: 8px 6px 8px 0; border-top: 1px solid rgba(255,255,255,.15); vertical-align: top; white-space: nowrap; }
+.cities td { padding: 8px 6px 8px 0; border-top: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
 .cities td:first-child { white-space: normal; }
 
 /* Sidebar city cards: the invisible button is stretched over the whole card */
@@ -99,7 +103,7 @@ CSS = """
 .city-row { display: flex; justify-content: space-between; gap: 6px; min-width: 0; }
 .city-row + .city-row .city-small { font-size: 0.73rem; }
 .city-main { min-width: 0; }
-.city.selected { outline: 2px solid rgba(255,255,255,.75); }
+.city.selected { outline: 2px solid var(--selected); }
 .city-name { font-weight: 600; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .city-temp { font-size: 1.7rem; font-weight: 300; text-align: right; }
 .city-small { font-size: 0.76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -108,7 +112,7 @@ CSS = """
 [class*="st-key-city-"] [class*="st-key-open-"] { position: absolute; inset: 0; z-index: 1; }
 [class*="st-key-open-"] button { width: 100%; height: 100%; opacity: 0; }
 [class*="st-key-city-"] [class*="st-key-remove-"] { position: absolute; top: 50%; right: 8px; z-index: 2; width: auto; transform: translateY(-50%); }
-[class*="st-key-remove-"] button { min-height: 0; padding: 0 7px; border: 0; background: rgba(0,0,0,.25); }
+[class*="st-key-remove-"] button { min-height: 0; padding: 0 7px; border: 0; background: var(--remove-button); }
 
 /* On a phone the sidebar starts closed, so a city picker appears in the page */
 .st-key-phone-city { display: none; }
@@ -129,5 +133,5 @@ CSS = """
 
 
 def apply_style(background):
-    """Add the CSS and the page background. background is a fixed gradient from display.py."""
-    st.html(CSS + f"<style>.stApp {{ background: {background}; }}</style>")
+    """Add the CSS, the theme's colour variables and the page background (a gradient from display.py)."""
+    st.html(CSS + f"<style>{css_variables()} .stApp {{ background: {background}; }}</style>")
