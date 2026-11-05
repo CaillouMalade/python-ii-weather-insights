@@ -1,6 +1,22 @@
+# Two themes, so Streamlit's menu offers System, Light and Dark. The colours repeat the
+# background, surface, text and green of src/weather_app/theme.py.
 [theme]
 base = "dark"
+
+[theme.dark]
 primaryColor = "#2FD27A"
 backgroundColor = "#0E1110"
 secondaryBackgroundColor = "#161A18"
 textColor = "#E8EDEA"
+
+[theme.dark.sidebar]
+backgroundColor = "#0E1110"
+
+[theme.light]
+primaryColor = "#1A7F4B"
+backgroundColor = "#F6F3EC"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1E2321"
+
+[theme.light.sidebar]
+backgroundColor = "#F6F3EC"
