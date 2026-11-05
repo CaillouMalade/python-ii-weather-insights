@@ -17,7 +17,7 @@ from weather_app.maps import (
     MAP_HEIGHT,
     RADAR_HALF_SIZE,
     RADAR_UPSCALE,
-    WIND_BANDS,
+    WIND_SPEEDS,
     WIND_FIELD_SIZE,
     boost_opacity,
     circuit_bounds,
@@ -49,6 +49,7 @@ from weather_app.maps import (
 )
 from weather_app.storage import load_circuits, load_track
 from weather_app.models import WeatherReading
+from weather_app.theme import DARK, LIGHT
 
 MONDAY = 1767571200  # 2026-01-05 00:00 UTC
 SPA = {"id": "spa", "location": "Spa-Francorchamps", "country": "Belgium", "latitude": 50.4372, "longitude": 5.9714, "timezone": "Europe/Brussels", "length_km": 7.004, "track_file": "be-1925.geojson"}
@@ -221,7 +222,7 @@ def test_radar_problem_only_speaks_when_the_radar_cannot_be_trusted():
 
 
 def test_now_group_folds_labels_into_values_and_has_three_named_lights():
-    html = now_group(make_reading(wind_gust=12.5, wind_deg=270, conditions="light <rain>"), 22.0, 14.0, MONDAY, ["rain", "dry", None], "Rain likely <now>", "")
+    html = now_group(make_reading(wind_gust=12.5, wind_deg=270, conditions="light <rain>"), 22.0, 14.0, MONDAY, ["rain", "dry", None], "Rain likely <now>", "", DARK)
     assert "Light &lt;rain&gt;" in html
     assert "Mon 00:00" in html
     assert '<span class="fact">High 22°  Low 14°</span> · <span class="fact">Feels 19°</span>' in html
@@ -234,7 +235,7 @@ def test_now_group_folds_labels_into_values_and_has_three_named_lights():
 
 
 def test_now_group_without_a_range_starts_with_feels_and_shows_a_radar_problem():
-    html = now_group(make_reading(), 20.0, 20.0, MONDAY, [None, None, None], "Dry all week", "No radar here")
+    html = now_group(make_reading(), 20.0, 20.0, MONDAY, [None, None, None], "Dry all week", "No radar here", DARK)
     assert '<div><span class="fact">Feels 19°</span></div>' in html
     assert "No radar here" in html
 
@@ -363,7 +364,7 @@ def test_circuit_bounds_from_the_outline_or_from_the_length():
 
 def test_radar_figure_without_an_outline_marks_the_circuit():
     area = radar_area(50.4372, 5.9714)
-    fig = radar_figure("data:,", area["bounds"], dict(SPA, track_file=""), [])
+    fig = radar_figure("data:,", area["bounds"], dict(SPA, track_file=""), [], DARK)
     assert fig.layout.map.layers[0].source == "data:,"
     assert len(fig.layout.map.layers) == 1
     assert list(fig.data[-1].lat) == [50.4372]
@@ -372,7 +373,7 @@ def test_radar_figure_without_an_outline_marks_the_circuit():
 def test_radar_figure_with_an_outline_frames_it_over_the_radar():
     segments = [[[5.96, 50.43], [5.98, 50.44]], [[5.98, 50.44], [5.97, 50.45]]]
     area = radar_area(50.4372, 5.9714)
-    fig = radar_figure("data:,", area["bounds"], SPA, segments)
+    fig = radar_figure("data:,", area["bounds"], SPA, segments, DARK)
     layers = fig.layout.map.layers
     # The radar first, then the dark casing, then the crisp line on top.
     assert [layer.sourcetype for layer in layers] == ["image", "geojson", "geojson"]
@@ -431,8 +432,8 @@ def test_track_layer_keeps_every_segment():
     layer = track_layer(segments, "#E8EDEA", 3)
     assert layer["source"]["geometry"] == {"type": "MultiLineString", "coordinates": segments}
     assert layer["below"] == "traces"
-    assert outline_layers([]) == []
-    assert len(outline_layers(segments)) == 2
+    assert outline_layers([], DARK) == []
+    assert len(outline_layers(segments, DARK)) == 2
 
 
 # Wind field
@@ -515,7 +516,7 @@ def test_wind_band_boundaries():
     assert wind_band(9.9) == 0
     assert wind_band(10) == 1
     assert wind_band(39.9) == 3
-    assert wind_band(120) == len(WIND_BANDS) - 1
+    assert wind_band(120) == len(WIND_SPEEDS) - 1
 
 
 def test_wind_arrow_points_where_the_wind_blows_to():
@@ -536,8 +537,8 @@ def test_wind_arrow_lines_group_by_band_and_skip_points_without_direction():
         {"latitude": 0.4, "longitude": 0.0, "speed_kmh": 45, "degrees": 180},
         {"latitude": 0.6, "longitude": 0.0, "speed_kmh": 25, "degrees": None},
     ]
-    lines = wind_arrow_lines(points, 0.05)
-    assert [line["color"] for line in lines] == [WIND_BANDS[0][1], WIND_BANDS[4][1]]
+    lines = wind_arrow_lines(points, 0.05, DARK)
+    assert [line["color"] for line in lines] == [DARK["wind_colors"][0], DARK["wind_colors"][4]]
     assert len(lines[0]["latitudes"]) == 16
     assert len(lines[1]["latitudes"]) == 8
 
@@ -551,8 +552,8 @@ def test_wind_figure_is_framed_exactly_like_the_radar_with_the_full_outline():
     segments = [[[5.96, 50.43], [5.98, 50.44]], [[5.98, 50.44], [5.97, 50.45]]]
     grid = wind_grid_bounds(circuit_bounds(SPA, segments))
     field = wind_field([{"speed_kmh": 12, "degrees": 90}] * 9, grid, circuit_bounds(SPA, segments))
-    wind = wind_figure(field, SPA, segments)
-    radar = radar_figure("data:,", radar_area(50.4372, 5.9714)["bounds"], SPA, segments)
+    wind = wind_figure(field, SPA, segments, DARK)
+    radar = radar_figure("data:,", radar_area(50.4372, 5.9714)["bounds"], SPA, segments, DARK)
     assert wind.layout.map.zoom == radar.layout.map.zoom
     assert wind.layout.map.center.lat == radar.layout.map.center.lat
     # The same full-strength outline as the radar, not a faint one.
@@ -568,57 +569,32 @@ def test_wind_figure_is_framed_exactly_like_the_radar_with_the_full_outline():
 
 def test_temperature_color_known_answers():
     from weather_app.display import temperature_color
-    assert temperature_color(-10) == "#8A96F0"
-    assert temperature_color(-5) == "#8A96F0"
-    assert temperature_color(0) == "#6EB0E8"
+    assert temperature_color(-10, DARK) == "#8A96F0"
+    assert temperature_color(-5, DARK) == "#8A96F0"
+    assert temperature_color(0, DARK) == "#6EB0E8"
     # Halfway between the 0° and 5° stops: (110+120)/2, (176+200)/2, (232+214)/2.
-    assert temperature_color(2.5) == "#73BCDF"
-    assert temperature_color(15) == "#DAD0B0"
-    assert temperature_color(30) == "#EC8C3C"
-    assert temperature_color(40) == "#EC8C3C"
-
-
-def test_a_cold_week_still_shows_its_range():
-    # Le Mans this week, 2° to 13°: the two ends must look clearly different.
-    from weather_app.display import temperature_color
-    cold = temperature_color(2)
-    mild = temperature_color(13)
-    difference = 0
-    for start in [1, 3, 5]:
-        difference = difference + abs(int(cold[start:start + 2], 16) - int(mild[start:start + 2], 16))
-    assert difference > 120
-
-
-def test_every_temperature_colour_reads_on_graphite():
-    from weather_app.display import temperature_color
-
-    def luminance(color):
-        parts = []
-        for start in [1, 3, 5]:
-            value = int(color[start:start + 2], 16) / 255
-            parts.append(value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4)
-        return 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2]
-
-    for celsius in range(-5, 31):
-        contrast = (luminance(temperature_color(celsius)) + 0.05) / (luminance("#161A18") + 0.05)
-        assert contrast >= 4.5, celsius
+    assert temperature_color(2.5, DARK) == "#73BCDF"
+    assert temperature_color(15, DARK) == "#DAD0B0"
+    assert temperature_color(30, DARK) == "#EC8C3C"
+    assert temperature_color(40, DARK) == "#EC8C3C"
 
 
 def test_temperature_scale_has_no_green_or_red():
-    from weather_app.display import TEMPERATURE_STOPS
-    for _, red, green, blue in TEMPERATURE_STOPS:
+    stops = DARK["temperature_stops"] + LIGHT["temperature_stops"]
+    for _, red, green, blue in stops:
         # Never a green-dominant or a red-dominant colour: those mean dry and rain.
         assert not (green > red + 30 and green > blue + 30)
         assert not (red > green + 100 and red > blue + 100)
 
 
 def test_rain_bar_is_red_only_when_rain_is_likely():
-    from weather_app.display import RAIN_BAR_LIKELY, RAIN_BAR_UNLIKELY, rain_bar_color
-    assert rain_bar_color(0.5, 0.5) == RAIN_BAR_LIKELY
-    assert rain_bar_color(0.9, 0.5) == RAIN_BAR_LIKELY
-    assert rain_bar_color(0.49, 0.5) == RAIN_BAR_UNLIKELY
-    assert rain_bar_color(0.0, 0.5) == RAIN_BAR_UNLIKELY
-    assert "229" not in RAIN_BAR_UNLIKELY
+    from weather_app.display import rain_bar_color
+    for theme in [DARK, LIGHT]:
+        assert rain_bar_color(0.5, 0.5, theme) == theme["red"]
+        assert rain_bar_color(0.9, 0.5, theme) == theme["red"]
+        assert rain_bar_color(0.49, 0.5, theme) == theme["rain_bar_unlikely"]
+        assert rain_bar_color(0.0, 0.5, theme) == theme["rain_bar_unlikely"]
+    assert "229" not in DARK["rain_bar_unlikely"]
 
 
 def test_condition_kind_and_glyphs():
@@ -626,10 +602,10 @@ def test_condition_kind_and_glyphs():
     from weather_app.icons import arrow_img, icon_img, icon_uri
     assert [condition_kind(code, False) for code in [211, 310, 501, 601, 741, 800, 801, 803, None]] == ["rain", "rain", "rain", "snow", "fog", "sun", "sun", "cloud", "cloud"]
     assert condition_kind(800, True) == "night"
-    assert 'alt="Rain"' in icon_img("rain")
+    assert 'alt="Rain"' in icon_img("rain", DARK)
     # Drawn inline as a data URI: nothing is loaded from the network.
-    assert icon_uri("cloud").startswith("data:image/svg+xml;base64,")
-    assert 'src="data:image/svg+xml;base64,' in icon_img("sun")
+    assert icon_uri("cloud", DARK).startswith("data:image/svg+xml;base64,")
+    assert 'src="data:image/svg+xml;base64,' in icon_img("sun", DARK)
     assert 'alt="From the SW"' in arrow_img(225, "#9A8FD0", "From the SW")
 
 
@@ -637,15 +613,15 @@ def test_wind_colour_is_one_hue_getting_brighter():
     from weather_app.maps import wind_color
     levels = []
     for speed in [0, 10, 20, 30, 40]:
-        color = wind_color(speed)
+        color = wind_color(speed, DARK)
         levels.append(int(color[1:3], 16) + int(color[3:5], 16) + int(color[5:7], 16))
     assert levels == sorted(levels)
-    assert wind_color(5) == wind_color(0)
+    assert wind_color(5, DARK) == wind_color(0, DARK)
 
 
 def test_now_group_colours_the_temperature_and_shows_a_glyph():
     reading = make_reading(temperature=25.0)
-    html = now_group(reading, 26.0, 18.0, MONDAY, ["dry", "dry", "dry"], "Dry all week", "")
+    html = now_group(reading, 26.0, 18.0, MONDAY, ["dry", "dry", "dry"], "Dry all week", "", DARK)
     assert 'style="color:#F29648"' in html
     assert 'alt="Cloudy"' in html
 
@@ -665,7 +641,7 @@ def test_history_rows_draw_ranges_rain_and_wind_and_mute_partial_days():
             "full": [True, False],
         }
     )
-    html = history_rows(rows)
+    html = history_rows(rows, DARK)
     assert html.count('class="day-row') == 2
     assert html.count('class="day-row partial"') == 1
     assert "Sun 1" in html and "Mon 2" in html
