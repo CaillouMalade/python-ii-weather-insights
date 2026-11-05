@@ -1,6 +1,13 @@
-[theme]
-base = "dark"
+# Two themes, picked in Streamlit's own menu (System, Light or Dark).
+# Dark is the app's original look. On a first visit Streamlit follows the system setting.
+[theme.dark]
 primaryColor = "#8fc7e8"
 backgroundColor = "#2b3440"
 secondaryBackgroundColor = "#3a4552"
 textColor = "#ffffff"
+
+[theme.light]
+primaryColor = "#165488"
+backgroundColor = "#f4f1ea"
+secondaryBackgroundColor = "#e8e3d8"
+textColor = "#1d232b"
