@@ -29,6 +29,7 @@ from weather_app.display import (
 )
 from weather_app.maps import WEATHER_LAYER_BOOST, boost_opacity, build_map_figure, has_radar_coverage, image_to_data_uri, lat_lon_to_tile, radar_over_coverage, stitch_tiles, tile_grid, tile_to_lat_lon
 from weather_app.models import WeatherReading
+from weather_app.theme import BACKGROUND_POSITIONS, DARK_BACKGROUNDS, DARK_MAP, DARK_TOKENS, LIGHT_BACKGROUNDS, LIGHT_MAP, LIGHT_TOKENS, css_variables, map_look
 from weather_app.views_analytics import compare_tiles
 
 MONDAY = 1767571200  # 2026-01-05 00:00 UTC
@@ -590,3 +591,91 @@ def test_radar_over_coverage_shades_lightly_and_keeps_radar_on_top():
 def test_image_to_data_uri():
     uri = image_to_data_uri(Image.new("RGBA", (1, 1)))
     assert uri.startswith("data:image/png;base64,")
+
+
+# Light and dark themes
+
+
+def relative_luminance(hex_colour):
+    """WCAG relative luminance of a colour such as #1d232b."""
+    channels = []
+    for start in [1, 3, 5]:
+        value = int(hex_colour[start:start + 2], 16) / 255
+        if value <= 0.03928:
+            channels.append(value / 12.92)
+        else:
+            channels.append(((value + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def contrast(first, second):
+    lighter = max(relative_luminance(first), relative_luminance(second))
+    darker = min(relative_luminance(first), relative_luminance(second))
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def test_contrast_helper_known_answers():
+    assert round(contrast("#000000", "#ffffff"), 1) == 21.0
+    assert round(contrast("#777777", "#ffffff"), 2) == 4.48
+
+
+def test_both_themes_have_the_same_tokens():
+    assert list(LIGHT_TOKENS.keys()) == list(DARK_TOKENS.keys())
+    assert list(LIGHT_BACKGROUNDS.keys()) == list(DARK_BACKGROUNDS.keys()) == list(BACKGROUND_POSITIONS.keys())
+    for name in BACKGROUND_POSITIONS:
+        assert len(LIGHT_BACKGROUNDS[name]) == len(DARK_BACKGROUNDS[name]) == len(BACKGROUND_POSITIONS[name])
+    assert list(LIGHT_MAP.keys()) == list(DARK_MAP.keys())
+
+
+def test_dark_theme_keeps_the_original_colours():
+    assert DARK_TOKENS["card"] == "rgba(40, 48, 58, 0.55)"
+    assert DARK_TOKENS["accent-text"] == "#7fd0f5"
+    assert DARK_BACKGROUNDS["clear_day"] == ["#2f6fa8", "#5a93c0", "#41688a"]
+
+
+def faded(hex_colour, opacity):
+    """A colour drawn at an opacity over white, as the browser blends it."""
+    blended = "#"
+    for start in [1, 3, 5]:
+        blended = blended + f"{round(int(hex_colour[start:start + 2], 16) * opacity + 255 * (1 - opacity)):02x}"
+    return blended
+
+
+def test_faded_known_answer():
+    assert faded("#000000", 0.6) == "#666666"
+
+
+def test_light_text_meets_wcag_aa_on_white_cards():
+    # Coloured words can sit in .small text, which is drawn at 85 % opacity.
+    for name in ["accent-text", "great", "good", "ok", "poor", "very-poor"]:
+        assert contrast(faded(LIGHT_TOKENS[name], 0.85), "#ffffff") >= 4.5, name
+    assert contrast("#1d232b", "#ffffff") >= 4.5
+    # Streamlit draws captions and their links at 60 % opacity.
+    for name in ["caption-text", "caption-link"]:
+        assert contrast(faded(LIGHT_TOKENS[name], 0.6), "#ffffff") >= 4.5, name
+
+
+def test_light_text_meets_wcag_aa_on_every_light_background():
+    text = "#1d232b"
+    for name in LIGHT_BACKGROUNDS:
+        for colour in LIGHT_BACKGROUNDS[name]:
+            assert contrast(text, colour) >= 4.5, (name, colour)
+    assert contrast(text, LIGHT_TOKENS["sidebar"]) >= 4.5
+
+
+def test_css_variables_put_light_first():
+    css = css_variables()
+    assert "--card: light-dark(#ffffff, rgba(40, 48, 58, 0.55));" in css
+    assert css.count("light-dark(") == len(DARK_TOKENS)
+
+
+def test_backgrounds_follow_the_theme():
+    assert BACKGROUNDS["none"] == "linear-gradient(180deg, light-dark(#f4f1ea, #2b3440) 0%, light-dark(#efebe3, #35404d) 100%)"
+
+
+def test_map_look_picks_the_basemap_and_defaults_to_dark():
+    assert map_look("light")["style"] == "carto-positron"
+    assert map_look("dark")["style"] == "carto-darkmatter"
+    assert map_look(None)["style"] == "carto-darkmatter"
+    grid = tile_grid(0.1, 0.1, 4)
+    assert build_map_figure("data:,", grid["bounds"], 0.1, 0.1, theme_type="light").layout.map.style == "carto-positron"
