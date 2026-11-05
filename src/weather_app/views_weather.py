@@ -52,7 +52,8 @@ def show_map(weather):
             return
 
         below = None if layer == RADAR_LAYER else FIRST_LABEL_LAYER
-        fig = build_map_figure(result["uri"], result["bounds"], location["latitude"], location["longitude"], below)
+        # Streamlit only reports a theme change on the next rerun, so the basemap can lag one click behind.
+        fig = build_map_figure(result["uri"], result["bounds"], location["latitude"], location["longitude"], below, st.context.theme.type)
         st.plotly_chart(fig, config={"displayModeBar": False})
         if layer == RADAR_LAYER:
             st.html(cards.radar_note(result["time"], weather["reading"].timezone_offset or 0, result["covered"], weather["name"]))

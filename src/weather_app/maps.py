@@ -11,6 +11,8 @@ import math
 import plotly.graph_objects as go
 from PIL import Image
 
+from .theme import map_look
+
 RADAR_LAYER = "Rain radar"
 MAP_LAYERS = {
     "Temperature": "temp_new",
@@ -32,7 +34,7 @@ LEGENDS = {
 # OpenWeatherMap's tiles are mostly see-through, so low values hardly show. Multiplying
 # each pixel's opacity makes them read clearly, while coasts and labels still show through.
 WEATHER_LAYER_BOOST = 1.5
-# The basemap's first label layer. A layer placed below it leaves the labels on top.
+# The first label layer of both basemaps. A layer placed below it leaves the labels on top.
 FIRST_LABEL_LAYER = "waterway_label"
 RADAR_BOOST = 2
 # How strongly areas without radar are shaded, out of 255.
@@ -139,15 +141,17 @@ def image_to_data_uri(image):
     return f"data:image/png;base64,{encoded}"
 
 
-def build_map_figure(image_uri, bounds, latitude, longitude, below=None):
-    """A Plotly map: free dark basemap, weather image on top, and a dot on the city.
+def build_map_figure(image_uri, bounds, latitude, longitude, below=None, theme_type=None):
+    """A Plotly map: free basemap, weather image on top, and a dot on the city.
 
     below is the basemap layer to put the image under. None puts it on top of everything.
+    theme_type is "light" or "dark", and picks the basemap and the dot's colour.
     """
-    fig = go.Figure(go.Scattermap(lat=[latitude], lon=[longitude], mode="markers", marker=dict(size=11, color="white")))
+    look = map_look(theme_type)
+    fig = go.Figure(go.Scattermap(lat=[latitude], lon=[longitude], mode="markers", marker=dict(size=11, color=look["marker"])))
     fig.update_layout(
         map=dict(
-            style="carto-darkmatter",
+            style=look["style"],
             center=dict(lat=latitude, lon=longitude),
             zoom=TILE_ZOOM - 1,
             layers=[dict(sourcetype="image", source=image_uri, coordinates=bounds, opacity=1, below=below)],

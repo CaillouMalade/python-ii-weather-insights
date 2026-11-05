@@ -56,8 +56,6 @@ MIN_TREND_HOURS = 1
 # Below this much history, the chart carries a note that more data will help.
 SETTLED_HISTORY_HOURS = 72
 
-TEMPERATURE_COLOR = "#ffb86b"
-RAIN_COLOR = "#7fd0f5"
 
 # Name on the selector: (column, unit).
 HISTORY_METRICS = {
@@ -170,8 +168,10 @@ def show_overview(weather):
 
 def show_outlook_chart(measures):
     fig = go.Figure()
-    fig.add_bar(x=measures["local_time"], y=measures["precipitation_mm"], name="Rain", marker_color=RAIN_COLOR, yaxis="y2", opacity=0.45)
-    fig.add_scatter(x=measures["local_time"], y=measures["temperature"], name="Temperature", mode="lines", line=dict(color=TEMPERATURE_COLOR, width=2.5))
+    # No fixed colours: Streamlit's chart theme picks them for light or dark. The line comes
+    # first, so it gets the theme's strongest colour.
+    fig.add_scatter(x=measures["local_time"], y=measures["temperature"], name="Temperature", mode="lines", line=dict(width=2.5))
+    fig.add_bar(x=measures["local_time"], y=measures["precipitation_mm"], name="Rain", yaxis="y2", opacity=0.6)
     # Set by hand: left alone, this axis lines up with the temperature gridlines and gets odd values.
     ticks = rain_axis_ticks(measures["precipitation_mm"].max())
     fig.update_layout(yaxis2=dict(title="Rain (mm)", overlaying="y", side="right", range=[0, ticks[-1]], tickmode="array", tickvals=ticks, showgrid=False))
@@ -346,7 +346,7 @@ def show_history(log, weather, names):
         known = series.dropna(subset=[column])
         st.write(trend_finding(known[column].to_list(), metric, unit))
         is_local = series["is_local"].to_list()[0]
-        fig = px.line(known, x="time", y=column, markers=True, color_discrete_sequence=[RAIN_COLOR])
+        fig = px.line(known, x="time", y=column, markers=True)
         style_chart(fig, "Local time" if is_local else "UTC (local offset not logged yet)", f"{metric} ({unit})")
         if span_hours < SETTLED_HISTORY_HOURS:
             st.caption("This only covers a short time so far. More readings will make it clearer.")
