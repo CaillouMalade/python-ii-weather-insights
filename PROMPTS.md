@@ -227,3 +227,27 @@ Commits `73043d4`, `387fdb0` and `b3c61e9` carry a `Co-Authored-By: Codex <norep
 ### Be ready to explain: forms not listed in earlier entries
 
 `pytest.approx`; class attributes (`COLOR_SCHEME`, `OPTIONS` on `RainViewerClient`); `.pop` on `st.session_state`; `.items()` on a dictionary; `dropna(subset=...)`; the `:02d` format; `datetime.timestamp()`; `getattr` in `to_dict`; `raise ... from None`; `traceback.format_exception` in a test; `float("inf")` as a sort key; `pd.to_numeric`; `.loc[mask, column] = value`; `st.expander`; `st.selectbox(width=...)`; the `below` setting on a Plotly map layer; CSS `min-height`.
+
+## Light mode — 5 November 2026
+
+**Asked:** Arthur wanted light mode, switched through Streamlit's own menu, with dark kept exactly as before and as the default. The ask was to use Streamlit's built-in mechanism (checked against the installed 1.66.1), keep one token dictionary per theme with identical keys, meet WCAG AA in light mode, and add no JavaScript, custom toggle or new text.
+
+**Got:**
+- `.streamlit/config.toml` with `[theme.dark]` (the old values) and `[theme.light]` (paper background, dark text).
+- A new `src/weather_app/theme.py` with `DARK_TOKENS` and `LIGHT_TOKENS`, plus light versions of the weather gradients. They become CSS variables written with `light-dark(light, dark)`.
+- Charts without fixed colours, so Streamlit's chart theme colours them.
+- The map's basemap and city dot follow `st.context.theme.type`: `carto-positron` in light, `carto-darkmatter` in dark.
+
+**Checked:** All tests pass, including identical token keys, WCAG ratios for light colours and known contrast answers. In real Chrome against a throwaway fake OpenWeatherMap, the agent switched themes through Streamlit's menu. It checked Weather and all four Analytics tabs in both themes at 1280 and 390 px, and audited text contrast on every page. It found no exceptions, no overflow, and no test key or `appid` in the page.
+
+**Kept / changed / rejected:**
+- **Theme switching:** checked first, in the installed Streamlit. Picking a theme in the menu re-themes the page but does not rerun the script, so `st.context.theme.type` stays stale until the next interaction (Streamlit issue #11920). As asked for that case, the page CSS uses CSS variables instead. Streamlit sets `color-scheme` on `.stApp`, and the CSS `light-dark()` function picks a colour from it, so cards, text, ratings and backgrounds switch instantly.
+- **Charts:** they re-theme instantly. In dark mode they now use Streamlit's palette, a light blue line with dark blue bars, instead of the earlier fixed orange and blue.
+- **Map:** the basemap is drawn in Python, so it switches on the next click.
+- **Default:** dark cannot be forced as the first-visit default in 1.66.1. With two themes defined, Streamlit starts from the browser's system setting, even with `base = "dark"`, then remembers the user's choice. On a dark system, or once Dark is picked, the app looks exactly as before.
+- **Contrast fixes:** the first light colours failed for captions (Streamlit draws them at 60 % opacity) and for coloured `.small` text (85 % opacity). Both were darkened, and the tests now check them at those opacities.
+- **Not fixed:** in dark mode some text was already below 4.5:1, and is unchanged on purpose. That covers sidebar cards on the brighter weather gradients (about 3.0 to 3.3), the orange guideline lines (about 4.0) and the RainViewer link (about 2.5). Streamlit's own light chart axis text is grey, at about 3.6:1 on white, and is not ours to set without fixing it for both themes.
+
+### Be ready to explain: new forms
+
+The `[theme.light]` and `[theme.dark]` config sections; `st.context.theme.type`; CSS custom properties (`--name`, `var(--name)`); the CSS `light-dark()` function and `color-scheme`; the WCAG contrast formula in the tests.

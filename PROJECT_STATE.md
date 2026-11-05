@@ -114,3 +114,15 @@ Still open at the time: `data/weather_log.csv` was uncommitted and the orchestra
 ## 3 November 2026 — v0.1 merged into main
 
 The orchestrator committed the real log (tag `v0.1` holds 45 rows; later real rows were added before the merge), pushed `release/v0.1` and tag `v0.1`, and, with Arthur's approval, fast-forwarded `main` to it. The README clone line now uses the default branch. An independent re-audit of `v0.1` found no banned construct, no secret and no regression, and estimated 9–9.5/10. Open: commits from every team member, the Team section, a team walkthrough of the README's hardest parts, and more logged days. The racetrack collector still lives untracked in the main checkout and on the `data-collection` branch; it comes into the app in V2.
+
+## 5 November 2026 — light mode (branch release/v0.1)
+
+Light and dark themes can be picked in Streamlit's own menu (System, Light, Dark). Colours live in `src/weather_app/theme.py`, as one dictionary per theme, and reach the page through CSS `light-dark()` variables. Charts use Streamlit's own theme colours. The map's basemap follows `st.context.theme.type`.
+
+Verified with no key, in real Chrome against a throwaway fake OpenWeatherMap: both themes, every tab, at 1280 and 390 px. Light mode passes the WCAG AA contrast audit on every page.
+
+Limits:
+- Streamlit 1.66.1 starts from the system setting on a first visit, so dark is not forced as the default.
+- Switching does not rerun, so the basemap catches up on the next click.
+- `light-dark()` needs a 2024 or newer browser.
+- Some dark-mode text was already under 4.5:1 and was left unchanged on purpose.
