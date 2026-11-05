@@ -44,6 +44,8 @@ The rest of this README describes the app as it is now.
 
 Colour carries data: one cool-to-warm scale for every temperature, with a step every 5° from periwinkle at -5° through sky and cyan to sand at 15° and orange at 30°, one violet scale for wind speed, green for dry and red for rain. Neither temperature nor wind uses green or red.
 
+The app has a dark theme (graphite) and a light one (warm paper, white panels, a pale map). Pick System, Light or Dark in Streamlit's menu (⋮, top right); System follows the device. Streamlit's own colours change at once; the panels, charts and maps follow at the next click or reload.
+
 Each current-weather fetch for a circuit is added to `data/weather_log.csv` with a UTC timestamp. Readings are cached for 10 minutes, so ordinary page reruns do not add duplicate rows. Forecasts and the wind grid points are not logged.
 
 ## Screenshots
@@ -103,11 +105,12 @@ The key is only used on the server. The browser receives the radar as one finish
 For the team's walkthrough. Start with these, because they are the least obvious code in the project.
 
 - **Radar framing (`src/weather_app/maps.py`):** a web map is a grid of square images. `lat_lon_to_tile` turns a place into a tile position, `radar_area` picks the tiles around the circuit and the square to keep, and `stitch_tiles` joins them. RainViewer's tiles stop at zoom 7, where a pixel is about 1 km, but the map is zoomed in much further, so `enlarge` stretches the square 16 times with smooth bicubic resampling.
-- **Track outlines (`load_track` in `storage.py`, `track_view` and `track_layer` in `maps.py`):** each GeoJSON file becomes a list of line segments; OpenStreetMap ways stay separate, as in the file. `track_view` finds the zoom at which the outline's bounds fill a 340 by 320 pixel map with a small margin, on the map's own grid, where at zoom z the world is 512 × 2^z pixels across. The outline is drawn as map layers, a dark casing then a 3 px line, on both maps.
+- **Track outlines (`load_track` in `storage.py`, `track_view` and `track_layer` in `maps.py`):** each GeoJSON file becomes a list of line segments; OpenStreetMap ways stay separate, as in the file. `track_view` finds the zoom at which the outline's bounds fill a 340 by 320 pixel map with a small margin, on the map's own grid, where at zoom z the world is 512 × 2^z pixels across. The outline is drawn as map layers, a casing in the page colour then a 3 px line in the text colour, on both maps.
 - **Wind field (`wind_field`, `interpolate_wind` and `wind_arrow` in `maps.py`):** OpenWeatherMap's wind map shows speed only, so the app asks for current weather at a 3 by 3 grid around the track. Each of the 25 arrows takes its value by bilinear interpolation of the four grid points around it. Directions cannot be averaged as numbers (350° and 10° would give 180°), so each wind is first split into east and north parts (`wind_vector`), interpolated, then turned back. Wind direction says where the wind comes from, so each arrow is drawn the opposite way.
 - **3-hour windows (`src/weather_app/forecast.py`):** OpenWeatherMap gives each forecast step's rain as the amount in the 3 hours before its time, so each step is drawn as the window that ends at that time. `rain_timing` walks through the windows to find the first run with a chance of rain of at least 50 %.
 - **History days (`hourly`, `daily` and `daily_rows` in `src/weather_app/history.py`):** `resample("h").mean()` makes one row for every hour, and an hour without readings gets no value, so counting the hours with a value tells how complete each day is; under 20 hours, the day is muted. Times are converted with each circuit's time zone name, so summer time is handled. Wind directions are counted as compass points, and the most frequent one gives the row's arrow. `drop_stuck` first keeps only the first reading of any stuck run.
 - **Temperature colour (`temperature_color` in `src/weather_app/display.py`):** eight colour stops, every 5° from -5° to 30°; a temperature between two stops mixes their red, green and blue in proportion.
+- **Themes (`src/weather_app/theme.py`):** one dictionary per theme, dark and light, with the same keys. `current_theme` reads which one Streamlit's menu has on (`st.context.theme.type`), and the CSS, the charts, the glyphs and the maps all take their colours from it. `.streamlit/config.toml` gives Streamlit the same colours, and a test checks that they match.
 - **Logging inside the cache (`fetch_and_log_current` in `src/weather_app/fetching.py`):** Streamlit reruns the whole script on every click. The log is written inside the function decorated with `@st.cache_data`, so a rerun reuses the saved answer and adds no duplicate row.
 - **Status lights (`status_lights` in `forecast.py`, `light` in `cards.py`):** each light is the rain-timing rule (a chance of rain of at least 50 %) applied to a slice of the windows: the one running now, those starting within 3 hours, and the rest of today. Each light also carries its meaning in words, for screen readers.
 - **Sessions (`src/weather_app/sessions.py`):** a session overlaps every 3-hour window that starts before it ends and ends after it starts; its light is the status rule applied to those windows. `weekend_friday` picks the current weekend until Sunday's race has ended, then the next one.
@@ -126,6 +129,7 @@ For the team's walkthrough. Start with these, because they are the least obvious
 - `src/weather_app/display.py`: small helpers for local time, wind direction and high and low.
 - `src/weather_app/sessions.py`: my sessions, the default weekend and their rain status.
 - `src/weather_app/icons.py`: the condition glyphs and the wind arrow, as SVG data URIs.
+- `src/weather_app/theme.py`: the dark and light colours.
 - `src/weather_app/views.py`, `cards.py`, `style.py`: the UI.
 - `data/circuits.csv`: the circuits, each with its outline file. `straight_heading_deg` is blank for now and not used.
 - `data/sessions.csv`: your own sessions, created when you add one. Git ignores it.

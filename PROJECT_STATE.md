@@ -222,3 +222,18 @@ Verified without a real key or live OpenWeatherMap call: 124 tests pass; real Ch
 Not verified yet: real API data and real phones.
 
 `data/weather_log.csv` (real, uncommitted) and the git-ignored `data/sessions.csv` come from the orchestrator's live checks and were left as they were.
+
+## 5 November 2026 — light mode (branch racetrack-mvp-build, not merged)
+
+Built on `783ef1c`.
+- **Themes:** Streamlit's menu offers System, Light and Dark. Dark is unchanged. Light has warm paper, white panels, graphite text, a darker green and red, darker temperature and wind colours, and the pale CARTO map with a dark outline.
+- **One source:** `theme.py` holds one dictionary per theme with the same keys; CSS, charts, glyphs and maps read from it.
+- **Default:** System, so a device set to light opens light. Streamlit 1.66 has no setting to start on Dark when it offers both themes.
+- **Switching:** Streamlit repaints its own colours at once; the app's panels, charts and maps follow at the next rerun (any click, or a reload). Panels stay readable in between.
+- **Size:** app code is 2,190 lines.
+
+Verified without a real key or live OpenWeatherMap call: 132 tests pass; real Chrome against the fake server, Today and History, both themes, at a 1280 px window and 390 px emulation, with no sideways scroll; the switch from the menu and the rerun after it.
+
+Not verified yet: real API data and real phones.
+
+`data/weather_log.csv` (real, uncommitted) and the git-ignored `data/sessions.csv` were left as they were. The README screenshots show the dark theme.

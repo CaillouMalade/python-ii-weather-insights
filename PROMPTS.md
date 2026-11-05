@@ -560,3 +560,36 @@ The `:02X` hex format; chained assignment (`low = high = ...`); `base64.b64encod
 ### Be ready to explain: new forms not evidenced in class material
 
 `zip` over four columns in `drop_stuck`; list repetition (`[False] * (length - 1)`); `Page.captureScreenshot` with a clip, used only by the agent's checking script, not the app.
+
+## Light mode — 5 November 2026
+
+**Asked:** Arthur wants light mode after all, switched through Streamlit's own menu. The orchestrator asked Claude Code (Opus 5.5) for:
+- `[theme.light]` and `[theme.dark]` in the config, Dark unchanged and the default;
+- `st.context.theme.type` to pick one set of colours for the CSS, the charts and the map, with a check that a switch in the menu reruns the app (if not, say so and use Streamlit's CSS variables);
+- one dictionary per theme with the same keys, and a test for that;
+- a warm off-white light palette with AA green and red, and readable temperatures, arrows, outline and lights;
+- no JavaScript, no toggle of our own, no new text.
+
+**Got:**
+- `src/weather_app/theme.py`: `DARK` and `LIGHT` with the same 20 keys, `theme_named` and `current_theme`.
+- `temperature_color`, `rain_bar_color`, `icon_uri`, `wind_color`, `outline_layers`, the figures and the cards take the theme as an argument.
+- `style.py` writes the theme's tokens as CSS variables above one set of rules.
+- `.streamlit/config.toml`: a dark and a light section, sidebars included.
+- `tests/test_theme.py`: same keys and types, same scales, AA contrast for text, muted and green on both backgrounds, every temperature at least 4.5:1 on its surface, wind standing out more when stronger, the outline colours, the CSS tokens, and the config matching `theme.py`.
+
+**Checked:**
+- 132 tests pass with no key.
+- **Real Chrome against the throwaway fake server:** Today (Spa, wet, with snow) and History, both themes, at a 1280 px window and 390 px emulation, with no sideways scroll and no errors.
+- **The menu, in the browser:** picking Light repaints Streamlit's page at once but does not rerun the script, so `st.context.theme.type` still says the old theme; the next rerun (a click, R, or a reload) brings the app's colours over.
+- **Contrast on white:** text 15.9:1, muted 5.9:1, green 5.0:1, red 5.4:1, temperatures 4.7–5.6:1, wind 3.3–12:1.
+
+**Kept / changed / rejected:**
+- **No CSS-variable fallback:** Streamlit 1.66 exposes none (checked in the running page), and a Plotly chart or a map style cannot follow CSS anyway. Instead, the page background comes from Streamlit itself, and each panel sets its own text colour with its surface, so nothing becomes unreadable before the rerun.
+- **Default theme:** with two themes Streamlit starts on System, following the device; nothing in the config can make it start on Dark (checked in its source). A dark device still gets the dark app exactly as before.
+- **Wind bands:** the speed thresholds moved to `WIND_SPEEDS` in `maps.py`; only the colours are per theme.
+- **Light cloud band** set fainter (7 %) than first tried, because grey on white read heavier than on graphite.
+- **Screenshots** stay dark.
+
+### Be ready to explain: new forms not evidenced in class material
+
+`st.context.theme.type`; `tomllib` in a test; the `type()` comparison in the same-keys test.
