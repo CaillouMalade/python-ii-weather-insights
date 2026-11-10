@@ -53,6 +53,7 @@ The tests need no key and make no API calls.
 - `tests/`: the tests.
 - `PROMPTS.md`: the AI collaboration log.
 - `assignment/BRIEF.md` and `summary.md`: the assignment material.
+- `ROADMAP.md`: what is left, the build order and who owns which module.
 
 Earlier, larger versions are kept on the branches `archive/city-app` and `archive/racetrack-poc`.
 
