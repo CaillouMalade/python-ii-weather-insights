@@ -1,6 +1,6 @@
 # Racetrack Weather
 
-Python II group assignment: a small object-oriented weather app for 18 European racetracks, built on OpenWeatherMap and Streamlit. It is the racetrack version of the basic weather app on `main`, with the same structure.
+Python II group assignment: a small object-oriented weather app for 18 European racetracks, built on OpenWeatherMap and Streamlit. It grew out of a general weather app, kept on the `weather-legacy` branch.
 
 ## What it does
 
@@ -58,7 +58,7 @@ The tests need no key and make no API calls.
 - `assignment/BRIEF.md` and `summary.md`: the assignment material.
 - `ROADMAP.md`: what is left, the build order and who owns which module.
 
-Earlier, larger versions are kept on the branches `archive/city-app` and `archive/racetrack-poc`.
+Branches: `main` is the submitted app, `dev` is where we work, `data-collection` holds the collector, and `weather-legacy` is the general weather app this started from.
 
 ## Errors the app explains
 
