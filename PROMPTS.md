@@ -251,3 +251,27 @@ Commits `73043d4`, `387fdb0` and `b3c61e9` carry a `Co-Authored-By: Codex <norep
 ### Be ready to explain: new forms
 
 The `[theme.light]` and `[theme.dark]` config sections; `st.context.theme.type`; CSS custom properties (`--name`, `var(--name)`); the CSS `light-dark()` function and `color-scheme`; the WCAG contrast formula in the tests.
+
+## Simplification — 10 November 2026
+
+**Asked:** Arthur asked for the earlier proofs of concept to be archived and for "one SIMPLE project that fits all the guidelines", built from the city app, with "a few cities" hardcoded in a CSV and no GeoNames.
+
+**Got:**
+- Archive branches `archive/city-app` (the old `main`) and `archive/racetrack-poc` (the racetrack app).
+- A fixed `data/cities.csv` of 12 cities, chosen from cities already in the log so their history carries over.
+- `client.py` cut down to `APIClient` and `WeatherClient` with `find_city` (geocoding) and `current`. Gone: forecast, air quality, UV, map tiles and RainViewer.
+- `WeatherReading` reduced to the 8 fields the app uses, with a second property `feels_like_gap` and `__str__`.
+- One `app.py` with two tabs, in Streamlit's default look. **Live conditions** shows the chosen cities ranked with `sorted()` (using `__lt__`), a bar chart of temperatures and a table. **Analytics** reads only the log and shows a trend chart, a city comparison chart with a table, the daily range and the feels-like gap.
+- The log's 52 real rows were kept with their values unchanged. Only the 15 columns the app no longer uses, all blank in those rows, were dropped.
+- New tests: 18, with no key and no network.
+
+**Checked:** `uv run pytest` passes. AppTest ran the app with no key (setup message, Analytics still works) and with a fake `requests.get`. That run covered one failing city skipped with a warning, the unknown-city and empty-input messages, adding a city, and no key in the page tree. The fake run's log rows were removed afterwards. The real API was not called.
+
+**Kept / changed / rejected:**
+- Rejected: keeping the forecast. It is useful, but it is not needed for the rubric, and the ask was simplicity.
+- Changed: the tests swap `requests.get` by hand and put it back in `finally`, because pytest fixtures such as `monkeypatch` are not used in this project.
+- Kept: logging inside the 10-minute `st.cache_data` function, so reruns add no duplicate rows.
+
+### Be ready to explain
+
+`FakeGet.__call__` in `tests/test_client.py` makes an object callable like a function. `raise ... from None` hides the original `requests` error, whose text contains the URL and therefore the key. `px.bar(..., error_y=..., error_y_minus=...)` draws the lowest-to-highest bars.
