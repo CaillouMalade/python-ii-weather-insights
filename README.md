@@ -1,32 +1,18 @@
 # Weather Insights
 
-Python II group assignment: an object-oriented weather app built on OpenWeatherMap and Streamlit. This is v0.1, a general weather app.
+Python II group assignment: a small object-oriented weather app built on OpenWeatherMap and Streamlit.
 
 ## What it does
 
-**Sidebar:** search about 5,000 cities in a dropdown, largest first, and tap a saved city to open it. The list holds the largest cities plus national capitals. A city that is not listed can be typed under "Not listed?" just below it, which checks the text and looks the city up with OpenWeatherMap's geocoding. Each card shows local time, temperature, conditions, high and low, and ✕ removes a city. Saved cities survive a refresh. On a phone the sidebar starts closed and a city picker appears at the top of the page.
+Pick cities in the sidebar from a fixed list of 12 (`data/cities.csv`), or type another city to add it. The app checks the text and looks the city up with OpenWeatherMap's geocoding.
 
-**Weather tab**, in one consistent grid, which adapts to the width available:
-- A header with the city, local time, temperature, conditions, high and low, plus feels like, wind, humidity and chance of rain.
-- Next hours, switchable between temperature, precipitation and wind.
-- A 5-day forecast beside a weather map. The map opens on real rain radar and also offers temperature, wind, clouds and pressure, each with a colour scale.
-- Same-size detail tiles: air quality, UV index today, sunrise, sunset, dew point, visibility, pressure and cloud cover.
+- **Live conditions:** the chosen cities' current weather, ranked warmest first, with the warmest and coldest highlighted, a bar chart of temperatures (°C) and a table with feels-like, humidity, wind (km/h) and conditions. A city that fails to load is skipped with a warning, and the rest still show.
+- **Analytics,** computed only from our own log:
+  - **Trend over time:** one city's logged temperature and feels-like (°C).
+  - **Compare cities:** each city's average, lowest and highest logged temperature, warmest first.
+  - **Derived metrics:** the daily range (highest minus lowest reading in a day) and the feels-like gap (feels-like minus real temperature).
 
-**Analytics tab**, written to be read without knowing weather terms. Four short answers sit at the top: best time outside, next rain, windiest moment and air quality. All times are local to the city. Below them:
-- **Plan the week:** one headline, a temperature-and-rain chart, and a card per day with a one-sentence summary and morning, afternoon and evening rated in words with a reason.
-- **Air:** how the air usually is, the share of days in each band, each pollutant in plain words against its health guideline, the best and worst time of day, and the coming days.
-- **Compare:** the warmest, driest, calmest and cleanest of your saved cities, and a sortable table.
-- **History:** your own logged data: how much there is, a trend chart once a city has 3 readings over at least an hour, and, from 3 days of data, how much the temperature moves within a day. This is the only section that works without an API key.
-
-Each successful current-weather fetch is added to `data/weather_log.csv` with a UTC timestamp. Readings are cached for 10 minutes, so ordinary page reruns do not add duplicate rows. Forecasts are not logged.
-
-## Screenshots
-
-![Weather tab](docs/screenshots/weather.png)
-![Analytics: Plan the week](docs/screenshots/plan-the-week.png)
-![Analytics: Air](docs/screenshots/air.png)
-![Analytics: Compare](docs/screenshots/compare.png)
-![Analytics: History](docs/screenshots/history.png)
+Every successful fetch is appended to `data/weather_log.csv` with a UTC timestamp. Readings are cached for 10 minutes, so clicking around does not add duplicate rows.
 
 ## Setup from a clean clone
 
@@ -36,25 +22,10 @@ Requires Python 3.11 or newer and [uv](https://docs.astral.sh/uv/).
 git clone https://github.com/CaillouMalade/python-ii-weather-insights.git
 cd python-ii-weather-insights
 uv sync
+cp variables.env.example variables.env        # Windows PowerShell: Copy-Item variables.env.example variables.env
 ```
 
-Copy the example settings file. On Windows PowerShell:
-
-```powershell
-Copy-Item variables.env.example variables.env
-```
-
-On macOS/Linux:
-
-```bash
-cp variables.env.example variables.env
-```
-
-Then put your own OpenWeatherMap key in `variables.env`. Git ignores this file; never commit or display a real key. A free-tier key is enough.
-
-Without a key, the app still opens. The Weather tab and the first three Analytics sections show a setup message, and History works on the existing log.
-
-A fresh clone starts with Madrid, Tokyo and New York City. Your own list is saved in `data/saved_cities.csv`, which Git ignores.
+Put your own OpenWeatherMap key in `variables.env`. Git ignores this file. Without a key the app still opens: Live conditions shows a setup message, and Analytics works on the committed log.
 
 ## Run the app
 
@@ -68,46 +39,36 @@ uv run streamlit run app.py
 uv run pytest
 ```
 
-The tests use small hand-made cases with known answers. They need no key and make no API calls.
+The tests need no key and make no API calls.
 
-## How the API key stays private
+## How the code is organised
 
-The key is only used on the server. Weather map tile URLs need the key, so the server downloads the tiles, joins them into one image with Pillow, and sends the browser only that image. Radar comes from RainViewer and needs no key; it is fetched the same way. The map background comes from CARTO's free basemap, which needs no token.
-
-## The hardest parts to explain
-
-For the team's walkthrough. Start with these, because they are the least obvious code in the project.
-
-- **Map tiles (`src/weather_app/maps.py`):** a web map is a grid of square images. `lat_lon_to_tile` turns a place into a tile number, `tile_grid` picks the tiles around it, and `stitch_tiles` joins them into one picture. The server does this because OpenWeatherMap's tile URLs contain the key, so the browser only ever gets the finished image.
-- **Logging inside the cache (`fetch_and_log_current` in `src/weather_app/fetching.py`):** Streamlit reruns the whole script on every click. The log is written inside the function decorated with `@st.cache_data`, so a rerun reuses the saved answer and adds no duplicate row. A new row appears only when the 10-minute cache runs out.
-- **Tab callbacks (`app.py`, `src/weather_app/views_analytics.py`, `src/weather_app/sidebar.py`):** `st.tabs(..., on_change="rerun")` makes the script rerun when a tab changes, and `.open` says which tab is showing, so hidden tabs make no API calls. Callbacks such as `on_click=select_city` run before the script reruns, which is why they can safely change `st.session_state`.
-- **Ozone rolling mean (`daily_guideline_levels` in `src/weather_app/analytics.py`):** the WHO's ozone guideline is an 8-hour level and the others are daily. So ozone uses each day's highest 8-hour rolling mean, while the others use the daily mean.
-- **Tappable cards (`src/weather_app/style.py`, `show_sidebar` in `src/weather_app/sidebar.py`):** a Streamlit button cannot contain a designed card. So each card is plain HTML, and an invisible real button is stretched over it with CSS. The ✕ sits above that button so it can still be pressed.
-
-## Project structure
-
-- `app.py`: the entry point.
-- `src/weather_app/client.py`: `APIClient` (generic GET, with or without a key), `WeatherClient` (OpenWeatherMap) and `RainViewerClient` (radar).
-- `src/weather_app/models.py`: `WeatherReading`.
-- `src/weather_app/storage.py`: the CSV log, the city list and the saved cities.
-- `src/weather_app/analytics.py`: pandas analyses, each taking and returning a DataFrame.
-- `src/weather_app/findings.py`: the plain-language ratings and sentences on the Analytics tab.
-- `src/weather_app/maps.py`: tile maths, stitching and the Plotly map.
-- `src/weather_app/fetching.py`: cached API calls.
-- `src/weather_app/display.py`: small helpers for local time, wind direction and backgrounds.
-- `src/weather_app/sidebar.py`, `views_weather.py`, `views_analytics.py`, `cards.py`, `style.py`: the UI.
-- `scripts/build_cities_csv.py`: rebuilds `data/cities.csv`. Not needed to run the app.
+- `app.py`: the Streamlit page with its two tabs.
+- `src/weather_app/client.py`: `APIClient`, a generic JSON client (sends the request, checks the status code, raises a clear `ValueError`), and `WeatherClient(APIClient)`, which knows OpenWeatherMap's endpoints and fields. The key is stored as `__api_key`, and helpers such as `_get` are protected.
+- `src/weather_app/models.py`: `WeatherReading`, with the properties `wind_kmh` and `feels_like_gap`, plus `__repr__`, `__str__` and `__lt__` (so `sorted()` ranks readings by temperature).
+- `src/weather_app/fetching.py`: cached fetch-and-log, and the loop that skips a failing city.
+- `src/weather_app/storage.py`: the city list and the CSV log.
+- `src/weather_app/analytics.py`: the pandas analyses.
+- `src/weather_app/config.py`: loads the key from `variables.env` with `python-dotenv`.
 - `tests/`: the tests.
 - `PROMPTS.md`: the AI collaboration log.
-- `assignment/BRIEF.md`, `summary.md` and `starter_template/`: the original assignment material.
+- `assignment/BRIEF.md` and `summary.md`: the assignment material.
 
-## Data sources and credits
+Earlier, larger versions are kept on the branches `archive/city-app` and `archive/racetrack-poc`.
 
-- Weather, air quality and the temperature, wind, clouds and pressure map layers: [OpenWeatherMap](https://openweathermap.org). Air quality is modelled data, not readings from local stations.
-- Rain radar: [RainViewer](https://www.rainviewer.com/), whose API is for personal and educational use.
-- City list: `data/cities.csv` is derived from [GeoNames](https://www.geonames.org) (`cities15000`, `admin1CodesASCII`, `countryInfo`), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). We kept the 5,000 largest cities plus every national capital in that file, and added our own label columns.
-- Basemap: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors © [CARTO](https://carto.com/attributions).
-- Air quality guideline values: WHO global air quality guidelines, 2021.
+## Errors the app explains
+
+| What goes wrong | Message |
+|---|---|
+| Empty or letter-free city name | "Please enter a city name." / "... contains no letters." (no API call is made) |
+| Unknown city | "City 'X' was not found. Check the spelling." |
+| Invalid key | "Invalid or inactive API key. Check the key in variables.env." |
+| No connection or timeout | "Could not connect ..." / "... took too long to respond." |
+| Other server error | "The weather service returned status N." |
+
+## Data sources
+
+Weather and geocoding: [OpenWeatherMap](https://openweathermap.org).
 
 ## Team
 
