@@ -275,3 +275,18 @@ The `[theme.light]` and `[theme.dark]` config sections; `st.context.theme.type`;
 ### Be ready to explain
 
 `FakeGet.__call__` in `tests/test_client.py` makes an object callable like a function. `raise ... from None` hides the original `requests` error, whose text contains the URL and therefore the key. `px.bar(..., error_y=..., error_y_minus=...)` draws the lowest-to-highest bars.
+
+## Basic racetrack app — 10 November 2026
+
+**Asked:** Arthur wants three apps: the collector (kept active on `data-collection`), the basic weather app and a basic racetrack app. Each starts very simple, and features come back one at a time. The racetrack app gets its own branch, not a switch inside the weather app.
+
+**Got:** Branch `racetrack-simple`, cut from the simple weather app, with the same files. The changes:
+- `data/circuits.csv` holds the 18 circuits: id, name and coordinates.
+- `data/current_weather.csv` is the collector's history up to 6 November, 6,013 readings, copied from Arthur's synced vault. The first 2,971 rows are byte-identical to the earlier committed snapshot, after converting Windows line endings.
+- `storage.load_history` renames the collector's columns to the log's names, and `load_all_readings` combines that history with the app's own log.
+- `weather_log.csv` starts empty here, because the city readings belong to the weather app.
+- Analytics shows the average daily range per circuit instead of one row per day.
+
+**Checked:** 20 tests pass. AppTest ran the app with no key and with a fake `requests.get`, covering a skipped circuit, the unknown-place and empty-input messages, adding a place, and no key in the page tree.
+
+**Kept / changed / rejected:** The radar, wind maps, track outlines, sessions and theming of `archive/racetrack-poc` were left out, to be brought back one at a time if wanted.

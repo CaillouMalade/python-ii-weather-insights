@@ -1,4 +1,4 @@
-"""Weather Insights: the Streamlit entry point. The logic lives in the weather_app package."""
+"""Racetrack Weather: the Streamlit entry point. The logic lives in the weather_app package."""
 
 import pandas as pd
 import plotly.express as px
@@ -7,19 +7,19 @@ import streamlit as st
 from weather_app.analytics import city_comparison, city_trend, daily_range, feels_like_gap, rank_by_temperature
 from weather_app.config import API_KEY, SETUP_MESSAGE
 from weather_app.fetching import fetch_many, find_city
-from weather_app.storage import load_cities, load_log
+from weather_app.storage import load_all_readings, load_circuits
 
-st.set_page_config(page_title="Weather Insights", page_icon="🌤️", layout="wide")
-st.title("Weather Insights")
+st.set_page_config(page_title="Racetrack Weather", page_icon="🏁", layout="wide")
+st.title("Racetrack Weather")
 
-# The fixed list from data/cities.csv, plus any city added this session.
-if "cities" not in st.session_state:
-    st.session_state["cities"] = load_cities()
-cities = st.session_state["cities"]
-names = [city["location"] for city in cities]
+# The fixed list from data/circuits.csv, plus any place added this session.
+if "places" not in st.session_state:
+    st.session_state["places"] = load_circuits()
+places = st.session_state["places"]
+names = [city["location"] for city in places]
 
 
-# Sidebar: choose cities, or add one.
+# Sidebar: choose circuits, or add a place.
 
 
 def add_city():
@@ -32,39 +32,39 @@ def add_city():
     if city["location"] in names:
         st.session_state["add_message"] = f"{city['location']} is already in the list."
     else:
-        cities.append(city)
+        places.append(city)
         st.session_state["chosen"] = st.session_state["chosen"] + [city["location"]]
         st.session_state["add_message"] = f"Added {city['location']}."
     st.session_state["new_city"] = ""
 
 
 with st.sidebar:
-    st.header("Cities")
+    st.header("Circuits")
     if "chosen" not in st.session_state:
         st.session_state["chosen"] = names[:5]
-    st.multiselect("Cities to compare", names, key="chosen")
+    st.multiselect("Circuits to compare", names, key="chosen")
 
     if API_KEY:
-        st.text_input("Add another city", key="new_city", placeholder="e.g. Oslo")
+        st.text_input("Add a place near another track (town name)", key="new_city", placeholder="e.g. Zandvoort")
         st.button("Add", on_click=add_city)
         if "add_message" in st.session_state:
             st.caption(st.session_state.pop("add_message"))
 
 chosen = []
-for city in cities:
+for city in places:
     if city["location"] in st.session_state["chosen"]:
         chosen.append(city)
 
 live_tab, analytics_tab = st.tabs(["Live conditions", "Analytics"])
 
 
-# View 1: live conditions for the chosen cities.
+# View 1: live conditions at the chosen circuits.
 
 with live_tab:
     if not API_KEY:
         st.warning(SETUP_MESSAGE)
     elif len(chosen) == 0:
-        st.info("Pick at least one city in the sidebar.")
+        st.info("Pick at least one circuit in the sidebar.")
     else:
         with st.spinner("Fetching current weather"):
             readings, failures = fetch_many(chosen)
@@ -83,7 +83,7 @@ with live_tab:
             for reading in ranked:
                 rows.append(
                     {
-                        "City": reading.location,
+                        "Circuit": reading.location,
                         "Temperature (°C)": round(reading.temperature, 1),
                         "Feels like (°C)": round(reading.feels_like, 1),
                         "Humidity (%)": reading.humidity,
@@ -93,27 +93,27 @@ with live_tab:
                 )
             table = pd.DataFrame(rows)
 
-            fig = px.bar(table, x="City", y="Temperature (°C)", title="Current temperature by city")
+            fig = px.bar(table, x="Circuit", y="Temperature (°C)", title="Current temperature by circuit")
             st.plotly_chart(fig)
             st.dataframe(table, hide_index=True)
             st.caption("Each successful fetch is added to data/weather_log.csv. Readings refresh every 10 minutes.")
 
 
-# View 2: analytics on our own logged history. Works without a key.
+# View 2: analytics on our own collected history. Works without a key.
 
 with analytics_tab:
-    log = load_log()
+    log = load_all_readings()
     if len(log) == 0:
-        st.info("The log is empty. Open Live conditions with an API key to start collecting.")
+        st.info("No collected history yet.")
     else:
         first = log["timestamp_utc"].min().strftime("%d %b %Y")
         last = log["timestamp_utc"].max().strftime("%d %b %Y")
-        st.caption(f"{len(log)} logged readings from {first} to {last} (UTC).")
+        st.caption(f"{len(log)} collected readings from {first} to {last} (UTC): the collector's history plus the app's own log.")
 
         st.subheader("Trend over time")
         # The city with the most readings is shown first, because its trend says the most.
-        logged_cities = list(log["location"].value_counts().index)
-        city = st.selectbox("City", logged_cities)
+        logged_places = list(log["location"].value_counts().index)
+        city = st.selectbox("Circuit", logged_places)
         trend = city_trend(log, city)
         if len(trend) < 2:
             st.info(f"Only one reading for {city} so far. The trend appears from the second one.")
@@ -123,22 +123,23 @@ with analytics_tab:
             fig.update_layout(yaxis_title="°C", legend_title_text="")
             st.plotly_chart(fig)
 
-        st.subheader("Compare cities")
+        st.subheader("Compare circuits")
         comparison = city_comparison(log)
         fig = px.bar(comparison, x="location", y="average", error_y=comparison["highest"] - comparison["average"], error_y_minus=comparison["average"] - comparison["lowest"], title="Average logged temperature, with lowest and highest")
-        fig.update_layout(xaxis_title="City", yaxis_title="°C")
+        fig.update_layout(xaxis_title="Circuit", yaxis_title="°C")
         st.plotly_chart(fig)
         st.dataframe(comparison.round(1), hide_index=True)
 
         st.subheader("Derived metrics")
         columns = st.columns(2)
         with columns[0]:
-            st.markdown("**Daily range** (highest minus lowest reading in a day, °C)")
+            st.markdown("**Average daily range** (highest minus lowest reading in a day, °C)")
             ranges = daily_range(log)
             if len(ranges) == 0:
-                st.info("Needs two readings of one city on the same day.")
+                st.info("Needs two readings of one circuit on the same day.")
             else:
-                st.dataframe(ranges.round(1), hide_index=True)
+                average_range = ranges.groupby("location")["range"].mean().reset_index().sort_values("range", ascending=False)
+                st.dataframe(average_range.round(1), hide_index=True)
         with columns[1]:
             st.markdown("**Feels-like gap** (average feels-like minus real temperature, °C)")
             st.dataframe(feels_like_gap(log).round(1), hide_index=True)
