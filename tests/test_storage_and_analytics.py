@@ -5,7 +5,7 @@ import pandas as pd
 
 from weather_app.analytics import city_comparison, city_trend, daily_range, feels_like_gap
 from weather_app.models import WeatherReading
-from weather_app.storage import CITIES_PATH, LOG_COLUMNS, LOG_PATH, append_reading, load_cities, load_log
+from weather_app.storage import CIRCUITS_PATH, HISTORY_PATH, LOG_COLUMNS, LOG_PATH, append_reading, load_all_readings, load_circuits, load_history, load_log
 
 
 def test_append_writes_header_once_and_load_reads_rows():
@@ -26,8 +26,32 @@ def test_missing_log_is_empty():
 
 
 def test_committed_files_load():
-    assert len(load_cities(CITIES_PATH)) >= 10
+    assert len(load_circuits(CIRCUITS_PATH)) == 18
     assert list(load_log(LOG_PATH).columns) == LOG_COLUMNS
+    history = load_history(HISTORY_PATH)
+    assert sorted(history.columns) == sorted(LOG_COLUMNS)
+    assert len(history) > 1000
+
+
+def test_every_circuit_has_history():
+    history = load_history(HISTORY_PATH)
+    for circuit in load_circuits(CIRCUITS_PATH):
+        assert circuit["location"] in set(history["location"])
+
+
+def test_history_and_log_are_combined_in_time_order():
+    with tempfile.TemporaryDirectory() as folder:
+        history_path = Path(folder) / "history.csv"
+        history_path.write_text(
+            "fetched_at_utc,location_name,latitude_deg,longitude_deg,temperature_c,feels_like_c,humidity_pct,wind_speed_m_s,weather_description,rain_1h_mm\n"
+            "2026-11-01T12:00:00Z,Spa,50.4,5.9,9.0,7.0,80,3.0,light rain,0.4\n",
+            encoding="utf-8",
+        )
+        log_path = Path(folder) / "log.csv"
+        append_reading(WeatherReading("Spa", 50.4, 5.9, 10.0, 8.0, 70, 2.0, "clouds"), log_path)
+        readings = load_all_readings(log_path, history_path)
+        assert list(readings["temperature"]) == [9.0, 10.0]
+        assert list(readings.columns) == LOG_COLUMNS
 
 
 def make_log():

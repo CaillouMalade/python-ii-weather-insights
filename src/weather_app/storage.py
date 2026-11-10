@@ -1,4 +1,4 @@
-"""Files: the fixed city list and the weather log (our own time series)."""
+"""Files: the circuit list, the collector's history and the app's own weather log."""
 
 import csv
 from datetime import datetime, timezone
@@ -9,19 +9,35 @@ import pandas as pd
 from .models import READING_COLUMNS
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-CITIES_PATH = DATA_DIR / "cities.csv"
+CIRCUITS_PATH = DATA_DIR / "circuits.csv"
+# Every reading the app itself fetches.
 LOG_PATH = DATA_DIR / "weather_log.csv"
+# Written by the collector (data-collection branch) every 30 minutes for every circuit since 29 October 2026.
+HISTORY_PATH = DATA_DIR / "current_weather.csv"
+
+# The collector's column names, and the log column each one becomes.
+HISTORY_COLUMNS = {
+    "fetched_at_utc": "timestamp_utc",
+    "location_name": "location",
+    "latitude_deg": "latitude",
+    "longitude_deg": "longitude",
+    "temperature_c": "temperature",
+    "feels_like_c": "feels_like",
+    "humidity_pct": "humidity",
+    "wind_speed_m_s": "wind_speed",
+    "weather_description": "conditions",
+}
 
 LOG_COLUMNS = ["timestamp_utc"] + READING_COLUMNS
 
 
-def load_cities(path=CITIES_PATH):
-    """Return the city list as location dictionaries: location, latitude, longitude."""
-    cities = []
+def load_circuits(path=CIRCUITS_PATH):
+    """Return the circuit list as location dictionaries: location, latitude, longitude."""
+    circuits = []
     for _, row in pd.read_csv(path, encoding="utf-8").iterrows():
         # float() because pandas gives a NumPy number, not a Python one.
-        cities.append({"location": row["location"], "latitude": float(row["latitude"]), "longitude": float(row["longitude"])})
-    return cities
+        circuits.append({"location": row["location"], "latitude": float(row["latitude"]), "longitude": float(row["longitude"])})
+    return circuits
 
 
 def append_reading(reading, path=LOG_PATH):
@@ -53,3 +69,20 @@ def load_log(path=LOG_PATH):
         return pd.DataFrame(columns=LOG_COLUMNS)
     log["timestamp_utc"] = pd.to_datetime(log["timestamp_utc"], utc=True, format="ISO8601")
     return log
+
+
+def load_history(path=HISTORY_PATH):
+    """Return the collector's readings with the log's column names, or an empty DataFrame."""
+    try:
+        history = pd.read_csv(path, encoding="utf-8")
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        return pd.DataFrame(columns=LOG_COLUMNS)
+    history = history[list(HISTORY_COLUMNS.keys())].rename(columns=HISTORY_COLUMNS)
+    history["timestamp_utc"] = pd.to_datetime(history["timestamp_utc"], utc=True, format="ISO8601")
+    return history
+
+
+def load_all_readings(log_path=LOG_PATH, history_path=HISTORY_PATH):
+    """The collector's history and the app's own log together, in time order."""
+    readings = pd.concat([load_history(history_path), load_log(log_path)], ignore_index=True)
+    return readings.sort_values("timestamp_utc").reset_index(drop=True)
