@@ -2,6 +2,25 @@
 
 Python II group assignment: an object-oriented Streamlit app for racetrack weather, built on OpenWeatherMap. This is the technical README for the `dev` branch: what we are building, how the code fits together, and the board of work. The user README for `main` is written at the end.
 
+## Why this app
+
+When racing on a track, weather plays a massive role, and three factors basically drive everything:
+
+- **Temperature:** it has a big influence on how well we can use the tyres and on overheating, so if the temperature evolves quickly during a session it can completely change our strategy (for instance in qualifying, if we can see it gets colder later, it's in our best interest to wait for maximum performance).
+- **Rain:** obviously it matters a massive amount, and having a precise idea of when it's going to rain is extremely important. The main issue we encounter is that the different weather apps on our phones or the radars often give conflicting information, and it's always difficult to compare them and to know which one to trust.
+- **Wind:** the cars rely on aerodynamics, so wind in a certain direction in a corner can massively influence the car and even be a cause for errors, hence having an idea of the wind strength and direction is just as important.
+
+Knowing that, the idea is a weather app that aggregates several APIs, so instead of giving one ungrounded likelihood of rain, we give the statistical likelihood of rain and wind with more detail, on top of the wind over the track map and the rain radar. It's an MVP (we will need more granularity later), but that's the main idea.
+
+## How it works
+
+Race weekends usually follow the same format and timing, so for now the session times are hardcoded, and being able to change the session hours comes later as polish. The app has four views:
+
+1. **Weekend overview (main dashboard):** the mechanics need to prepare the car's setup a few days before, so we need the whole weekend at a glance. For instance, if we can see that tomorrow is going to rain, we need to test a few different setups, since the car is set up differently in the wet than for maximum performance in the dry.
+2. **Session dashboard:** more granular, per-session information.
+3. **History:** what usually happens on a given track, the temperature range and how variable things are over that particular circuit. That's a really important metric because it tells us how much we can trust the forecast there.
+4. **Track comparison:** it's always interesting to compare different tracks over the same period and see how they differ rain-wise, temperature-wise and wind-wise (no track map needed here).
+
 ## What the app should do
 
 A user can:
