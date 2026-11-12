@@ -1,6 +1,6 @@
 # Racetrack Weather (development)
 
-Python II group assignment: an object-oriented Streamlit app for racetrack weather, built on OpenWeatherMap. This is the technical README for the `dev` branch: what we are building, how the code fits together, and the board of work. The user README for `main` is written at the end.
+Python II group assignment: an object-oriented Streamlit app for racetrack weather, built on OpenWeatherMap. This is the technical README for the `dev` branch: what we are building, how we work, and the checklist of cards. The user README for `main` is written at the end.
 
 ## Why this app
 
@@ -57,109 +57,37 @@ uv run streamlit run app.py     # run the app
 uv run pytest                   # run the tests (no key, no API calls)
 ```
 
-## How the code fits together
-
-```mermaid
-flowchart TB
-  OWM[OpenWeatherMap] --> C1[OpenWeatherMap client + errors]
-  OM[Open-Meteo] --> C2[More providers]
-  MET[MET Norway] --> C2
-  C1 --> FP[list of ForecastPoint]
-  C2 --> FP
-  FP --> ST[Statistics: mean + 95% CI]
-  FP --> DB[Weekend overview]
-  FP --> SD[Session dashboard]
-  ST --> DB
-  ST --> SD
-  RV[RainViewer radar] --> DB
-  TR[Track CSVs] --> SB[Sidebar] -- selected track --> C1 & C2
-  CO[Collector, data-collection branch] --> LOG[data/current_weather.csv] --> AN[Analytics]
-```
-
-Current modules in `src/weather_app/`: `client.py` (API classes and input checks), `models.py` (data classes), `fetching.py` (fetch, log, skip failures), `storage.py` (CSV files), `analytics.py` (analyses on the log), `config.py` (loads the key). Put new code where it fits; we tidy the layout in the refactor at the end.
-
-### Shared data (do not change without telling everyone)
-
-- **`ForecastPoint`** (`models.py`): one provider's forecast for one 3-hour window: `source`, `time_utc` (window start, UTC), `temperature` (°C), `wind_speed` (m/s), `wind_deg`, `rain` (mm over the window). Missing values are `None`. Every provider returns a list of these on the same windows. `tests/fake_forecast.py` has an invented three-provider forecast to build against.
-- **`WeatherReading`** (`models.py`): current conditions at one place.
-- **Log** `data/current_weather.csv`, written by the collector: `fetched_at_utc, observed_at_utc, location_id, location_name, latitude_deg, longitude_deg, provider_latitude_deg, provider_longitude_deg, temperature_c, feels_like_c, humidity_pct, pressure_hpa, wind_speed_m_s, wind_direction_deg, wind_gust_m_s, cloud_cover_pct, visibility_m, rain_1h_mm, snow_1h_mm, weather_code, weather_description`.
-- **Tracks:** `data/circuits.csv` (the list in the app), `data/grade1_tracks.csv` (`id, name, country, latitude, longitude`: the FIA Grade 1 circuits used to check an added track), `data/my_tracks.csv` (tracks users add).
-
 ## How we work
 
-- Take a card from the board, work on your own branch from `dev`, and open a pull request into `dev`. Arthur merges.
+- Take a card from the checklist, work on your own branch from `dev`, and open a pull request into `dev`. Arthur merges.
 - If you use an AI coding agent, it reads `AGENTS.md` (Claude Code reads it through `CLAUDE.md`): it will explain before and after coding and keep the code to what we saw in class.
 - Commit from your own GitHub account.
 - Keep it simple enough that anyone in the group could explain every line. Use what we saw in class.
 - Run `uv run pytest` before pushing, and add tests for what you build.
 - If an AI agent helps, add an entry to `PROMPTS.md` (what you asked, what you got, what you kept or changed) and the co-author trailer on that commit, e.g. `Co-Authored-By: Claude <noreply@anthropic.com>`.
 
-## Board
-
-Pick a card that is **Ready**. A card becomes Ready when everything in "Needs" is merged. Feature freeze: Tue 17 Nov; after that, only the refactor, polish and fixes.
-
-| # | Card | Needs | Owner | Status |
-|---|---|---|---|---|
-| 0 | Setup: shared data, fake forecast, this README | — | Arthur | Done |
-| 1 | Track list and logo | — | Arthur | Ready |
-| 2 | OpenWeatherMap client and errors | 0 | | Ready |
-| 3 | More providers | 0 | | Ready |
-| 4 | Sidebar | 1 | | Blocked |
-| 5 | Analytics | — | | Ready |
-| 6 | Statistics | 0 (fake data), then 2 + 3 | | Ready |
-| 7 | Weekend overview | 0 (fake data), then 2 + 6 | | Ready |
-| 8 | Session dashboard | 0 (fake data), then 2 + 6 | | Ready |
-| 9 | Live check | 2 + 3 | | Blocked |
-| 10 | Refactor (16–17 Nov) | 2–8 | | Blocked |
-| 11 | Polish (18 Nov) | 10 | | Blocked |
-| 12 | Finish (19 Nov) | 11 | Arthur | Blocked |
-
-Later, only after card 10: wind arrows over the track map, changing the session times, adding your own sessions, a settings view to choose providers.
-
-### Cards
-
-**1. Track list and logo.** Fill `data/grade1_tracks.csv` with the FIA Grade 1 circuits (one point near the centre of each track) and add the logo picture. Done when the file is complete and the logo is in the repo.
-
-**2. OpenWeatherMap client and errors.** The app needs the current weather and the 5-day forecast for a track, and must explain every failure. Extend `WeatherClient` with a forecast that returns a list of `ForecastPoint`, and make sure a bad input, a bad key, a missing location, a timeout, no connection, a server error and an unreadable answer each give their own message. Done when each failure has a test with a fake response.
-
-**3. More providers.** The statistics need three forecasts that can be compared. Add Open-Meteo and MET Norway (both free, no key; MET Norway asks for a User-Agent header naming the app) as subclasses of `APIClient`, each returning `ForecastPoint`s on the same 3-hour UTC windows as OpenWeatherMap: convert units, sum hourly rain over each window, take temperature and wind at the window start. A provider that fails is skipped with its own message. Done when, for one track, all three return the same windows, with a test per provider on a saved sample answer.
-
-**4. Sidebar.** The user picks a track, sees the session times, and can add a track. The add form takes a name, latitude and longitude; checks them before anything else (name not empty or already used, latitude −90 to 90, longitude −180 to 180); accepts the track only within 3 km of a circuit in `grade1_tracks.csv` (a small distance function), otherwise says "No racetrack found at these coordinates"; and saves accepted tracks to `data/my_tracks.csv`. Shows the logo and the fixed session times. Done when every check has its own message and a test.
-
-**5. Analytics.** Two views from `data/current_weather.csv`: the rain history of the selected track (rain per day, mm), and two tracks side by side, ranked with `sorted()`, with a one-line f-string summary for each (average temperature, rain days, total rain, over how many days we logged). Each with a chart with units. Done when both run on the committed data, with tests on a small slice of it.
-
-**6. Statistics.** For each 3-hour window, combine the three providers: mean temperature, wind and rain with a 95% confidence interval, and how many providers predict rain. Build it on `tests/fake_forecast.py` first. Done when the numbers are tested on the fake forecast.
-
-**7. Weekend overview.** The main page for the selected track, used to prepare the car days before: the weather now, one 5-day chart (temperature °C, rain mm, wind km/h) with the confidence interval from card 6 and the session times marked, wind strength and direction, and a map with the RainViewer radar around the track. Build it on the fake forecast first, then switch to the real one. Done when it runs with the real providers.
-
-**8. Session dashboard.** One session at a time, with previous and next buttons to go through the weekend. For that session's time window: temperature, chance of rain and wind strength and direction, per provider and combined with the confidence interval from card 6, plus a small chart of the window. OpenWeatherMap only forecasts 5 days ahead; a session beyond that uses the providers that reach it, or says "No forecast yet". Build it on the fake forecast first. Done when it runs with the real providers.
-
-**9. Live check.** With the real key: each error message, a failing provider, adding a good and a bad track. Fix what breaks.
-
-**10. Refactor.** Move functions to where they belong, remove duplicates and unused code, make names consistent. Tests pass before and after.
-
-**11. Polish.** Cosmetic upgrades only, no new features: consistent layout and spacing, colours, clear titles and labels, empty and loading states, the logo, and anything an outsider trying the app found confusing. Tests still pass.
-
-**12. Finish.** User README for `main`, fresh data commit, clean-clone test, merge `dev` into `main`.
-
 ## Checklist
 
-- [x] 0 Setup merged
-- [ ] 1 Track list and logo
-- [ ] Everyone added to the repo and on a card
-- [ ] 2 OpenWeatherMap client and errors
-- [ ] 3 More providers
-- [ ] 4 Sidebar
-- [ ] 5 Analytics
-- [ ] 6 Statistics
-- [ ] 7 Weekend overview
-- [ ] 8 Session dashboard
-- [ ] 9 Live check
-- [ ] Walkthrough: each of us explains our card (Mon 16 Nov)
-- [ ] 10 Refactor, feature freeze (Tue 17 Nov)
-- [ ] 11 Polish (Wed 18 Nov)
-- [ ] 12 Finish (Thu 19 Nov)
-- [ ] Submitted (Fri 20 Nov)
+Pick an unticked card whose "needs" are done, put your name on it, and tick it when it's merged. Feature freeze Tue 17 Nov; after that, only the refactor, polish and fixes.
+
+- [x] **0. Setup** (Arthur): shared `ForecastPoint` shape, fake forecast in `tests/`, this README.
+- [ ] **1. Track list and logo** (Arthur): fill `data/grade1_tracks.csv` with the FIA Grade 1 circuits (one point near the centre of each track) and add the logo picture.
+- [ ] **Everyone added to the repo and on a card.**
+- [ ] **2. OpenWeatherMap client and errors** (needs 0, owner: ): the current weather and the 5-day forecast for a track, with the forecast as a list of `ForecastPoint`. A bad input, a bad key, a missing location, a timeout, no connection, a server error and an unreadable answer each give their own message. Done when each failure has a test with a fake response.
+- [ ] **3. More providers** (needs 0, owner: ): Open-Meteo and MET Norway (both free, no key; MET Norway asks for a User-Agent header naming the app) as subclasses of `APIClient`, each returning `ForecastPoint`s on the same 3-hour UTC windows as OpenWeatherMap: convert units, sum hourly rain over each window, take temperature and wind at the window start. A provider that fails is skipped with its own message. Done when all three return the same windows for one track, with a test per provider on a saved sample answer.
+- [ ] **4. Sidebar** (needs 1, owner: ): pick a track, see the fixed session times and the logo, and add a track with a name, latitude and longitude. Check them first (name not empty or already used, latitude −90 to 90, longitude −180 to 180), accept the track only within 3 km of a circuit in `grade1_tracks.csv`, otherwise say "No racetrack found at these coordinates", and save accepted tracks to `data/my_tracks.csv`. Done when every check has its own message and a test.
+- [ ] **5. History and track comparison** (needs nothing, owner: ): from `data/current_weather.csv`, the rain history of the selected track (rain per day, mm, temperature range and how variable it is), and two tracks side by side over the same period, ranked with `sorted()`, with a one-line f-string summary for each (average temperature, rain days, total rain, over how many days we logged). Each with a chart with units. Done when both run on the committed data, with tests on a small slice of it.
+- [ ] **6. Statistics** (needs 0, owner: ): for each 3-hour window, combine the three providers: mean temperature, wind and rain with a 95% confidence interval, and how many providers predict rain. Build it on `tests/fake_forecast.py` first. Done when the numbers are tested on the fake forecast.
+- [ ] **7. Weekend overview** (needs 0, then 2 + 6, owner: ): the main page for the selected track: the weather now, one 5-day chart (temperature °C, rain mm, wind km/h) with the confidence interval and the session times marked, wind strength and direction, and the RainViewer radar on a map around the track. Fake forecast first, then the real one.
+- [ ] **8. Session dashboard** (needs 0, then 2 + 6, owner: ): one session at a time, with previous and next buttons. For that session's window: temperature, chance of rain and wind strength and direction, per provider and combined with the confidence interval, plus a small chart. A session beyond OpenWeatherMap's 5 days uses the providers that reach it, or says "No forecast yet".
+- [ ] **9. Live check** (needs 2 + 3, owner: ): with the real key, each error message, a failing provider, adding a good and a bad track. Fix what breaks.
+- [ ] **Walkthrough (Mon 16 Nov):** each of us explains our card to the group.
+- [ ] **10. Refactor (Tue 17 Nov, feature freeze)** (needs 2–8): move functions to where they belong, remove duplicates and unused code, make names consistent. Tests pass before and after.
+- [ ] **11. Polish (Wed 18 Nov)** (needs 10): cosmetic upgrades only: layout and spacing, colours, titles and labels, empty and loading states, the logo, and anything an outsider found confusing.
+- [ ] **12. Finish (Thu 19 Nov)** (Arthur, needs 11): user README for `main`, fresh data commit, clean-clone test, merge `dev` into `main`.
+- [ ] **Submitted (Fri 20 Nov).**
+
+Later, only if there's time after card 10: wind arrows over the track map, changing the session times, adding your own sessions, a settings view to choose providers.
 
 ## Data sources
 
