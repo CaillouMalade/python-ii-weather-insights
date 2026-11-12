@@ -44,3 +44,30 @@ class WeatherReading:
         for name in READING_COLUMNS:
             values[name] = getattr(self, name)
         return values
+
+
+class ForecastPoint:
+    """One provider's forecast for one 3-hour window. Units: °C, m/s, degrees, mm.
+
+    Every provider turns its own answer into a list of these, on the same
+    3-hour windows in UTC, so the statistics can compare them directly.
+    A value the provider does not send stays None.
+    """
+
+    def __init__(self, source, time_utc, temperature, wind_speed, wind_deg, rain):
+        self.source = source          # e.g. "openweathermap", "open-meteo", "met-norway"
+        self.time_utc = time_utc      # start of the 3-hour window, a datetime in UTC
+        self.temperature = temperature
+        self.wind_speed = wind_speed
+        self.wind_deg = wind_deg      # direction the wind comes from
+        self.rain = rain              # mm over the whole 3-hour window
+
+    @property
+    def wind_kmh(self):
+        """Wind speed in km/h, or None when the provider sent no wind."""
+        if self.wind_speed is None:
+            return None
+        return self.wind_speed * METRES_PER_SECOND_TO_KMH
+
+    def __repr__(self):
+        return f"ForecastPoint({self.source!r}, {self.time_utc:%a %H:%M}, {self.temperature}°C)"
