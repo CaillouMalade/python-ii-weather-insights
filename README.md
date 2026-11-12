@@ -8,15 +8,16 @@ A user can:
 1. Pick a track from the list in the sidebar.
 2. Add a track by typing a name, latitude and longitude. It is saved only if it lies within 3 km of an FIA Grade 1 circuit; otherwise the app says so.
 3. See the weekend's session times (FP1, FP2, FP3, Qualifying, Race), fixed for now.
-4. See the weather now at that track: temperature, feels like, rain, and wind speed and direction.
-5. See the next 5 days on one chart: temperature (°C), rain (mm) and wind (km/h).
-6. See the rain radar on a map around the track.
-7. See how sure the forecast is: the average of three providers with a 95% confidence interval.
-8. See the rain history of a track, from our own logged data.
-9. Compare two tracks side by side, with a short summary of each (average temperature, rain days, total rain).
-10. Get a clear message, never a crash, when the input is wrong, the key is bad, the network is down or a provider fails. The rest of the app keeps working.
+4. **Weekend overview:** see the weather now at that track (temperature, feels like, rain, wind strength and direction), the next 5 days on one chart (temperature °C, rain mm, wind km/h), and the rain radar on a map around the track.
+5. **Session dashboard:** go through the sessions one by one and see, for each, the temperature, chance of rain and wind strength and direction during that session.
+6. See how sure the forecast is: the average of three providers with a 95% confidence interval.
+7. **History:** see what usually happens at a track, from our own logged data: rain, temperature range and how variable the weather is there.
+8. **Track comparison:** compare two tracks over the same period, with a short summary of each (average temperature, rain days, total rain).
+9. Get a clear message, never a crash, when the input is wrong, the key is bad, the network is down or a provider fails. The rest of the app keeps working.
 
 Every successful fetch is logged with a timestamp to a CSV that grows over time and is committed with the repo.
+
+Temperatures are air temperatures. Track (surface) temperature is measured by the race engineers on track and is not part of this MVP.
 
 ## Setup
 
@@ -47,8 +48,10 @@ flowchart TB
   C1 --> FP[list of ForecastPoint]
   C2 --> FP
   FP --> ST[Statistics: mean + 95% CI]
-  FP --> DB[Dashboard]
+  FP --> DB[Weekend overview]
+  FP --> SD[Session dashboard]
   ST --> DB
+  ST --> SD
   RV[RainViewer radar] --> DB
   TR[Track CSVs] --> SB[Sidebar] -- selected track --> C1 & C2
   CO[Collector, data-collection branch] --> LOG[data/current_weather.csv] --> AN[Analytics]
@@ -78,20 +81,21 @@ Pick a card that is **Ready**. A card becomes Ready when everything in "Needs" i
 
 | # | Card | Needs | Owner | Status |
 |---|---|---|---|---|
-| 0 | Setup: shared data, fake forecast, this README | — | Arthur | In review |
+| 0 | Setup: shared data, fake forecast, this README | — | Arthur | Done |
 | 1 | Track list and logo | — | Arthur | Ready |
-| 2 | OpenWeatherMap client and errors | 0 | | Blocked |
-| 3 | More providers | 0 | | Blocked |
+| 2 | OpenWeatherMap client and errors | 0 | | Ready |
+| 3 | More providers | 0 | | Ready |
 | 4 | Sidebar | 1 | | Blocked |
 | 5 | Analytics | — | | Ready |
-| 6 | Statistics | 0 (fake data), then 2 + 3 | | Blocked |
-| 7 | Dashboard | 0 (fake data), then 2 + 6 | | Blocked |
-| 8 | Live check | 2 + 3 | | Blocked |
-| 9 | Refactor (16–17 Nov) | 2–7 | | Blocked |
-| 10 | Polish (18 Nov) | 9 | | Blocked |
-| 11 | Finish (19 Nov) | 10 | Arthur | Blocked |
+| 6 | Statistics | 0 (fake data), then 2 + 3 | | Ready |
+| 7 | Weekend overview | 0 (fake data), then 2 + 6 | | Ready |
+| 8 | Session dashboard | 0 (fake data), then 2 + 6 | | Ready |
+| 9 | Live check | 2 + 3 | | Blocked |
+| 10 | Refactor (16–17 Nov) | 2–8 | | Blocked |
+| 11 | Polish (18 Nov) | 10 | | Blocked |
+| 12 | Finish (19 Nov) | 11 | Arthur | Blocked |
 
-Later, only after card 9: a settings view to choose providers, a session detail view, adding your own sessions.
+Later, only after card 10: wind arrows over the track map, changing the session times, adding your own sessions, a settings view to choose providers.
 
 ### Cards
 
@@ -107,19 +111,21 @@ Later, only after card 9: a settings view to choose providers, a session detail 
 
 **6. Statistics.** For each 3-hour window, combine the three providers: mean temperature, wind and rain with a 95% confidence interval, and how many providers predict rain. Build it on `tests/fake_forecast.py` first. Done when the numbers are tested on the fake forecast.
 
-**7. Dashboard.** The main page for the selected track: the weather now, one 5-day chart (temperature °C, rain mm, wind km/h), the confidence interval from card 6, and a map with the RainViewer radar around the track. Build it on the fake forecast first, then switch to the real one. Done when it runs with the real providers.
+**7. Weekend overview.** The main page for the selected track, used to prepare the car days before: the weather now, one 5-day chart (temperature °C, rain mm, wind km/h) with the confidence interval from card 6 and the session times marked, wind strength and direction, and a map with the RainViewer radar around the track. Build it on the fake forecast first, then switch to the real one. Done when it runs with the real providers.
 
-**8. Live check.** With the real key: each error message, a failing provider, adding a good and a bad track. Fix what breaks.
+**8. Session dashboard.** One session at a time, with previous and next buttons to go through the weekend. For that session's time window: temperature, chance of rain and wind strength and direction, per provider and combined with the confidence interval from card 6, plus a small chart of the window. OpenWeatherMap only forecasts 5 days ahead; a session beyond that uses the providers that reach it, or says "No forecast yet". Build it on the fake forecast first. Done when it runs with the real providers.
 
-**9. Refactor.** Move functions to where they belong, remove duplicates and unused code, make names consistent. Tests pass before and after.
+**9. Live check.** With the real key: each error message, a failing provider, adding a good and a bad track. Fix what breaks.
 
-**10. Polish.** Cosmetic upgrades only, no new features: consistent layout and spacing, colours, clear titles and labels, empty and loading states, the logo, and anything an outsider trying the app found confusing. Tests still pass.
+**10. Refactor.** Move functions to where they belong, remove duplicates and unused code, make names consistent. Tests pass before and after.
 
-**11. Finish.** User README for `main`, fresh data commit, clean-clone test, merge `dev` into `main`.
+**11. Polish.** Cosmetic upgrades only, no new features: consistent layout and spacing, colours, clear titles and labels, empty and loading states, the logo, and anything an outsider trying the app found confusing. Tests still pass.
+
+**12. Finish.** User README for `main`, fresh data commit, clean-clone test, merge `dev` into `main`.
 
 ## Checklist
 
-- [ ] 0 Setup merged
+- [x] 0 Setup merged
 - [ ] 1 Track list and logo
 - [ ] Everyone added to the repo and on a card
 - [ ] 2 OpenWeatherMap client and errors
@@ -127,12 +133,13 @@ Later, only after card 9: a settings view to choose providers, a session detail 
 - [ ] 4 Sidebar
 - [ ] 5 Analytics
 - [ ] 6 Statistics
-- [ ] 7 Dashboard
-- [ ] 8 Live check
+- [ ] 7 Weekend overview
+- [ ] 8 Session dashboard
+- [ ] 9 Live check
 - [ ] Walkthrough: each of us explains our card (Mon 16 Nov)
-- [ ] 9 Refactor, feature freeze (Tue 17 Nov)
-- [ ] 10 Polish (Wed 18 Nov)
-- [ ] 11 Finish (Thu 19 Nov)
+- [ ] 10 Refactor, feature freeze (Tue 17 Nov)
+- [ ] 11 Polish (Wed 18 Nov)
+- [ ] 12 Finish (Thu 19 Nov)
 - [ ] Submitted (Fri 20 Nov)
 
 ## Data sources
