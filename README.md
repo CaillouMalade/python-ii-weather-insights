@@ -71,7 +71,8 @@ uv run pytest                   # run the tests (no key, no API calls)
 Pick an unticked card whose "needs" are done, put your name on it, and tick it when it's merged. Feature freeze Tue 17 Nov; after that, only the refactor, polish and fixes.
 
 - [x] **0. Setup** (Arthur): shared `ForecastPoint` shape, fake forecast in `tests/`, this README.
-- [ ] **1. Track list and logo** (Arthur): fill `data/grade1_tracks.csv` with the FIA Grade 1 circuits (one point near the centre of each track) and add the logo picture.
+- [x] **1. Track list** (Arthur): `data/grade1_tracks.csv` holds the 16 FIA Grade 1 circuits in EU countries (one point near the centre of each track).
+- [ ] **1b. Logo** (Arthur): add the logo picture.
 - [ ] **Everyone added to the repo and on a card.**
 - [ ] **2. OpenWeatherMap client and errors** (needs 0, owner: ): the current weather and the 5-day forecast for a track, with the forecast as a list of `ForecastPoint`. A bad input, a bad key, a missing location, a timeout, no connection, a server error and an unreadable answer each give their own message. Done when each failure has a test with a fake response.
 - [ ] **3. More providers** (needs 0, owner: ): Open-Meteo and MET Norway (both free, no key; MET Norway asks for a User-Agent header naming the app) as subclasses of `APIClient`, each returning `ForecastPoint`s on the same 3-hour UTC windows as OpenWeatherMap: convert units, sum hourly rain over each window, take temperature and wind at the window start. A provider that fails is skipped with its own message. Done when all three return the same windows for one track, with a test per provider on a saved sample answer.
