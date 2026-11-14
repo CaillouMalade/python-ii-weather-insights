@@ -1,10 +1,12 @@
-"""Calls to OpenWeatherMap, cached so Streamlit's reruns do not repeat them."""
+"""Calls to the weather providers, cached so Streamlit's reruns do not repeat them."""
 
 import streamlit as st
 
+from .aggregator import fetch_all_forecasts
 from .client import WeatherClient
 from .config import API_KEY
-from .storage import append_reading
+from .providers import MetNorwayClient, OpenMeteoClient
+from .storage import append_forecasts, append_reading
 
 TEN_MINUTES = 600
 
@@ -32,3 +34,15 @@ def fetch_many(locations):
 
 def find_city(text):
     return WeatherClient(API_KEY).find_city(text)
+
+
+# Same idea as fetch_and_log: the forecasts are logged inside the cached function,
+# so a rerun reuses them and cannot log the same fetch twice.
+@st.cache_data(ttl=TEN_MINUTES, show_spinner=False)
+def fetch_forecasts_and_log(location):
+    """Return (table, failure messages) for every provider, and log what came back."""
+    # OpenWeatherMap joins this list once card 2 gives WeatherClient a forecast() method.
+    providers = [OpenMeteoClient(), MetNorwayClient()]
+    table, failures = fetch_all_forecasts(location, providers)
+    append_forecasts(table, location)
+    return table, failures

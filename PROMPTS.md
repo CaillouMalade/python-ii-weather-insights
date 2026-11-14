@@ -290,3 +290,11 @@ The `[theme.light]` and `[theme.dark]` config sections; `st.context.theme.type`;
 **Checked:** 20 tests pass. AppTest ran the app with no key and with a fake `requests.get`, covering a skipped circuit, the unknown-place and empty-input messages, adding a place, and no key in the page tree.
 
 **Kept / changed / rejected:** The radar, wind maps, track outlines, sessions and theming of `archive/racetrack-poc` were left out, to be brought back one at a time if wanted.
+
+## Card 3: more providers — 14 November 2026 (Arthur, with Claude Code)
+
+**Asked:** add Open-Meteo and MET Norway as `APIClient` subclasses returning `ForecastPoint`s on OpenWeatherMap's 3-hour UTC windows, plus a way to combine the providers.
+
+**Got:** `OpenMeteoClient`, `MetNorwayClient`, an aggregator returning one DataFrame with a `source` column and a list of failures, a forecast log `data/forecasts.csv`, and tests on two saved real answers.
+
+**Decided / changed:** compared the APIs first in a side chat. Chose value at window start for temperature and wind, a 3-hour sum for rain, "00:00 = rain falling 00→03" for every provider, MET only where it's hourly (no 6-hour logic), 5 days max, wind direction never averaged (card 6 counts compass sectors). Rejected one CSV per provider (harder to group) and extra columns that can be calculated. Asked why a class rather than a function, and confirmed it's inheritance, not nested classes.

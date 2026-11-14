@@ -2,10 +2,12 @@ import tempfile
 from pathlib import Path
 
 import pandas as pd
+from fake_forecast import fake_forecasts
 
+from weather_app.aggregator import points_to_frame
 from weather_app.analytics import city_comparison, city_trend, daily_range, feels_like_gap
 from weather_app.models import WeatherReading
-from weather_app.storage import CIRCUITS_PATH, HISTORY_PATH, LOG_COLUMNS, LOG_PATH, append_reading, load_all_readings, load_circuits, load_history, load_log
+from weather_app.storage import CIRCUITS_PATH, FORECAST_LOG_COLUMNS, HISTORY_PATH, LOG_COLUMNS, LOG_PATH, append_forecasts, append_reading, load_all_readings, load_circuits, load_history, load_log
 
 
 def test_append_writes_header_once_and_load_reads_rows():
@@ -87,3 +89,28 @@ def test_feels_like_gap_per_city():
     gaps = feels_like_gap(make_log())
     assert list(gaps["location"]) == ["Oslo", "Madrid"]
     assert gaps.loc[0, "gap"] == -4.0
+
+
+def test_append_forecasts_adds_fetch_time_and_location():
+    points = fake_forecasts()["open-meteo"]
+    points[0].rain = None  # a missing value must stay empty, not become "nan"
+    table = points_to_frame(points)
+    monza = {"location": "Monza", "latitude": 45.62, "longitude": 9.28}
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "forecasts.csv"
+        append_forecasts(table, monza, path)
+        append_forecasts(table, monza, path)
+        lines = path.read_text(encoding="utf-8").splitlines()
+        assert lines[0] == ",".join(FORECAST_LOG_COLUMNS)
+        assert len(lines) == 1 + 2 * len(points)   # one header, then every row of both fetches
+        assert "nan" not in lines[1]
+        saved = pd.read_csv(path)
+        assert list(saved["location"].unique()) == ["Monza"]
+        assert saved["rain"].isna().sum() == 2
+
+
+def test_append_forecasts_skips_an_empty_table():
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "forecasts.csv"
+        append_forecasts(points_to_frame([]), {"location": "Monza", "latitude": 45.62, "longitude": 9.28}, path)
+        assert not path.exists()
