@@ -14,6 +14,8 @@ CIRCUITS_PATH = DATA_DIR / "circuits.csv"
 LOG_PATH = DATA_DIR / "weather_log.csv"
 # Written by the collector (data-collection branch) every 30 minutes for every circuit since 29 October 2026.
 HISTORY_PATH = DATA_DIR / "current_weather.csv"
+# Every forecast the app fetches: one row per provider and 3-hour window, per fetch.
+FORECAST_LOG_PATH = DATA_DIR / "forecasts.csv"
 
 # The collector's column names, and the log column each one becomes.
 HISTORY_COLUMNS = {
@@ -29,6 +31,11 @@ HISTORY_COLUMNS = {
 }
 
 LOG_COLUMNS = ["timestamp_utc"] + READING_COLUMNS
+
+FORECAST_LOG_COLUMNS = [
+    "fetched_at_utc", "location", "latitude", "longitude",
+    "source", "time_utc", "temperature", "wind_speed", "wind_deg", "rain",
+]
 
 
 def load_circuits(path=CIRCUITS_PATH):
@@ -59,6 +66,28 @@ def append_reading(reading, path=LOG_PATH):
             writer.writerow(row)
     except PermissionError:
         raise ValueError("Could not save to the weather log. Close the file if it is open in another program.") from None
+
+
+def append_forecasts(table, location, path=FORECAST_LOG_PATH):
+    """Append one fetch of forecasts with the UTC time we asked, writing the header if the file is new."""
+    if len(table) == 0:
+        return  # no provider answered, so there is nothing to log
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not path.exists() or path.stat().st_size == 0
+
+    rows = table.copy()
+    # Every row of one fetch gets the same time, so fetches can be told apart later.
+    rows["fetched_at_utc"] = datetime.now(timezone.utc).isoformat()
+    rows["location"] = location["location"]
+    rows["latitude"] = location["latitude"]
+    rows["longitude"] = location["longitude"]
+
+    # mode="a" adds to the end of the file; a missing value (None) is written as an empty cell.
+    try:
+        rows[FORECAST_LOG_COLUMNS].to_csv(path, mode="a", header=write_header, index=False, encoding="utf-8")
+    except PermissionError:
+        raise ValueError("Could not save the forecasts. Close the file if it is open in another program.") from None
 
 
 def load_log(path=LOG_PATH):

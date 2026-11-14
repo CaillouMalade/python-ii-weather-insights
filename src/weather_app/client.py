@@ -8,15 +8,18 @@ BASE_URL = "https://api.openweathermap.org"
 
 
 class APIClient:
-    """Calls any JSON API that takes its key as a query parameter.
+    """Calls any JSON API, with or without a key.
 
     Another provider would subclass this and only say which endpoints and fields it uses.
+    A provider without a key passes api_key=None and key_param=None.
     """
 
     def __init__(self, base_url, api_key, key_param, timeout=10):
         self.base_url = base_url
         self.key_param = key_param
         self.timeout = timeout
+        # Extra request headers; empty by default. MET Norway needs a User-Agent here.
+        self.headers = {}
         self._not_found_message = "The requested resource was not found."
         # Name-mangled so callers and subclasses cannot read it by accident.
         # The real protection is keeping the key out of the repo and the browser.
@@ -24,12 +27,14 @@ class APIClient:
 
     def _get(self, endpoint, params):
         """Send a GET request and return the JSON, or raise ValueError with a clear message."""
-        params[self.key_param] = self.__api_key
+        # Only providers that use a key get one added to the request.
+        if self.key_param is not None:
+            params[self.key_param] = self.__api_key
 
         # The messages are fixed text on purpose: the text of a requests error
         # contains the full URL, and the URL contains the API key.
         try:
-            response = requests.get(f"{self.base_url}/{endpoint}", params=params, timeout=self.timeout)
+            response = requests.get(f"{self.base_url}/{endpoint}", params=params, headers=self.headers, timeout=self.timeout)
         except requests.exceptions.Timeout:
             raise ValueError("The weather service took too long to respond. Please try again.") from None
         except requests.exceptions.ConnectionError:

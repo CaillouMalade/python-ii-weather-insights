@@ -28,7 +28,7 @@ class FakeGet:
         self.error = error
         self.calls = 0
 
-    def __call__(self, url, params, timeout):
+    def __call__(self, url, params, timeout, headers=None):
         self.calls = self.calls + 1
         if self.error is not None:
             raise self.error
