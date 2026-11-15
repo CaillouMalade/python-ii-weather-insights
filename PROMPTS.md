@@ -298,3 +298,10 @@ The `[theme.light]` and `[theme.dark]` config sections; `st.context.theme.type`;
 **Got:** `OpenMeteoClient`, `MetNorwayClient`, an aggregator returning one DataFrame with a `source` column and a list of failures, a forecast log `data/forecasts.csv`, and tests on two saved real answers.
 
 **Decided / changed:** compared the APIs first in a side chat. Chose value at window start for temperature and wind, a 3-hour sum for rain, "00:00 = rain falling 00→03" for every provider, MET only where it's hourly (no 6-hour logic), 5 days max, wind direction never averaged (card 6 counts compass sectors). Rejected one CSV per provider (harder to group) and extra columns that can be calculated. Asked why a class rather than a function, and confirmed it's inheritance, not nested classes.
+## Card 5: History and track comparison - 15 November 2026
+
+**Asked:** The student asked to complete card 5.
+
+**Got:** Track history by stable collector track ID, daily rain and temperature ranges, and a two-track comparison over their overlapping logged period. Added unit-labeled charts, summary lines, and tests using a small copy of committed collector data.
+
+**Kept as-is / changed / rejected:** Kept the card 5 scope and the simple pandas patterns already used in the project. No changes to the requested scope so far; awaiting the student's review of the implementation.

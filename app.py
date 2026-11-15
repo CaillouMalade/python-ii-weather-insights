@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from weather_app.analytics import city_comparison, city_trend, daily_range, feels_like_gap, rank_by_temperature
+from weather_app.analytics import compare_track_history, rank_by_temperature, track_rain_history
 from weather_app.config import API_KEY, SETUP_MESSAGE
 from weather_app.fetching import fetch_many, find_city
 from weather_app.storage import load_all_readings, load_circuits
@@ -102,44 +102,55 @@ with live_tab:
 # View 2: analytics on our own collected history. Works without a key.
 
 with analytics_tab:
-    log = load_all_readings()
-    if len(log) == 0:
-        st.info("No collected history yet.")
+    history = load_all_readings()
+    if len(history) == 0 or "location_id" not in history.columns:
+        st.info("No collected track history yet.")
     else:
-        first = log["timestamp_utc"].min().strftime("%d %b %Y")
-        last = log["timestamp_utc"].max().strftime("%d %b %Y")
-        st.caption(f"{len(log)} collected readings from {first} to {last} (UTC): the collector's history plus the app's own log.")
-
-        st.subheader("Trend over time")
-        # The city with the most readings is shown first, because its trend says the most.
-        logged_places = list(log["location"].value_counts().index)
-        city = st.selectbox("Circuit", logged_places)
-        trend = city_trend(log, city)
-        if len(trend) < 2:
-            st.info(f"Only one reading for {city} so far. The trend appears from the second one.")
+        tracks = history[history["location_id"].notna()][["location_id", "location"]].drop_duplicates()
+        track_ids = list(tracks["location_id"])
+        track_names = dict(zip(tracks["location_id"], tracks["location"]))
+        if len(track_ids) == 0:
+            st.info("No collected track history yet.")
         else:
-            trend = trend.rename(columns={"timestamp_utc": "Time (UTC)", "temperature": "Temperature", "feels_like": "Feels like"})
-            fig = px.line(trend, x="Time (UTC)", y=["Temperature", "Feels like"], markers=True, title=f"{city}: logged temperature")
-            fig.update_layout(yaxis_title="°C", legend_title_text="")
-            st.plotly_chart(fig)
+            st.subheader("Track history")
+            track_id = st.selectbox("Track", track_ids, format_func=lambda value: track_names[value])
+            daily = track_rain_history(history, track_id)
+            rain_fig = px.line(daily, x="day", y="rain_mm", markers=True, title=f"{track_names[track_id]}: daily rain")
+            rain_fig.update_layout(xaxis_title="Day (UTC)", yaxis_title="Rain (mm)")
+            st.plotly_chart(rain_fig)
+            temp_fig = px.line(daily, x="day", y=["temperature_min_c", "temperature_max_c"], markers=True, title=f"{track_names[track_id]}: daily temperature range")
+            temp_fig.update_layout(xaxis_title="Day (UTC)", yaxis_title="Temperature (°C)", legend_title_text="")
+            st.plotly_chart(temp_fig)
+            variation_fig = px.line(daily, x="day", y="temperature_range_c", markers=True, title="Daily temperature variability")
+            variation_fig.update_layout(xaxis_title="Day (UTC)", yaxis_title="Temperature range (°C)")
+            st.plotly_chart(variation_fig)
 
-        st.subheader("Compare circuits")
-        comparison = city_comparison(log)
-        fig = px.bar(comparison, x="location", y="average", error_y=comparison["highest"] - comparison["average"], error_y_minus=comparison["average"] - comparison["lowest"], title="Average logged temperature, with lowest and highest")
-        fig.update_layout(xaxis_title="Circuit", yaxis_title="°C")
-        st.plotly_chart(fig)
-        st.dataframe(comparison.round(1), hide_index=True)
-
-        st.subheader("Derived metrics")
-        columns = st.columns(2)
-        with columns[0]:
-            st.markdown("**Average daily range** (highest minus lowest reading in a day, °C)")
-            ranges = daily_range(log)
-            if len(ranges) == 0:
-                st.info("Needs two readings of one circuit on the same day.")
+            st.subheader("Compare two tracks")
+            if len(track_ids) < 2:
+                st.info("Track comparison needs history for at least two tracks.")
             else:
-                average_range = ranges.groupby("location")["range"].mean().reset_index().sort_values("range", ascending=False)
-                st.dataframe(average_range.round(1), hide_index=True)
-        with columns[1]:
-            st.markdown("**Feels-like gap** (average feels-like minus real temperature, °C)")
-            st.dataframe(feels_like_gap(log).round(1), hide_index=True)
+                col1, col2 = st.columns(2)
+                first_id = col1.selectbox("First track", track_ids, index=0, format_func=lambda value: track_names[value])
+                second_options = [value for value in track_ids if value != first_id]
+                second_id = col2.selectbox("Second track", second_options, format_func=lambda value: track_names[value])
+                first_rows = history[history["location_id"] == first_id]
+                second_rows = history[history["location_id"] == second_id]
+                start = max(first_rows["timestamp_utc"].min(), second_rows["timestamp_utc"].min())
+                end = min(first_rows["timestamp_utc"].max(), second_rows["timestamp_utc"].max())
+                if start > end:
+                    st.info("These tracks do not have history over the same period.")
+                else:
+                    shared = history[(history["location_id"].isin([first_id, second_id])) & (history["timestamp_utc"] >= start) & (history["timestamp_utc"] <= end)].copy()
+                    summaries = compare_track_history(shared, [first_id, second_id])
+                    for summary in summaries:
+                        st.caption(f"{summary['location']}: average {summary['average_temperature_c']:.1f} °C, {summary['rain_days']} rain days, {summary['total_rain_mm']:.1f} mm total rain over {summary['days_logged']} logged days.")
+                    shared["day"] = shared["timestamp_utc"].dt.date
+                    daily_compare = shared.groupby(["location", "day"]).agg(temperature_c=("temperature", "mean")).reset_index()
+                    rain_compare = shared.groupby(["location", "day"])["rain"].sum(min_count=1).reset_index(name="rain_mm")
+                    daily_compare = daily_compare.merge(rain_compare, on=["location", "day"])
+                    temp_fig = px.line(daily_compare, x="day", y="temperature_c", color="location", markers=True, title="Average daily temperature comparison")
+                    temp_fig.update_layout(xaxis_title="Day (UTC)", yaxis_title="Temperature (°C)")
+                    st.plotly_chart(temp_fig)
+                    rain_fig = px.line(daily_compare, x="day", y="rain_mm", color="location", markers=True, title="Daily rain comparison")
+                    rain_fig.update_layout(xaxis_title="Day (UTC)", yaxis_title="Rain (mm)")
+                    st.plotly_chart(rain_fig)
