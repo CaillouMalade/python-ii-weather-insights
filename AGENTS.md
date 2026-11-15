@@ -111,7 +111,7 @@ Short hints so each card starts in the right place. The card text in the README 
 
 1. **Explain it back** in plain words, function by function: what it does, why it's written that way, and how it connects to the rest of the app.
 2. **Give the student two or three questions** they should be able to answer in front of the teacher (for example: "Why is this a subclass of `APIClient`?", "What happens if one provider times out?"). Offer to go through the answers.
-3. **Update `PROMPTS.md`** with a short entry: what the student asked, what you produced, and what they kept, changed or rejected and why. Draft it with the student, not for them. Keep the file's line endings.
+3. **Update `PROMPTS.md`** under the card's own heading (replace the "To fill" line; never add at the end of the file, or two PRs conflict) with a short entry: what the student asked, what you produced, and what they kept, changed or rejected and why. Draft it with the student, not for them. Keep the file's line endings.
 4. **Commit** from the student's own GitHub account, a short plain message ending with the co-author trailer naming the tool, e.g. `Co-Authored-By: Claude <noreply@anthropic.com>` (or the Codex/other equivalent). Ask before committing and before pushing.
 5. **Pull request into `dev`**, never `main`, from the card's branch. The PR ticks the card's box and sets its owner. The description says what's in it, anything other cards must know, and any change to shared contracts or `data/`. Don't merge; Arthur merges.
 
