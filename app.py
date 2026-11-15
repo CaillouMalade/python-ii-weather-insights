@@ -169,6 +169,8 @@ def show_radar(track):
         lat="latitude",
         lon="longitude",
         hover_name="location",
+        # Centre on the track every time, so the map moves when another track is picked.
+        center={"lat": track["latitude"], "lon": track["longitude"]},
         zoom=6,
         map_style="carto-positron",
         title="Rain radar now",
