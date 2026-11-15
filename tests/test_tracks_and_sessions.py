@@ -63,7 +63,7 @@ def test_distance_same_point_is_zero():
 
 
 def test_distance_madrid_barcelona():
-    # 大约 505 km，用来确认公式没写错
+    # About 505 km, to check the formula is right.
     assert 495 < distance_km(40.4168, -3.7038, 41.3874, 2.1686) < 515
 
 
@@ -107,7 +107,7 @@ def test_longitude_out_of_range():
 
 
 def test_far_from_any_circuit():
-    # 马德里市中心，附近没有 Grade 1 赛道
+    # Madrid city centre: no Grade 1 circuit nearby.
     assert error_for("Madrid", "40.4168", "-3.7038") == NOT_FOUND_MESSAGE
 
 

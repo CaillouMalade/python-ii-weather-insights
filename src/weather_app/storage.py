@@ -62,7 +62,7 @@ def load_tracks(path=GRADE1_TRACKS_PATH):
         return []
     tracks = []
     for _, row in table.iterrows():
-        # 统一成项目里的 location 格式：name -> "location"，保留 id
+        # Turn it into the project's location shape: name becomes "location", id is kept.
         tracks.append({
             "id": row["id"],
             "location": row["name"],

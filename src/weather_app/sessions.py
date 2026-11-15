@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 FRIDAY = 4  # datetime.weekday(): Monday is 0, Friday is 4
 
 # (session, days after Friday, hour in UTC)
-# 写死在 UTC，CET 下就是 09:00 / 15:00 / 14:00 这些常见时间
+# Fixed in UTC; in Central European time these are the usual 09:00 / 15:00 / 14:00.
 SESSIONS = [
     ("FP1", 0, 8),
     ("FP2", 0, 14),
@@ -20,7 +20,7 @@ def weekend_friday(now=None):
     if now is None:
         now = datetime.now(timezone.utc)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    # 周一到周四：往后找周五；周六 -1、周日 -2：退回本周末的周五
+    # Monday to Thursday: go forward to Friday; Saturday (-1) and Sunday (-2): go back to this weekend's Friday.
     days = FRIDAY - now.weekday()
     return today + timedelta(days=days)
 

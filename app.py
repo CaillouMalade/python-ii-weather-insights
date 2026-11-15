@@ -39,7 +39,7 @@ def add_track():
     except ValueError as error:
         st.session_state["track_message"] = ("warning", str(error))
         return
-    # 加成功后直接选中新赛道，并清空输入框
+    # Once added, select the new track straight away and empty the inputs.
     st.session_state["track"] = track["location"]
     st.session_state["track_message"] = ("ok", f"Added {track['location']}.")
     st.session_state["new_track_name"] = ""
@@ -80,7 +80,7 @@ def show_sidebar():
             return track
 
 
-# 选中的赛道，后面 Weekend overview / Session dashboard (cards 7, 8) 会用到
+# The selected track, used below by the Weekend overview and Session dashboard (cards 7, 8).
 selected_track = show_sidebar()
 
 
