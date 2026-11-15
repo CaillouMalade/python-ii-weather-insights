@@ -47,8 +47,9 @@ The grade depends on more than working code: **every member must be able to expl
 | File | What it holds |
 |---|---|
 | `app.py` | Only builds the pages. Today the old pages run at top level; a **new** page goes in its own `show_...()` function so people don't edit the same lines. Moving the existing code is card 10, not yours. |
-| `src/weather_app/client.py` | `APIClient` (generic JSON GET: timeout, status checks, one clear `ValueError` per failure; key optional; `self.headers`), `WeatherClient` (OpenWeatherMap), `validate_city`, `validate_location`. |
-| `src/weather_app/providers.py` | `OpenMeteoClient`, `MetNorwayClient` and the 3-hour window helpers (`is_window_start`, `window_start`, `sum_rain`, `keep_next_five_days`). |
+| `src/weather_app/client.py` | `APIClient` (generic JSON GET: timeout, status checks, one clear `ValueError` per failure; key optional; `self.headers`), `WeatherClient` (OpenWeatherMap: current weather and forecast), `validate_city`, `validate_location`. |
+| `src/weather_app/providers.py` | `OpenMeteoClient`, `MetNorwayClient`. |
+| `src/weather_app/windows.py` | The 3-hour window helpers (`is_window_start`, `window_start`, `sum_rain`, `keep_next_five_days`), used by every provider. |
 | `src/weather_app/aggregator.py` | `fetch_all_forecasts(location, providers, now=None)` → `(table, failures)`; `points_to_frame(points)`. |
 | `src/weather_app/fetching.py` | The cached calls the pages use: `fetch_and_log`, `fetch_many`, `find_city`, `fetch_forecasts_and_log(location)`. |
 | `src/weather_app/storage.py` | Every file read and write in `data/`. |
