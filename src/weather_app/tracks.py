@@ -9,7 +9,7 @@ NOT_FOUND_MESSAGE = "No racetrack found at these coordinates."
 
 def distance_km(latitude_1, longitude_1, latitude_2, longitude_2):
     """Distance in km between two points on the Earth, with the haversine formula."""
-    # haversine：地球是球面，不能直接用勾股定理算经纬度的距离
+    # Haversine: the Earth is a sphere, so Pythagoras on latitude and longitude would be wrong.
     lat_1 = math.radians(latitude_1)
     lat_2 = math.radians(latitude_2)
     delta_lat = math.radians(latitude_2 - latitude_1)
@@ -36,7 +36,8 @@ def read_coordinate(text, label, low, high):
         value = float(text.strip())
     except ValueError:
         raise ValueError(f"{label} must be a number, for example 50.43.") from None
-    if value < low or value > high:
+    # Written as "not inside" so "nan" (not a number) is rejected too: every comparison with nan is False.
+    if not (low <= value <= high):
         raise ValueError(f"{label} must be between {low} and {high}.")
     return value
 
@@ -51,14 +52,14 @@ def check_new_track(name, latitude_text, longitude_text, tracks, grade1_tracks):
     if name == "":
         raise ValueError("Please enter a name for the track.")
     for track in tracks:
-        # 不区分大小写，"monza" 和 "Monza" 算重名
+        # Case does not count: "monza" and "Monza" are the same name.
         if track["location"].lower() == name.lower():
             raise ValueError(f"A track called {track['location']} is already in the list.")
 
     latitude = read_coordinate(latitude_text, "Latitude", -90, 90)
     longitude = read_coordinate(longitude_text, "Longitude", -180, 180)
 
-    # 前面都过了才算距离：3 km 内必须有一条 Grade 1 赛道
+    # Only once every input is valid: a Grade 1 circuit must be within 3 km.
     circuit, distance = nearest_track(latitude, longitude, grade1_tracks)
     if circuit is None or distance > MAX_DISTANCE_KM:
         raise ValueError(NOT_FOUND_MESSAGE)

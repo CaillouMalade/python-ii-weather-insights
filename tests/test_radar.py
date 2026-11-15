@@ -1,10 +1,12 @@
 # The radar is tested with a fake RainViewer answer, so no internet call is made.
 # FakeGet and FakeResponse are the same fakes the provider tests use.
 
+from datetime import datetime, timezone
+
 from test_providers import FakeGet, FakeResponse
 
 from weather_app import client
-from weather_app.radar import RainViewerClient
+from weather_app.providers import RainViewerClient
 
 # A small answer shaped like RainViewer's real one.
 ANSWER = {
@@ -18,16 +20,18 @@ def radar_url_or_error(response):
     original = client.requests.get
     client.requests.get = FakeGet(response)
     try:
-        return RainViewerClient().latest_radar_url()
+        return RainViewerClient().radar_frames()
     except ValueError as error:
         return str(error)
     finally:
         client.requests.get = original
 
 
-def test_takes_the_newest_radar_image():
-    url = radar_url_or_error(FakeResponse(200, ANSWER))
-    assert url == "https://tilecache.rainviewer.com/v2/radar/newest/256/{z}/{x}/{y}/2/1_1.png"
+def test_returns_every_radar_image_oldest_first():
+    frames = radar_url_or_error(FakeResponse(200, ANSWER))
+    assert len(frames) == 2
+    assert frames[0]["time_utc"] == datetime(2026, 11, 15, 15, 10, tzinfo=timezone.utc)
+    assert frames[-1]["url"] == "https://tilecache.rainviewer.com/v2/radar/newest/256/{z}/{x}/{y}/2/1_1.png"
 
 
 def test_unexpected_answer_has_its_own_message():

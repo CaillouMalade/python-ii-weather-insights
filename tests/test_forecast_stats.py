@@ -6,12 +6,12 @@ import pandas as pd
 import pytest
 from fake_forecast import fake_forecasts
 
-from weather_app.aggregator import fetch_all_forecasts, points_to_frame
+from weather_app.fetching import fetch_all_forecasts, points_to_frame
 from weather_app.forecast_stats import RESULT_COLUMNS, combine_forecasts, t_value
 
 
 def fake_table():
-    """All three fake providers in one table, as the aggregator would return it."""
+    """All three fake providers in one table, as fetch_all_forecasts would return it."""
     points = []
     for source_points in fake_forecasts().values():
         points.extend(source_points)
@@ -105,7 +105,7 @@ def test_the_input_table_is_not_changed():
     pd.testing.assert_frame_equal(table, before)
 
 
-def test_works_on_the_aggregator_output():
+def test_works_on_the_fetch_all_forecasts_output():
     """The real path: providers -> fetch_all_forecasts -> combine_forecasts."""
     forecasts = fake_forecasts()
 

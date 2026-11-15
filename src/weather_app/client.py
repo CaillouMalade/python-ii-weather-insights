@@ -65,24 +65,6 @@ class APIClient:
             raise ValueError("The weather service sent a response that could not be read.") from None
 
 
-def validate_city(city):
-    """Return the cleaned city name, or raise ValueError if it is obviously invalid."""
-    if not isinstance(city, str):
-        raise ValueError("The city name must be text.")
-    cleaned = city.strip()
-    if cleaned == "":
-        raise ValueError("Please enter a city name.")
-    if len(cleaned) > 100:
-        raise ValueError("That city name is too long.")
-    has_letter = False
-    for character in cleaned:
-        if character.isalpha():
-            has_letter = True
-    if not has_letter:
-        raise ValueError(f"'{cleaned}' is not a valid city name: it contains no letters.")
-    return cleaned
-
-
 def validate_location(location):
     """Raise ValueError before any API call if a location dictionary is unusable."""
     name = location.get("location")
@@ -92,7 +74,8 @@ def validate_location(location):
         raise ValueError("The location has no name.")
     if not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float)):
         raise ValueError(f"{name} has invalid coordinates.")
-    if latitude < -90 or latitude > 90 or longitude < -180 or longitude > 180:
+    # Written as "not inside" so nan (not a number) is rejected too: every comparison with nan is False.
+    if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
         raise ValueError(f"{name} has coordinates outside the valid range.")
 
 
@@ -103,18 +86,6 @@ class WeatherClient(APIClient):
         super().__init__(BASE_URL, api_key, "appid")
         self.source = "openweathermap"
         self._not_found_message = "OpenWeatherMap could not find this location."
-
-    def find_city(self, city):
-        """Check a typed city name, then return its best match as a location dictionary."""
-        cleaned = validate_city(city)
-        data = self._get("geo/1.0/direct", {"q": cleaned, "limit": 1})
-        if len(data) == 0:
-            raise ValueError(f"City '{cleaned}' was not found. Check the spelling.")
-        try:
-            match = data[0]
-            return {"location": f"{match['name']}, {match['country']}", "latitude": match["lat"], "longitude": match["lon"]}
-        except (KeyError, TypeError):
-            raise ValueError("OpenWeatherMap sent a location in an unexpected format.") from None
 
     def current(self, location):
         """Return a WeatherReading for a location dictionary."""

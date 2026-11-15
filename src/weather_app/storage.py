@@ -9,7 +9,6 @@ import pandas as pd
 from .models import READING_COLUMNS
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-CIRCUITS_PATH = DATA_DIR / "circuits.csv"
 # Every reading the app itself fetches.
 LOG_PATH = DATA_DIR / "weather_log.csv"
 # Written by the collector (data-collection branch) every 30 minutes for every circuit since 29 October 2026.
@@ -45,15 +44,6 @@ FORECAST_LOG_COLUMNS = [
 ]
 
 
-def load_circuits(path=CIRCUITS_PATH):
-    """Return the circuit list as location dictionaries: location, latitude, longitude."""
-    circuits = []
-    for _, row in pd.read_csv(path, encoding="utf-8").iterrows():
-        # float() because pandas gives a NumPy number, not a Python one.
-        circuits.append({"location": row["location"], "latitude": float(row["latitude"]), "longitude": float(row["longitude"])})
-    return circuits
-
-
 def load_tracks(path=GRADE1_TRACKS_PATH):
     """Return one track file as location dictionaries, or an empty list if the file is missing."""
     try:
@@ -62,7 +52,7 @@ def load_tracks(path=GRADE1_TRACKS_PATH):
         return []
     tracks = []
     for _, row in table.iterrows():
-        # 统一成项目里的 location 格式：name -> "location"，保留 id
+        # Turn it into the project's location shape: name becomes "location", id is kept.
         tracks.append({
             "id": row["id"],
             "location": row["name"],
@@ -137,16 +127,6 @@ def append_forecasts(table, location, path=FORECAST_LOG_PATH):
         raise ValueError("Could not save the forecasts. Close the file if it is open in another program.") from None
 
 
-def load_log(path=LOG_PATH):
-    """Return the log as a DataFrame with a parsed UTC timestamp, or an empty one if there is none."""
-    try:
-        log = pd.read_csv(path, encoding="utf-8")
-    except (FileNotFoundError, pd.errors.EmptyDataError):
-        return pd.DataFrame(columns=LOG_COLUMNS)
-    log["timestamp_utc"] = pd.to_datetime(log["timestamp_utc"], utc=True, format="ISO8601")
-    return log
-
-
 def load_history(path=HISTORY_PATH):
     """Return the collector's readings with the log's column names, or an empty DataFrame."""
     try:
@@ -156,9 +136,3 @@ def load_history(path=HISTORY_PATH):
     history = history[list(HISTORY_COLUMNS.keys())].rename(columns=HISTORY_COLUMNS)
     history["timestamp_utc"] = pd.to_datetime(history["timestamp_utc"], utc=True, format="ISO8601")
     return history
-
-
-def load_all_readings(log_path=LOG_PATH, history_path=HISTORY_PATH):
-    """The collector's history and the app's own log together, in time order."""
-    readings = pd.concat([load_history(history_path), load_log(log_path)], ignore_index=True)
-    return readings.sort_values("timestamp_utc").reset_index(drop=True)

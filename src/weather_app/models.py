@@ -24,20 +24,11 @@ class WeatherReading:
         """Wind speed in km/h. OpenWeatherMap sends m/s, and the page shows km/h."""
         return self.wind_speed * METRES_PER_SECOND_TO_KMH
 
-    @property
-    def feels_like_gap(self):
-        """How much colder (negative) or warmer (positive) it feels than the thermometer says, in °C."""
-        return self.feels_like - self.temperature
-
     def __repr__(self):
         return f"WeatherReading({self.location!r}, {self.temperature}°C)"
 
     def __str__(self):
         return f"{self.location}: {self.temperature:.1f}°C, {self.conditions}"
-
-    def __lt__(self, other):
-        # This is what lets sorted() rank readings by temperature.
-        return self.temperature < other.temperature
 
     def to_dict(self):
         values = {}

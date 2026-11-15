@@ -7,15 +7,15 @@ import pandas as pd
 import pytest
 from fake_forecast import fake_forecasts
 
-from weather_app.aggregator import points_to_frame
-from weather_app.dashboard import chance_of_rain, compass_sector, direction_label, direction_votes, interval_text, provider_table, session_message, session_window_rows
+from weather_app.fetching import points_to_frame
+from weather_app.dashboard import chance_of_rain, compass_sector, direction_votes, interval_text, provider_table, session_message, session_window_rows
 from weather_app.forecast_stats import combine_forecasts
 
 FP1 = datetime(2026, 11, 13, 8, 0, tzinfo=timezone.utc)  # in the 06:00 window
 
 
 def fake_table():
-    """All three fake providers in one table, as the aggregator would return it."""
+    """All three fake providers in one table, as fetch_all_forecasts would return it."""
     points = []
     for source_points in fake_forecasts().values():
         points.extend(source_points)
@@ -101,11 +101,6 @@ def test_provider_table_with_a_missing_direction():
 
 
 # Texts shown on the pages
-
-def test_direction_label():
-    assert direction_label(session_window_rows(fake_table(), FP1)) == "SW (3 of 3 providers)"
-    assert direction_label(pd.DataFrame({"wind_deg": [None]})) == "Unknown"
-
 
 def test_interval_text():
     # The first window: 9.33 °C, interval 7.90 to 10.77 (checked by hand in test_forecast_stats.py).
