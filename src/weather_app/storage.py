@@ -1,4 +1,4 @@
-"""Files: the circuit list, the collector's history and the app's own weather log."""
+"""Files: the track lists, the collector's history and the app's own weather log."""
 
 import csv
 from datetime import datetime, timezone
@@ -16,6 +16,11 @@ LOG_PATH = DATA_DIR / "weather_log.csv"
 HISTORY_PATH = DATA_DIR / "current_weather.csv"
 # Every forecast the app fetches: one row per provider and 3-hour window, per fetch.
 FORECAST_LOG_PATH = DATA_DIR / "forecasts.csv"
+# The 16 FIA Grade 1 circuits, and the tracks users add in the sidebar.
+GRADE1_TRACKS_PATH = DATA_DIR / "grade1_tracks.csv"
+MY_TRACKS_PATH = DATA_DIR / "my_tracks.csv"
+
+TRACK_COLUMNS = ["id", "name", "country", "latitude", "longitude"]
 
 # The collector's column names, and the log column each one becomes.
 HISTORY_COLUMNS = {
@@ -45,6 +50,46 @@ def load_circuits(path=CIRCUITS_PATH):
         # float() because pandas gives a NumPy number, not a Python one.
         circuits.append({"location": row["location"], "latitude": float(row["latitude"]), "longitude": float(row["longitude"])})
     return circuits
+
+
+def load_tracks(path=GRADE1_TRACKS_PATH):
+    """Return one track file as location dictionaries, or an empty list if the file is missing."""
+    try:
+        table = pd.read_csv(path, encoding="utf-8")
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        return []
+    tracks = []
+    for _, row in table.iterrows():
+        # 统一成项目里的 location 格式：name -> "location"，保留 id
+        tracks.append({
+            "id": row["id"],
+            "location": row["name"],
+            "country": row["country"],
+            "latitude": float(row["latitude"]),
+            "longitude": float(row["longitude"]),
+        })
+    return tracks
+
+
+def load_all_tracks(grade1_path=GRADE1_TRACKS_PATH, my_path=MY_TRACKS_PATH):
+    """The Grade 1 circuits first, then the tracks users added."""
+    return load_tracks(grade1_path) + load_tracks(my_path)
+
+
+def append_track(track, path=MY_TRACKS_PATH):
+    """Add one accepted track to my_tracks.csv, writing the header if the file is new."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not path.exists() or path.stat().st_size == 0
+    row = [track["id"], track["location"], track["country"], track["latitude"], track["longitude"]]
+    try:
+        with open(path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            if write_header:
+                writer.writerow(TRACK_COLUMNS)
+            writer.writerow(row)
+    except PermissionError:
+        raise ValueError("Could not save the track. Close my_tracks.csv if it is open in another program.") from None
 
 
 def append_reading(reading, path=LOG_PATH):
