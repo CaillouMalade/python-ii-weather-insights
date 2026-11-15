@@ -47,8 +47,9 @@ The grade depends on more than working code: **every member must be able to expl
 | File | What it holds |
 |---|---|
 | `app.py` | Only builds the pages. Today the old pages run at top level; a **new** page goes in its own `show_...()` function so people don't edit the same lines. Moving the existing code is card 10, not yours. |
-| `src/weather_app/client.py` | `APIClient` (generic JSON GET: timeout, status checks, one clear `ValueError` per failure; key optional; `self.headers`), `WeatherClient` (OpenWeatherMap), `validate_city`, `validate_location`. |
-| `src/weather_app/providers.py` | `OpenMeteoClient`, `MetNorwayClient` and the 3-hour window helpers (`is_window_start`, `window_start`, `sum_rain`, `keep_next_five_days`). |
+| `src/weather_app/client.py` | `APIClient` (generic JSON GET: timeout, status checks, one clear `ValueError` per failure; key optional; `self.headers`), `WeatherClient` (OpenWeatherMap: current weather and forecast), `validate_city`, `validate_location`. |
+| `src/weather_app/providers.py` | `OpenMeteoClient`, `MetNorwayClient`. |
+| `src/weather_app/windows.py` | The 3-hour window helpers (`is_window_start`, `window_start`, `sum_rain`, `keep_next_five_days`), used by every provider. |
 | `src/weather_app/aggregator.py` | `fetch_all_forecasts(location, providers, now=None)` → `(table, failures)`; `points_to_frame(points)`. |
 | `src/weather_app/fetching.py` | The cached calls the pages use: `fetch_and_log`, `fetch_many`, `find_city`, `fetch_forecasts_and_log(location)`. |
 | `src/weather_app/storage.py` | Every file read and write in `data/`. |
@@ -110,7 +111,7 @@ Short hints so each card starts in the right place. The card text in the README 
 
 1. **Explain it back** in plain words, function by function: what it does, why it's written that way, and how it connects to the rest of the app.
 2. **Give the student two or three questions** they should be able to answer in front of the teacher (for example: "Why is this a subclass of `APIClient`?", "What happens if one provider times out?"). Offer to go through the answers.
-3. **Update `PROMPTS.md`** with a short entry: what the student asked, what you produced, and what they kept, changed or rejected and why. Draft it with the student, not for them. Keep the file's line endings.
+3. **Update `PROMPTS.md`** under the card's own heading (replace the "To fill" line; never add at the end of the file, or two PRs conflict) with a short entry: what the student asked, what you produced, and what they kept, changed or rejected and why. Draft it with the student, not for them. Keep the file's line endings.
 4. **Commit** from the student's own GitHub account, a short plain message ending with the co-author trailer naming the tool, e.g. `Co-Authored-By: Claude <noreply@anthropic.com>` (or the Codex/other equivalent). Ask before committing and before pushing.
 5. **Pull request into `dev`**, never `main`, from the card's branch. The PR ticks the card's box and sets its owner. The description says what's in it, anything other cards must know, and any change to shared contracts or `data/`. Don't merge; Arthur merges.
 

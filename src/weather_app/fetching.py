@@ -41,8 +41,10 @@ def find_city(text):
 @st.cache_data(ttl=TEN_MINUTES, show_spinner=False)
 def fetch_forecasts_and_log(location):
     """Return (table, failure messages) for every provider, and log what came back."""
-    # OpenWeatherMap joins this list once card 2 gives WeatherClient a forecast() method.
     providers = [OpenMeteoClient(), MetNorwayClient()]
+    # OpenWeatherMap needs a key; without one, the two keyless providers still work.
+    if API_KEY is not None:
+        providers.append(WeatherClient(API_KEY))
     table, failures = fetch_all_forecasts(location, providers)
     append_forecasts(table, location)
     return table, failures
