@@ -8,7 +8,7 @@ import pytest
 from fake_forecast import fake_forecasts
 
 from weather_app.aggregator import points_to_frame
-from weather_app.dashboard import chance_of_rain, compass_sector, direction_votes, session_message, session_window_rows
+from weather_app.dashboard import chance_of_rain, compass_sector, direction_votes, provider_table, session_message, session_window_rows
 from weather_app.forecast_stats import combine_forecasts
 
 FP1 = datetime(2026, 11, 13, 8, 0, tzinfo=timezone.utc)  # in the 06:00 window
@@ -81,3 +81,20 @@ def test_session_message():
     assert session_message(FP1, thursday, rows) is None
     assert session_message(FP1, saturday, rows) == "This session is over."
     assert session_message(FP1, thursday, rows.iloc[0:0]) == "No forecast yet."
+
+
+# Per-provider table
+
+def test_provider_table_for_fp1():
+    table = provider_table(session_window_rows(fake_table(), FP1))
+    assert list(table.columns) == ["Provider", "Temperature (°C)", "Rain (mm)", "Wind (km/h)", "Wind from"]
+    assert list(table["Provider"]) == ["openweathermap", "open-meteo", "met-norway"]
+    # The 06:00 window: wind 5 m/s for every provider, which is 18 km/h, from 225° (SW).
+    assert list(table["Wind (km/h)"]) == [18, 18, 18]
+    assert list(table["Wind from"]) == ["SW", "SW", "SW"]
+
+
+def test_provider_table_with_a_missing_direction():
+    rows = pd.DataFrame({"source": ["met-norway"], "temperature": [10.0], "rain": [None], "wind_speed": [2.0], "wind_deg": [None]})
+    table = provider_table(rows)
+    assert table["Wind from"].iloc[0] == "Unknown"

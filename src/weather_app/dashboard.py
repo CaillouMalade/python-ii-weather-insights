@@ -4,6 +4,9 @@ They take the forecast table (one row per provider and 3-hour window) and return
 values the pages can show. No Streamlit here, so every helper can be tested on its own.
 """
 
+import pandas as pd
+
+from .models import METRES_PER_SECOND_TO_KMH
 from .windows import window_start
 
 # The 8 compass directions, clockwise from north, 45 degrees apart.
@@ -59,3 +62,21 @@ def session_message(session_start, now, rows):
     if len(rows) == 0:
         return "No forecast yet."
     return None
+
+
+def provider_table(window_rows):
+    """Return one row per provider for one window, with readable column names and units."""
+    rows = []
+    for _, row in window_rows.iterrows():
+        # A provider can leave a value out (None); then the cell stays empty and the direction "Unknown".
+        direction = "Unknown"
+        if not pd.isna(row["wind_deg"]):
+            direction = compass_sector(row["wind_deg"])
+        rows.append({
+            "Provider": row["source"],
+            "Temperature (°C)": row["temperature"],
+            "Rain (mm)": row["rain"],
+            "Wind (km/h)": row["wind_speed"] * METRES_PER_SECOND_TO_KMH,
+            "Wind from": direction,
+        })
+    return pd.DataFrame(rows)
