@@ -298,3 +298,13 @@ The `[theme.light]` and `[theme.dark]` config sections; `st.context.theme.type`;
 **Got:** `OpenMeteoClient`, `MetNorwayClient`, an aggregator returning one DataFrame with a `source` column and a list of failures, a forecast log `data/forecasts.csv`, and tests on two saved real answers.
 
 **Decided / changed:** compared the APIs first in a side chat. Chose value at window start for temperature and wind, a 3-hour sum for rain, "00:00 = rain falling 00→03" for every provider, MET only where it's hourly (no 6-hour logic), 5 days max, wind direction never averaged (card 6 counts compass sectors). Rejected one CSV per provider (harder to group) and extra columns that can be calculated. Asked why a class rather than a function, and confirmed it's inheritance, not nested classes.
+
+## Card 4: sidebar — 15 November 2026 (Minho, with Claude Code)
+
+**Asked:** do card 4 from the README: pick a track, show the fixed session times and the logo, and add a track by name, latitude and longitude, accepted only within 3 km of a Grade 1 circuit. Asked for simple code with a few short comments at the key steps.
+
+**Got:** `sessions.py` (`SESSIONS` in UTC and `session_times()` for the coming weekend), `tracks.py` (`distance_km` with the haversine formula, `nearest_track`, `check_new_track` with one message per check), `load_tracks`, `load_all_tracks` and `append_track` in `storage.py`, a `show_sidebar()` function in `app.py`, and 16 tests in `tests/test_tracks_and_sessions.py`.
+
+**Checked:** `uv run pytest` passes. Ran the app with Streamlit's AppTest: an empty name, a point in central Madrid ("No racetrack found at these coordinates"), a point at Monza (added and selected) and the same name again. The test row in `data/my_tracks.csv` was deleted afterwards.
+
+**Decided / changed:** the tests first used `pytest.raises`; changed to `try / except ValueError as error` like `tests/test_client.py`. Coordinates are typed in `text_input` and turned into numbers with `float()`, so "north" gets its own message. The name check ignores case. The old circuit multiselect stays as it is, because moving it is card 10. The logo shows only once `assets/logo.png` exists (card 1b). From Friday to Sunday the sidebar shows the current weekend, from Monday the next one.
