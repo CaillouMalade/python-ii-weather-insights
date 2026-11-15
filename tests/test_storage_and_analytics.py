@@ -99,19 +99,27 @@ def make_track_history():
     return history
 
 
-def test_daily_track_history_sums_rain_and_finds_temperature_range():
+def test_daily_track_history_estimates_rain_and_finds_temperature_range():
     daily = track_rain_history(make_track_history(), "imola")
-    assert round(daily.loc[0, "rain_mm"], 2) == 0.86
+    assert round(daily.loc[0, "rain_mm"], 2) == 10.32
     assert list(daily["temperature_range_c"]) == [0.0]
 
 
 def test_track_comparison_sorts_and_counts_rain_days():
     summaries = compare_track_history(make_track_history(), ["imola", "monza"])
-    assert [summary["location"] for summary in summaries] == ["Monza", "Imola"]
-    assert summaries[1]["average_temperature_c"] == 9.03
-    assert summaries[1]["rain_days"] == 1
-    assert round(summaries[1]["total_rain_mm"], 2) == 0.86
-    assert summaries[1]["days_logged"] == 1
+    assert [summary.location for summary in summaries] == ["Monza", "Imola"]
+    assert summaries[1].average_temperature_c == 9.03
+    assert summaries[1].rain_days == 1
+    assert round(summaries[1].total_rain_mm, 2) == 10.32
+    assert summaries[1].days_logged == 1
+    assert str(summaries[1]) == "Imola: average 9.0 °C, 1 rain days, 10.3 mm total rain over 1 logged days."
+
+
+def test_missing_rain_becomes_zero_mm():
+    history = make_track_history()
+    history.loc[history["location_id"] == "imola", "rain"] = float("nan")
+    daily = track_rain_history(history, "imola")
+    assert daily.loc[0, "rain_mm"] == 0
 
 
 def test_append_forecasts_adds_fetch_time_and_location():
