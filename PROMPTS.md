@@ -304,4 +304,4 @@ The `[theme.light]` and `[theme.dark]` config sections; `st.context.theme.type`;
 
 **Got:** Track history by stable collector track ID, daily rain and temperature ranges, and a two-track comparison over their overlapping logged period. Added unit-labeled charts, summary lines, and tests using a small copy of committed collector data.
 
-**Kept as-is / changed / rejected:** Kept the card 5 scope and the simple pandas patterns already used in the project. No changes to the requested scope so far; awaiting the student's review of the implementation.
+**Kept as-is / changed / rejected:** Kept the card 5 scope and the simple pandas patterns already used in the project. The student accepted the planned scope and approved the commit and PR.
