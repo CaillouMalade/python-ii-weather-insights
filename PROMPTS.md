@@ -1,5 +1,7 @@
 # AI collaboration log
 
+One section per card, in card order. Write your entry under your own card's heading (replace the "To fill" line), never at the end of the file, so two pull requests don't edit the same lines.
+
 ## Repository setup — 21 October 2026
 
 **Asked:** "just let's make a private repo with the assignments docs. linked to the group assignment's folder"
@@ -291,6 +293,10 @@ The `[theme.light]` and `[theme.dark]` config sections; `st.context.theme.type`;
 
 **Kept / changed / rejected:** The radar, wind maps, track outlines, sessions and theming of `archive/racetrack-poc` were left out, to be brought back one at a time if wanted.
 
+## Card 2: OpenWeatherMap client and errors
+
+_To fill in this card's pull request._
+
 ## Card 3: more providers — 14 November 2026 (Arthur, with Claude Code)
 
 **Asked:** add Open-Meteo and MET Norway as `APIClient` subclasses returning `ForecastPoint`s on OpenWeatherMap's 3-hour UTC windows, plus a way to combine the providers.
@@ -308,3 +314,55 @@ The `[theme.light]` and `[theme.dark]` config sections; `st.context.theme.type`;
 **Checked:** `uv run pytest` passes. Ran the app with Streamlit's AppTest: an empty name, a point in central Madrid ("No racetrack found at these coordinates"), a point at Monza (added and selected) and the same name again. The test row in `data/my_tracks.csv` was deleted afterwards.
 
 **Decided / changed:** the tests first used `pytest.raises`; changed to `try / except ValueError as error` like `tests/test_client.py`. Coordinates are typed in `text_input` and turned into numbers with `float()`, so "north" gets its own message. The name check ignores case. The old circuit multiselect stays as it is, because moving it is card 10. The logo shows only once `assets/logo.png` exists (card 1b). From Friday to Sunday the sidebar shows the current weekend, from Monday the next one.
+
+## Card 5: History and track comparison - 15 November 2026
+
+**Asked:** The student asked to complete card 5.
+
+**Got:** Track history by stable collector track ID, daily rain and temperature ranges, and a two-track comparison over their overlapping logged period. Added unit-labeled charts, summary lines, and tests using a small copy of committed collector data.
+
+**Kept as-is / changed / rejected:** Kept the card 5 scope and the simple pandas patterns already used in the project. The student accepted the planned scope and approved the commit and PR.
+
+## Card 5 follow-up: history fixes — 15 November 2026
+
+**Asked:** restore the previous Analytics view, put track history in `show_track_history()`, fix dry-day rain and avoid double-counting overlapping hourly rain; optionally use the sidebar track, readable temperature legend labels, and a `TrackSummary` class with `__lt__` and `__str__`.
+
+**Got:** restored the trend, circuit comparison and derived metrics; made track history follow the sidebar selection when available; filled missing rain with zero and estimated daily rain as the mean rolling-hour reading × 24. Added readable chart labels and ranked `TrackSummary` objects by estimated rain.
+
+**Kept / changed:** Kept both card 4 and card 5 README/PROMPTS entries. Retained comparison track selectors because the user still needs to choose the pair being compared.
+
+## Card 6: Statistics — 14 November 2026 (Cedric)
+
+**Asked:** Claude (Opus 5.5) to write card 6 from the README: for each 3-hour window, combine the three providers (mean temperature, wind and rain with a 95% confidence interval, and how many providers predict rain), built and tested on `tests/fake_forecast.py`.
+
+**Got:** `src/weather_app/forecast_stats.py` (`combine_forecasts`, `add_interval`, `t_value`, `check_forecast_table`) and `tests/test_forecast_stats.py` (13 tests). It takes the table from `aggregator.fetch_all_forecasts` and returns one row per window, ready for cards 7 and 8.
+
+**Decided:** a t-distribution interval (mean ± t × std / √n) instead of the normal 1.96, because we only have 2–3 providers and 1.96 would make the forecast look more certain than it is; a provider "predicts rain" from 0.1 mm; the low end of rain and wind is cut at 0; a window with one provider gets no interval; wind direction is not averaged (it is an angle, so the session dashboard shows it per provider).
+
+**Checked:** the first window's numbers by hand in a test (9.33 °C, interval 7.90 to 10.77); ran it on the saved Open-Meteo and MET Norway answers in `tests/`; `uv run pytest`: 50 passed.
+
+**Kept / changed / rejected:** kept the module as written; rejected the normal approximation (too narrow with three values) and a 0 mm rain cutoff (counts rounding noise as rain).
+
+## Card 7: Weekend overview
+
+_To fill in this card's pull request._
+
+## Card 8: Session dashboard
+
+_To fill in this card's pull request._
+
+## Card 9: Live check
+
+_To fill in this card's pull request._
+
+## Card 10: Refactor
+
+_To fill in this card's pull request._
+
+## Card 11: Polish
+
+_To fill in this card's pull request._
+
+## Card 12: Finish
+
+_To fill in this card's pull request._

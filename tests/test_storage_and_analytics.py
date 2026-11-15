@@ -5,7 +5,7 @@ import pandas as pd
 from fake_forecast import fake_forecasts
 
 from weather_app.aggregator import points_to_frame
-from weather_app.analytics import city_comparison, city_trend, daily_range, feels_like_gap
+from weather_app.analytics import city_comparison, city_trend, compare_track_history, daily_range, feels_like_gap, track_rain_history
 from weather_app.models import WeatherReading
 from weather_app.storage import CIRCUITS_PATH, FORECAST_LOG_COLUMNS, HISTORY_PATH, LOG_COLUMNS, LOG_PATH, append_forecasts, append_reading, load_all_readings, load_circuits, load_history, load_log
 
@@ -31,7 +31,8 @@ def test_committed_files_load():
     assert len(load_circuits(CIRCUITS_PATH)) == 18
     assert list(load_log(LOG_PATH).columns) == LOG_COLUMNS
     history = load_history(HISTORY_PATH)
-    assert sorted(history.columns) == sorted(LOG_COLUMNS)
+    assert "location_id" in history.columns
+    assert "rain" in history.columns
     assert len(history) > 1000
 
 
@@ -45,15 +46,16 @@ def test_history_and_log_are_combined_in_time_order():
     with tempfile.TemporaryDirectory() as folder:
         history_path = Path(folder) / "history.csv"
         history_path.write_text(
-            "fetched_at_utc,location_name,latitude_deg,longitude_deg,temperature_c,feels_like_c,humidity_pct,wind_speed_m_s,weather_description,rain_1h_mm\n"
-            "2026-11-01T12:00:00Z,Spa,50.4,5.9,9.0,7.0,80,3.0,light rain,0.4\n",
+            "fetched_at_utc,location_id,location_name,latitude_deg,longitude_deg,temperature_c,feels_like_c,humidity_pct,wind_speed_m_s,weather_description,rain_1h_mm\n"
+            "2026-11-01T12:00:00Z,spa,Spa,50.4,5.9,9.0,7.0,80,3.0,light rain,0.4\n",
             encoding="utf-8",
         )
         log_path = Path(folder) / "log.csv"
         append_reading(WeatherReading("Spa", 50.4, 5.9, 10.0, 8.0, 70, 2.0, "clouds"), log_path)
         readings = load_all_readings(log_path, history_path)
         assert list(readings["temperature"]) == [9.0, 10.0]
-        assert list(readings.columns) == LOG_COLUMNS
+        assert "location_id" in readings.columns
+        assert "rain" in readings.columns
 
 
 def make_log():
@@ -89,6 +91,35 @@ def test_feels_like_gap_per_city():
     gaps = feels_like_gap(make_log())
     assert list(gaps["location"]) == ["Oslo", "Madrid"]
     assert gaps.loc[0, "gap"] == -4.0
+
+
+def make_track_history():
+    history = pd.read_csv("tests/sample_track_history.csv")
+    history["timestamp_utc"] = pd.to_datetime(history["fetched_at_utc"], utc=True)
+    return history
+
+
+def test_daily_track_history_estimates_rain_and_finds_temperature_range():
+    daily = track_rain_history(make_track_history(), "imola")
+    assert round(daily.loc[0, "rain_mm"], 2) == 10.32
+    assert list(daily["temperature_range_c"]) == [0.0]
+
+
+def test_track_comparison_sorts_and_counts_rain_days():
+    summaries = compare_track_history(make_track_history(), ["imola", "monza"])
+    assert [summary.location for summary in summaries] == ["Monza", "Imola"]
+    assert summaries[1].average_temperature_c == 9.03
+    assert summaries[1].rain_days == 1
+    assert round(summaries[1].total_rain_mm, 2) == 10.32
+    assert summaries[1].days_logged == 1
+    assert str(summaries[1]) == "Imola: average 9.0 °C, 1 rain days, 10.3 mm total rain over 1 logged days."
+
+
+def test_missing_rain_becomes_zero_mm():
+    history = make_track_history()
+    history.loc[history["location_id"] == "imola", "rain"] = float("nan")
+    daily = track_rain_history(history, "imola")
+    assert daily.loc[0, "rain_mm"] == 0
 
 
 def test_append_forecasts_adds_fetch_time_and_location():

@@ -25,10 +25,12 @@ TRACK_COLUMNS = ["id", "name", "country", "latitude", "longitude"]
 # The collector's column names, and the log column each one becomes.
 HISTORY_COLUMNS = {
     "fetched_at_utc": "timestamp_utc",
+    "location_id": "location_id",
     "location_name": "location",
     "latitude_deg": "latitude",
     "longitude_deg": "longitude",
     "temperature_c": "temperature",
+    "rain_1h_mm": "rain",
     "feels_like_c": "feels_like",
     "humidity_pct": "humidity",
     "wind_speed_m_s": "wind_speed",
