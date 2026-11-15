@@ -375,9 +375,13 @@ _To fill in this card's pull request._
 - The small chart is a bar per provider plus a "Combined" bar whose error bar shows the 95% interval, the same `error_y` already used in the Analytics tab.
 - A session beyond the providers' 5 days shows "No forecast yet."; one that has already started keeps its forecast until its 3-hour window ends.
 
-## Card 9: Live check
+## Card 9: Live check — 15 November 2026 (Arthur, with Claude Code)
 
-_To fill in this card's pull request._
+**Asked:** Run the card 9 live check with my real key: every error message, one provider failing, adding a good and a bad track, and whether OpenWeatherMap's `rain.3h` lands in the right window. Fix only what breaks.
+
+**Got:** Scratch scripts outside the repo that triggered each failure for real (bad key, not found, bad request, timeout, no connection, 429, 503, an answer that isn't JSON, bad input before any request), one provider pointed at a wrong URL, and the add-track form driven in the app with Streamlit's AppTest. For `rain.3h`, OpenWeatherMap was compared with Open-Meteo's hourly rain on all 16 tracks: they agree best (correlation 0.64, against 0.27 for the 3 hours after) when `rain.3h` is the rain of the 3 hours before its timestamp, which is what `WeatherClient.forecast` already assumes. One bug: "nan" typed as a latitude passed every check, the track was saved, and every provider then refused it.
+
+**Kept / changed:** Every message and the failing-provider case worked, so they stay as they are. Fixed the `nan` hole in two places, one commit each, with a test each: `validate_location` (client.py) and `read_coordinate` (tracks.py) now check "not inside the range" instead of "below or above", so `nan` is rejected. Left the other card 4 follow-ups (comments, the "Spa" id) to card 4. No live-check output was kept in the repo or in `data/`.
 
 ## Card 10: Refactor
 
