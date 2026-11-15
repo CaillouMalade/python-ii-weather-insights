@@ -343,9 +343,22 @@ _To fill in this card's pull request._
 
 **Kept / changed / rejected:** kept the module as written; rejected the normal approximation (too narrow with three values) and a 0 mm rain cutoff (counts rounding noise as rain).
 
-## Card 7: Weekend overview
+## Card 7: Weekend overview — 15 November 2026 (Emilio, with Claude)
 
-_To fill in this card's pull request._
+**Asked:** I began with an exploration phase together with Claude (Opus 5.5): we went through the card's requirements in the README and `AGENTS.md`, the code the group had already merged (cards 2 to 6), and the class material on Streamlit (s14) and Plotly (s18). From there I decided on the page layout and on an approach that reuses the group's existing functions and stays within the concepts covered in class. Claude then helped me structure and draft the code one piece at a time; I reviewed, tested and adjusted each piece before committing it.
+
+**Got:** `dashboard.py` with small page helpers shared with card 8 (wind compass sector and provider votes, chance of rain, a session's 3-hour window, and the "session over / no forecast yet" message), with 8 tests; `radar.py` with `RainViewerClient(APIClient)`, a cached `fetch_radar_url()` in `fetching.py`, and 3 tests; and in `app.py`, `forecast_chart()`, `show_radar()`, `show_weekend_overview()` and a first tab, "Weekend overview".
+
+**Checked:** `uv run pytest` passes (84 tests). The page was run with Streamlit's AppTest on fake forecasts, with and without an API key: setup message, a skipped provider, metrics and four charts, no errors. One live RainViewer request and one radar tile confirmed the image address. I also reviewed the page in the browser.
+
+**Decided / changed:**
+- Three line charts (°C, mm, km/h) instead of one chart split into panels, so each chart keeps its own unit and the code stays within what was covered in class.
+- The 95% confidence interval is shown as Low / Average / High lines (`px.line` with three columns) rather than error bars.
+- Wind direction is shown as a vote over eight compass sectors ("SW (3 of 3 providers)") rather than an average, since averaging angles is misleading (350° and 10° average to 180°).
+- Rain and wind direction for the current window come from the forecast, so `WeatherReading` and the log columns stay unchanged.
+- The radar client lives in its own file because it is not a forecast provider. The earlier archived radar code was not reused, to keep the implementation simple.
+- During my review, the radar showed "Zoom Level Not Supported" tiles at close zoom. RainViewer's free images stop at zoom 7 and the map requests one level ahead, so the radar layer is hidden from map zoom 6.5 onwards (`maxzoom`), with a caption explaining the limit.
+- Beyond the class material: `fig.add_vline`, `px.scatter_map` and `map_layers`, each used once and documented in the code.
 
 ## Card 8: Session dashboard
 

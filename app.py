@@ -1,5 +1,6 @@
 """Racetrack Weather: the Streamlit entry point. The logic lives in the weather_app package."""
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -8,7 +9,9 @@ import streamlit as st
 
 from weather_app.analytics import city_comparison, city_trend, compare_track_history, daily_range, feels_like_gap, rank_by_temperature, track_rain_history
 from weather_app.config import API_KEY, SETUP_MESSAGE
-from weather_app.fetching import fetch_many, find_city
+from weather_app.dashboard import chance_of_rain, direction_votes, session_window_rows
+from weather_app.fetching import fetch_and_log, fetch_forecasts_and_log, fetch_many, fetch_radar_url, find_city
+from weather_app.forecast_stats import combine_forecasts
 from weather_app.sessions import session_times
 from weather_app.storage import append_track, load_all_readings, load_all_tracks, load_circuits, load_tracks
 from weather_app.tracks import check_new_track
@@ -124,7 +127,130 @@ for city in places:
     if city["location"] in st.session_state["chosen"]:
         chosen.append(city)
 
-live_tab, analytics_tab = st.tabs(["Live conditions", "Analytics"])
+# Weekend overview (card 7): the weather now and the next 5 days at the selected track.
+
+
+def forecast_chart(combined, column, title, unit_label, sessions):
+    """One line chart: the providers' average, and the low and high ends of its 95% interval."""
+    # Readable names for the legend, instead of "temperature_low" and so on.
+    chart_table = combined.rename(columns={
+        column + "_low": "Low (95%)",
+        column: "Average",
+        column + "_high": "High (95%)",
+    })
+    fig = px.line(
+        chart_table,
+        x="time_utc",
+        y=["Low (95%)", "Average", "High (95%)"],
+        title=title,
+        labels={"time_utc": "Time (UTC)", "value": unit_label, "variable": ""},
+        markers=True,
+    )
+    # A dashed line at every session inside the forecast's 5 days.
+    first = combined["time_utc"].min()
+    last = combined["time_utc"].max()
+    for session in sessions:
+        if first <= session["start_utc"] <= last:
+            fig.add_vline(x=session["start_utc"], line_dash="dash", line_color="grey")
+    return fig
+
+
+def show_radar(track):
+    """A map around the track with the newest rain radar image laid over it."""
+    try:
+        radar_url = fetch_radar_url()
+    except ValueError as error:
+        st.warning(f"No rain radar right now: {error}")
+        return
+    # One row with the track's coordinates, so the map has a point to centre on.
+    track_point = pd.DataFrame([track])
+    fig = px.scatter_map(
+        track_point,
+        lat="latitude",
+        lon="longitude",
+        hover_name="location",
+        # Centre on the track every time, so the map moves when another track is picked.
+        center={"lat": track["latitude"], "lon": track["longitude"]},
+        zoom=6,
+        map_style="carto-positron",
+        title="Rain radar now",
+    )
+    # The radar is a picture made of map tiles; the map fills in {z}/{x}/{y} itself.
+    # RainViewer's free images stop at their zoom 7. The map asks for one zoom level more detail
+    # than it shows, so from map zoom 6.5 it would get grey "not supported" tiles: hide the radar there.
+    fig.update_layout(map_layers=[{"sourcetype": "raster", "source": [radar_url], "maxzoom": 6.5}])
+    st.plotly_chart(fig)
+    st.caption("The map opens at the most detailed free radar there is (about 1 km per pixel). Zoom in further and the radar hides, since RainViewer has no finer images.")
+
+
+def show_weekend_overview(track):
+    """The main page: the weather now and the next 5 days at the track picked in the sidebar."""
+    if track is None:
+        st.info("Pick a track in the sidebar.")
+        return
+    st.header(f"Weekend overview: {track['location']}")
+
+    # The weather now needs the OpenWeatherMap key; the forecast below works without it.
+    st.subheader("Weather now")
+    if not API_KEY:
+        st.warning(SETUP_MESSAGE)
+    else:
+        try:
+            reading = fetch_and_log(track)
+        except ValueError as error:
+            st.warning(f"Could not load the weather now: {error}")
+        else:
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Temperature", f"{reading.temperature:.1f} °C")
+            col2.metric("Feels like", f"{reading.feels_like:.1f} °C")
+            col3.metric("Wind", f"{reading.wind_kmh:.0f} km/h")
+            col4.metric("Conditions", reading.conditions)
+    show_radar(track)
+
+    # Every provider for this track. One that fails is skipped and named here.
+    with st.spinner("Fetching the forecasts"):
+        table, failures = fetch_forecasts_and_log(track)
+    for failure in failures:
+        st.warning(f"Skipped {failure}")
+    if len(table) == 0:
+        st.info("No forecast could be loaded. Try again in a few minutes.")
+        return
+    combined = combine_forecasts(table)
+
+    # Rain and wind for the 3-hour window we are in now.
+    now = datetime.now(timezone.utc)
+    now_window = session_window_rows(combined, now)
+    if len(now_window) == 0:
+        st.info("No forecast for the current 3 hours yet.")
+    else:
+        window = now_window.iloc[0]
+        st.subheader(f"This 3-hour window (from {window['time_utc']:%H:%M} UTC)")
+        votes = direction_votes(session_window_rows(table, now))
+        direction = "Unknown"
+        if votes is not None:
+            direction = f"{votes[0]} ({votes[1]} of {votes[2]} providers)"
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Rain", f"{window['rain']:.1f} mm")
+        col2.metric("Chance of rain", f"{chance_of_rain(window):.0f}%")
+        col3.metric("Wind", f"{window['wind_kmh']:.0f} km/h")
+        col4.metric("Wind from", direction)
+
+    st.subheader("Next 5 days")
+    sessions = session_times()
+    st.plotly_chart(forecast_chart(combined, "temperature", "Temperature", "Temperature (°C)", sessions))
+    st.plotly_chart(forecast_chart(combined, "rain", "Rain", "Rain (mm per 3 hours)", sessions))
+    st.plotly_chart(forecast_chart(combined, "wind_kmh", "Wind", "Wind (km/h)", sessions))
+    st.caption(
+        "Average: the mean of the providers. Low and high: the 95% confidence interval. "
+        "Dashed lines: the session times. MET Norway forecasts only about 2.5 days ahead, "
+        "so later windows average fewer providers and their interval is wider."
+    )
+
+
+weekend_tab, live_tab, analytics_tab = st.tabs(["Weekend overview", "Live conditions", "Analytics"])
+
+with weekend_tab:
+    show_weekend_overview(selected_track)
 
 
 # View 1: live conditions at the chosen circuits.
