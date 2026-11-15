@@ -8,7 +8,7 @@ import pytest
 from fake_forecast import fake_forecasts
 
 from weather_app.aggregator import points_to_frame
-from weather_app.dashboard import chance_of_rain, compass_sector, direction_votes, provider_table, session_message, session_window_rows
+from weather_app.dashboard import chance_of_rain, compass_sector, direction_label, direction_votes, interval_text, provider_table, session_message, session_window_rows
 from weather_app.forecast_stats import combine_forecasts
 
 FP1 = datetime(2026, 11, 13, 8, 0, tzinfo=timezone.utc)  # in the 06:00 window
@@ -98,3 +98,21 @@ def test_provider_table_with_a_missing_direction():
     rows = pd.DataFrame({"source": ["met-norway"], "temperature": [10.0], "rain": [None], "wind_speed": [2.0], "wind_deg": [None]})
     table = provider_table(rows)
     assert table["Wind from"].iloc[0] == "Unknown"
+
+
+# Texts shown on the pages
+
+def test_direction_label():
+    assert direction_label(session_window_rows(fake_table(), FP1)) == "SW (3 of 3 providers)"
+    assert direction_label(pd.DataFrame({"wind_deg": [None]})) == "Unknown"
+
+
+def test_interval_text():
+    # The first window: 9.33 °C, interval 7.90 to 10.77 (checked by hand in test_forecast_stats.py).
+    first = combine_forecasts(fake_table()).iloc[0]
+    assert interval_text(first, "temperature", "°C") == "95%: 7.9 to 10.8 °C"
+
+
+def test_interval_text_with_one_provider():
+    one_provider = combine_forecasts(fake_table().iloc[0:1]).iloc[0]
+    assert interval_text(one_provider, "temperature", "°C") == "One provider only: no interval"

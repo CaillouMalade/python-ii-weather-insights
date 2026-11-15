@@ -44,6 +44,22 @@ def direction_votes(window_rows):
     return best, votes[best], sum(votes.values())
 
 
+def direction_label(window_rows):
+    """Return the wind direction to show for one window, e.g. "SW (3 of 3 providers)"."""
+    votes = direction_votes(window_rows)
+    if votes is None:
+        return "Unknown"
+    return f"{votes[0]} ({votes[1]} of {votes[2]} providers)"
+
+
+def interval_text(window, column, unit):
+    """Return the 95% interval of one combined value as text, e.g. "95%: 10.1 to 14.7 °C"."""
+    # With a single provider there is nothing to compare, so combine_forecasts leaves it empty.
+    if pd.isna(window[column + "_low"]):
+        return "One provider only: no interval"
+    return f"95%: {window[column + '_low']:.1f} to {window[column + '_high']:.1f} {unit}"
+
+
 def chance_of_rain(window):
     """Percentage of providers that predict rain, for one row of combine_forecasts()."""
     return window["rain_providers"] / window["providers"] * 100

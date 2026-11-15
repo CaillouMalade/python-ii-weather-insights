@@ -9,7 +9,7 @@ import streamlit as st
 
 from weather_app.analytics import city_comparison, city_trend, compare_track_history, daily_range, feels_like_gap, rank_by_temperature, track_rain_history
 from weather_app.config import API_KEY, SETUP_MESSAGE
-from weather_app.dashboard import chance_of_rain, direction_votes, session_window_rows
+from weather_app.dashboard import chance_of_rain, direction_label, interval_text, provider_table, session_message, session_window_rows
 from weather_app.fetching import fetch_and_log, fetch_forecasts_and_log, fetch_many, fetch_radar_url, find_city
 from weather_app.forecast_stats import combine_forecasts
 from weather_app.sessions import session_times
@@ -225,10 +225,7 @@ def show_weekend_overview(track):
     else:
         window = now_window.iloc[0]
         st.subheader(f"This 3-hour window (from {window['time_utc']:%H:%M} UTC)")
-        votes = direction_votes(session_window_rows(table, now))
-        direction = "Unknown"
-        if votes is not None:
-            direction = f"{votes[0]} ({votes[1]} of {votes[2]} providers)"
+        direction = direction_label(session_window_rows(table, now))
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Rain", f"{window['rain']:.1f} mm")
         col2.metric("Chance of rain", f"{chance_of_rain(window):.0f}%")
@@ -247,10 +244,100 @@ def show_weekend_overview(track):
     )
 
 
-weekend_tab, live_tab, analytics_tab = st.tabs(["Weekend overview", "Live conditions", "Analytics"])
+# Session dashboard (card 8): one session at a time, per provider and combined.
+
+
+def previous_session():
+    """Runs when Previous is pressed, before the page reruns."""
+    st.session_state["session_index"] = st.session_state["session_index"] - 1
+
+
+def next_session():
+    """Runs when Next is pressed, before the page reruns."""
+    st.session_state["session_index"] = st.session_state["session_index"] + 1
+
+
+def session_chart(table, window, session_name):
+    """Bar chart: each provider's temperature, and the combined one with its 95% interval."""
+    chart_rows = []
+    for _, row in table.iterrows():
+        chart_rows.append({"Forecast": row["Provider"], "Temperature (°C)": row["Temperature (°C)"], "Margin": 0})
+    # The error bar on the combined bar goes from the low to the high end of the interval.
+    chart_rows.append({
+        "Forecast": "Combined",
+        "Temperature (°C)": window["temperature"],
+        "Margin": window["temperature_high"] - window["temperature"],
+    })
+    fig = px.bar(
+        pd.DataFrame(chart_rows),
+        x="Forecast",
+        y="Temperature (°C)",
+        error_y="Margin",
+        title=f"{session_name}: temperature by provider",
+    )
+    return fig
+
+
+def show_session_dashboard(track):
+    """One session at a time: what each provider forecasts for it, and the combined forecast."""
+    if track is None:
+        st.info("Pick a track in the sidebar.")
+        return
+
+    sessions = session_times()
+    # A button is only "pressed" on the run right after the click, so the session
+    # shown is remembered in session_state, like the track in the sidebar.
+    if "session_index" not in st.session_state:
+        st.session_state["session_index"] = 0
+    index = st.session_state["session_index"]
+    session = sessions[index]
+
+    col1, col2, col3 = st.columns([1, 4, 1])
+    col1.button("◀ Previous", on_click=previous_session, disabled=index == 0)
+    col2.subheader(f"{session['session']}: {session['start_utc']:%a %d %b, %H:%M} UTC ({index + 1} of {len(sessions)})")
+    col3.button("Next ▶", on_click=next_session, disabled=index == len(sessions) - 1)
+
+    # The same cached call as the Weekend overview, so nothing is downloaded or logged twice.
+    with st.spinner("Fetching the forecasts"):
+        table, failures = fetch_forecasts_and_log(track)
+    for failure in failures:
+        st.warning(f"Skipped {failure}")
+
+    now = datetime.now(timezone.utc)
+    rows = session_window_rows(table, session["start_utc"])
+    message = session_message(session["start_utc"], now, rows)
+    if message is not None:
+        st.info(message)
+        return
+
+    # Combine only this session's window: one row with the means and their 95% interval.
+    window = combine_forecasts(rows).iloc[0]
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Temperature", f"{window['temperature']:.1f} °C")
+    col1.caption(interval_text(window, "temperature", "°C"))
+    col2.metric("Chance of rain", f"{chance_of_rain(window):.0f}%")
+    col2.caption(f"{window['rain_providers']} of {window['providers']} providers predict rain")
+    col3.metric("Wind", f"{window['wind_kmh']:.0f} km/h")
+    col3.caption(interval_text(window, "wind_kmh", "km/h"))
+    col4.metric("Wind from", direction_label(rows))
+
+    table = provider_table(rows)
+    left, right = st.columns(2)
+    with left:
+        st.markdown("**Per provider**")
+        st.dataframe(table.round(1), hide_index=True)
+        st.caption(f"Combined from {window['providers']} providers. MET Norway only forecasts about 2.5 days ahead.")
+    with right:
+        st.plotly_chart(session_chart(table, window, session["session"]))
+
+
+weekend_tab, session_tab, live_tab, analytics_tab = st.tabs(["Weekend overview", "Session dashboard", "Live conditions", "Analytics"])
 
 with weekend_tab:
     show_weekend_overview(selected_track)
+
+with session_tab:
+    show_session_dashboard(selected_track)
 
 
 # View 1: live conditions at the chosen circuits.
