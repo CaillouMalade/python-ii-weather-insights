@@ -360,9 +360,20 @@ _To fill in this card's pull request._
 - During my review, the radar showed "Zoom Level Not Supported" tiles at close zoom. RainViewer's free images stop at zoom 7 and the map requests one level ahead, so the radar layer is hidden from map zoom 6.5 onwards (`maxzoom`), with a caption explaining the limit.
 - Beyond the class material: `fig.add_vline`, `px.scatter_map` and `map_layers`, each used once and documented in the code.
 
-## Card 8: Session dashboard
+## Card 8: Session dashboard — 15 November 2026 (Emilio, with Claude)
 
-_To fill in this card's pull request._
+**Asked:** Building on the exploration done for card 7, I defined the session page: one session at a time with Previous and Next buttons, the combined forecast with its 95% interval, the chance of rain and the wind for that session, a per-provider comparison, and a clear message when a session is over or not yet forecast. Claude helped me structure and draft the code one piece at a time; I reviewed, tested and adjusted each piece before committing it.
+
+**Got:** in `dashboard.py`, `provider_table()` (one readable row per provider, wind in km/h and as a compass direction), `direction_label()` and `interval_text()` (the texts shown on both pages), with 5 more tests; in `app.py`, `previous_session()`, `next_session()`, `session_chart()`, `show_session_dashboard()` and a second tab, "Session dashboard". The Weekend overview now uses `direction_label()` too, so the direction text is written in one place.
+
+**Checked:** `uv run pytest` passes (89 tests). The page was run with Streamlit's AppTest on fake forecasts and fake session times, clicking through every case: a session that is over, two sessions with a forecast (values checked by hand against the fake data), a session six days ahead ("No forecast yet."), and the buttons disabled at the first and last session. I also reviewed the page in the browser with next weekend's sessions and real forecasts.
+
+**Decided / changed:**
+- The session shown is kept in `st.session_state`, because a button is only pressed for one run; the buttons use `on_click`, the same pattern as "Add track" in the sidebar, so the page always redraws with the right session and button states.
+- The forecast is fetched with the same cached call as the Weekend overview, so switching tabs or sessions downloads and logs nothing twice.
+- The statistics are computed on the session's window only, by reusing `combine_forecasts()` unchanged.
+- The small chart is a bar per provider plus a "Combined" bar whose error bar shows the 95% interval, the same `error_y` already used in the Analytics tab.
+- A session beyond the providers' 5 days shows "No forecast yet."; one that has already started keeps its forecast until its 3-hour window ends.
 
 ## Card 9: Live check
 

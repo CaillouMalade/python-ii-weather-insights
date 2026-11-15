@@ -4,6 +4,9 @@ They take the forecast table (one row per provider and 3-hour window) and return
 values the pages can show. No Streamlit here, so every helper can be tested on its own.
 """
 
+import pandas as pd
+
+from .models import METRES_PER_SECOND_TO_KMH
 from .windows import window_start
 
 # The 8 compass directions, clockwise from north, 45 degrees apart.
@@ -41,6 +44,22 @@ def direction_votes(window_rows):
     return best, votes[best], sum(votes.values())
 
 
+def direction_label(window_rows):
+    """Return the wind direction to show for one window, e.g. "SW (3 of 3 providers)"."""
+    votes = direction_votes(window_rows)
+    if votes is None:
+        return "Unknown"
+    return f"{votes[0]} ({votes[1]} of {votes[2]} providers)"
+
+
+def interval_text(window, column, unit):
+    """Return the 95% interval of one combined value as text, e.g. "95%: 10.1 to 14.7 °C"."""
+    # With a single provider there is nothing to compare, so combine_forecasts leaves it empty.
+    if pd.isna(window[column + "_low"]):
+        return "One provider only: no interval"
+    return f"95%: {window[column + '_low']:.1f} to {window[column + '_high']:.1f} {unit}"
+
+
 def chance_of_rain(window):
     """Percentage of providers that predict rain, for one row of combine_forecasts()."""
     return window["rain_providers"] / window["providers"] * 100
@@ -59,3 +78,21 @@ def session_message(session_start, now, rows):
     if len(rows) == 0:
         return "No forecast yet."
     return None
+
+
+def provider_table(window_rows):
+    """Return one row per provider for one window, with readable column names and units."""
+    rows = []
+    for _, row in window_rows.iterrows():
+        # A provider can leave a value out (None); then the cell stays empty and the direction "Unknown".
+        direction = "Unknown"
+        if not pd.isna(row["wind_deg"]):
+            direction = compass_sector(row["wind_deg"])
+        rows.append({
+            "Provider": row["source"],
+            "Temperature (°C)": row["temperature"],
+            "Rain (mm)": row["rain"],
+            "Wind (km/h)": row["wind_speed"] * METRES_PER_SECOND_TO_KMH,
+            "Wind from": direction,
+        })
+    return pd.DataFrame(rows)
