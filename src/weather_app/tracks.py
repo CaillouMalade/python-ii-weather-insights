@@ -36,7 +36,8 @@ def read_coordinate(text, label, low, high):
         value = float(text.strip())
     except ValueError:
         raise ValueError(f"{label} must be a number, for example 50.43.") from None
-    if value < low or value > high:
+    # Written as "not inside" so "nan" (not a number) is rejected too: every comparison with nan is False.
+    if not (low <= value <= high):
         raise ValueError(f"{label} must be between {low} and {high}.")
     return value
 

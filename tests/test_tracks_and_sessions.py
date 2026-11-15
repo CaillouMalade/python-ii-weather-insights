@@ -94,6 +94,10 @@ def test_latitude_out_of_range():
     assert error_for("Test", "95", "9.28") == "Latitude must be between -90 and 90."
 
 
+def test_latitude_nan_is_rejected():
+    assert error_for("Test", "nan", "9.28") == "Latitude must be between -90 and 90."
+
+
 def test_longitude_not_a_number():
     assert error_for("Test", "45.62", "") == "Longitude must be a number, for example 50.43."
 
