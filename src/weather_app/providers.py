@@ -5,45 +5,10 @@ from datetime import datetime, timedelta, timezone
 
 from .client import APIClient, validate_location
 from .models import ForecastPoint
-
-WINDOW_HOURS = 3
-FORECAST_DAYS = 5  # same reach as OpenWeatherMap's 5-day forecast
+from .windows import FORECAST_DAYS, WINDOW_HOURS, is_window_start, keep_next_five_days, sum_rain
 
 # MET Norway's terms ask every app to name itself; requests without a User-Agent are refused.
 MET_USER_AGENT = "racetrack-weather/0.1 github.com/CaillouMalade/python-ii-weather-insights"
-
-
-def is_window_start(time_utc):
-    """True for 00:00, 03:00, ... 21:00."""
-    return time_utc.hour % WINDOW_HOURS == 0 and time_utc.minute == 0
-
-
-def window_start(time_utc):
-    """Return the start of the 3-hour window a time falls in (14:20 gives 12:00)."""
-    hour = time_utc.hour - time_utc.hour % WINDOW_HOURS
-    return time_utc.replace(hour=hour, minute=0, second=0, microsecond=0)
-
-
-def sum_rain(amounts):
-    """Add up the rain of the hours in one window, or None if any hour is missing."""
-    # A partial sum would look like a real (too low) value, so we don't make one.
-    total = 0
-    for amount in amounts:
-        if amount is None:
-            return None
-        total = total + amount
-    return total
-
-
-def keep_next_five_days(points, now):
-    """Keep the points from the current window up to 5 days ahead."""
-    first = window_start(now)
-    last = first + timedelta(days=FORECAST_DAYS)
-    kept = []
-    for point in points:
-        if first <= point.time_utc < last:
-            kept.append(point)
-    return kept
 
 
 class OpenMeteoClient(APIClient):
