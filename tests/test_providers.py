@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 from weather_app import client
-from weather_app.providers import MetNorwayClient, OpenMeteoClient, sum_rain, window_start
+from weather_app.providers import MetNorwayClient, OpenMeteoClient
+from weather_app.windows import sum_rain, window_start
 
 MONZA = {"location": "Monza", "latitude": 45.62, "longitude": 9.28}
 SAMPLES = Path(__file__).parent
