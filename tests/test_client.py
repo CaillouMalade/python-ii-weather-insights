@@ -101,6 +101,8 @@ def test_bad_input_is_stopped_before_any_call():
     assert fake.calls == 0
     with pytest.raises(ValueError, match="outside the valid range"):
         validate_location({"location": "Nowhere", "latitude": 95.0, "longitude": 0.0})
+    with pytest.raises(ValueError, match="outside the valid range"):
+        validate_location({"location": "Nowhere", "latitude": float("nan"), "longitude": 0.0})
     assert validate_city("  Paris ") == "Paris"
 
 

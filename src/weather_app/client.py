@@ -92,7 +92,8 @@ def validate_location(location):
         raise ValueError("The location has no name.")
     if not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float)):
         raise ValueError(f"{name} has invalid coordinates.")
-    if latitude < -90 or latitude > 90 or longitude < -180 or longitude > 180:
+    # Written as "not inside" so nan (not a number) is rejected too: every comparison with nan is False.
+    if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
         raise ValueError(f"{name} has coordinates outside the valid range.")
 
 
