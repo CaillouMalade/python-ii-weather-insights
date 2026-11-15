@@ -1,6 +1,6 @@
 """Combines the providers' forecasts into one estimate per 3-hour window, with a 95% confidence interval.
 
-The input is the table from aggregator.fetch_all_forecasts (one row per provider and window).
+The input is the table from fetching.fetch_all_forecasts (one row per provider and window).
 The output has one row per window: the mean of the providers, the low and high ends of the
 95% confidence interval, and how many providers predict rain.
 """

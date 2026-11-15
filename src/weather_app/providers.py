@@ -1,5 +1,9 @@
-"""Keyless forecast providers. Each one turns its own answer into ForecastPoints
-on the same 3-hour UTC windows as OpenWeatherMap (00, 03, ... 21)."""
+"""The keyless services: two forecast providers and the rain radar.
+
+Open-Meteo and MET Norway each turn their own answer into ForecastPoints on the same
+3-hour UTC windows as OpenWeatherMap (00, 03, ... 21). RainViewer gives the radar images.
+All three are subclasses of APIClient, so they share its timeout and error messages.
+"""
 
 from datetime import datetime, timedelta, timezone
 
@@ -118,3 +122,38 @@ class MetNorwayClient(APIClient):
             raise ValueError("MET Norway sent a forecast in an unexpected format.") from None
 
         return keep_next_five_days(points, now)
+
+
+# The rain radar is not a forecast provider (it sends pictures of where it rains now, not
+# numbers for later), but it is called the same way, so it is also a subclass of APIClient.
+
+# RainViewer's image settings: 256-pixel tiles, colour scheme 2, smoothed, with snow shown.
+TILE_SETTINGS = "/256/{z}/{x}/{y}/2/1_1.png"
+
+
+class RainViewerClient(APIClient):
+    """Asks RainViewer for its list of radar images (the last 2 hours, one every 10 minutes)."""
+
+    def __init__(self):
+        super().__init__("https://api.rainviewer.com", None, None)
+
+    def radar_frames(self):
+        """Return every radar image, oldest first, as {"time_utc": datetime, "url": tile address}.
+
+        The tile address has {z}/{x}/{y} in it, which the map fills in itself.
+        """
+        data = self._get("public/weather-maps.json", {})
+        try:
+            frames = []
+            # The "past" list goes from oldest to newest; "time" is a Unix time in UTC.
+            for image in data["radar"]["past"]:
+                frames.append({
+                    "time_utc": datetime.fromtimestamp(image["time"], timezone.utc),
+                    "url": data["host"] + image["path"] + TILE_SETTINGS,
+                })
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("RainViewer sent its radar list in an unexpected format.") from None
+        # An empty list would leave the map with nothing to show, so it counts as a bad answer.
+        if len(frames) == 0:
+            raise ValueError("RainViewer sent its radar list in an unexpected format.")
+        return frames

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[2] / "variables.env")
 
 # API_KEY is None when no key is configured. The app checks this and shows
-# SETUP_MESSAGE, so Analytics keeps working on the saved log without a key.
+# SETUP_MESSAGE, so the forecasts and the history keep working without a key.
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
 SETUP_MESSAGE = (

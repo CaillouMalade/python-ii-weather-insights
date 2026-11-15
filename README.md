@@ -83,7 +83,7 @@ Pick an unticked card whose "needs" are done, put your name on it, and tick it w
 - [x] **8. Session dashboard** (needs 0, then 2 + 6, owner: Emilio): one session at a time, with previous and next buttons. For that session's window: temperature, chance of rain and wind strength and direction, per provider and combined with the confidence interval, plus a small chart. A session beyond OpenWeatherMap's 5 days uses the providers that reach it, or says "No forecast yet".
 - [x] **9. Live check** (needs 2 + 3, owner: Arthur): with the real key, each error message, a failing provider, adding a good and a bad track. Fix what breaks.
 - [ ] **Walkthrough (Mon 16 Nov):** each of us explains our card to the group.
-- [ ] **10. Refactor (Tue 17 Nov, feature freeze)** (needs 2–8): move functions to where they belong, remove duplicates and unused code, make names consistent. Tests pass before and after.
+- [x] **10. Refactor (Tue 17 Nov, feature freeze)** (needs 2–8, owner: Arthur): move functions to where they belong, remove duplicates and unused code, make names consistent. Tests pass before and after.
 - [ ] **11. Polish (Wed 18 Nov)** (needs 10): cosmetic upgrades only: layout and spacing, colours, titles and labels, empty and loading states, the logo, and anything an outsider found confusing.
 - [ ] **12. Finish (Thu 19 Nov)** (Arthur, needs 11): user README for `main`, fresh data commit, clean-clone test, merge `dev` into `main`.
 - [ ] **Submitted (Fri 20 Nov).**

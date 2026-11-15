@@ -383,9 +383,25 @@ _To fill in this card's pull request._
 
 **Kept / changed:** Every message and the failing-provider case worked, so they stay as they are. Fixed the `nan` hole in two places, one commit each, with a test each: `validate_location` (client.py) and `read_coordinate` (tracks.py) now check "not inside the range" instead of "below or above", so `nan` is rejected. Also translated the 10 comments in Chinese into English (sidebar, sessions, storage, tracks and their tests), keeping their meaning, so every member can read them. Left the "Spa" id follow-up to card 4. No live-check output was kept in the repo or in `data/`.
 
-## Card 10: Refactor
+## Card 10: Refactor — 15 November 2026 (Arthur, with Claude Code)
 
-_To fill in this card's pull request._
+**Asked:** Remove everything left over from the old city app so each page holds only what the README says, keep the code simple, close to the class and well commented, and keep each member's code recognisable. While checking the app in the browser I also asked for a few changes: the race weekend always starting tomorrow (the presentation is on a Monday and the forecasts only reach a few days ahead), "Add a track" folded, a zoomed-in track map, a time slider on the radar, one rain and temperature chart like the one in our first prototype, the charts cut to the 3 race days right under "Weather now", the pages in a bar that stays at the top, and the app name in the sidebar.
+
+**Got:**
+- Removed the old city app: the "Circuits" box and "Add a place" in the sidebar, the Live conditions tab, the old analytics (`city_trend`, `city_comparison`, `daily_range`, `feels_like_gap`, `rank_by_temperature`), `find_city`, `validate_city`, `fetch_many`, `load_circuits`, `load_log`, `load_all_readings` and `data/circuits.csv`, with their tests. Also `direction_label`, `WeatherReading.__lt__` and `WeatherReading.feels_like_gap`, which nothing used any more.
+- Four pages, matching the README: Weekend overview, Session dashboard, History and Track comparison (card 5's page split in two, its code unchanged). They are `st.Page`s in `st.navigation(position="top")`, so the bar stays visible and only the open page runs.
+- `sessions.py`: `weekend_start()` (tomorrow at 00:00 UTC) replaces `weekend_friday()`.
+- Weekend overview: "Wind from" in "Weather now"; `rain_and_temperature_chart()` (rain bars, temperature line and its 95% band on a second axis) and `wind_chart()`, both for the 3 race days, with the band drawn only where all 3 providers answered (with 2, Student's t is 12.7 and the band flattened the line); a satellite map of the track next to the radar; `RainViewerClient.radar_frames()` and a slider over the last 2 hours of radar.
+- Structure: `aggregator.py` moved into `fetching.py`, `radar.py` into `providers.py` (15 modules to 13), docstrings on the page functions, the `AGENTS.md` project map updated.
+
+**Checked:** `uv run pytest` passes (78 tests: 9 removed with the old city code, 3 with the unused pieces, 2 added for the weekend start and the radar list). Every page opened in the browser and with Streamlit's AppTest on real data, with no errors; `data/` restored before each commit.
+
+**Kept / changed:** Every member's functions were moved, not rewritten: card 5's history and comparison, card 6's statistics, card 7's radar and card 8's session page work as before. I rejected removing the radar: it only shows the last 2 hours, but that is what tells you whether rain reaches the track within the hour. I kept `weather_log.csv` and `forecasts.csv` being written, but the history pages read only the collector's `current_weather.csv`, since the app's own log has no track id.
+
+### Be ready to explain: new forms
+- `st.navigation` with `st.Page` (the top bar), `st.select_slider` (radar time), `st.expander` (Add a track).
+- `fig.add_scatter` with `fill="tonexty"` (the shaded band) and `yaxis="y2"` (temperature on a second axis), and `pandas.Series.where` (hiding the band where only 2 providers answered).
+- A satellite tile layer (Esri World Imagery, free, no key) in `px.scatter_map`, the same way the radar is drawn.
 
 ## Card 11: Polish
 

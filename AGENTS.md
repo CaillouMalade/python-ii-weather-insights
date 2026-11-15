@@ -46,22 +46,24 @@ The grade depends on more than working code: **every member must be able to expl
 
 | File | What it holds |
 |---|---|
-| `app.py` | Only builds the pages. Today the old pages run at top level; a **new** page goes in its own `show_...()` function so people don't edit the same lines. Moving the existing code is card 10, not yours. |
-| `src/weather_app/client.py` | `APIClient` (generic JSON GET: timeout, status checks, one clear `ValueError` per failure; key optional; `self.headers`), `WeatherClient` (OpenWeatherMap: current weather and forecast), `validate_city`, `validate_location`. |
-| `src/weather_app/providers.py` | `OpenMeteoClient`, `MetNorwayClient`. |
+| `app.py` | Only builds the pages: the sidebar (`show_sidebar`), one `show_...()` function per page, and the four pages in the top bar (`st.navigation`): Weekend overview, Session dashboard, History, Track comparison. |
+| `src/weather_app/client.py` | `APIClient` (generic JSON GET: timeout, status checks, one clear `ValueError` per failure; key optional; `self.headers`), `WeatherClient` (OpenWeatherMap: current weather and forecast), `validate_location`. |
+| `src/weather_app/providers.py` | `OpenMeteoClient`, `MetNorwayClient`, and `RainViewerClient` (radar images of the last 2 hours, not a forecast). |
 | `src/weather_app/windows.py` | The 3-hour window helpers (`is_window_start`, `window_start`, `sum_rain`, `keep_next_five_days`), used by every provider. |
-| `src/weather_app/aggregator.py` | `fetch_all_forecasts(location, providers, now=None)` → `(table, failures)`; `points_to_frame(points)`. |
-| `src/weather_app/fetching.py` | The cached calls the pages use: `fetch_and_log`, `fetch_many`, `find_city`, `fetch_forecasts_and_log(location)`. |
+| `src/weather_app/fetching.py` | `fetch_all_forecasts(location, providers, now=None)` → `(table, failures)` and `points_to_frame(points)`; then the cached calls the pages use: `fetch_and_log`, `fetch_forecasts_and_log(location)`, `fetch_radar_frames`. |
+| `src/weather_app/forecast_stats.py` | `combine_forecasts(table)`: per window, the providers' mean, 95% interval and rain count (card 6). |
+| `src/weather_app/dashboard.py` | Session helpers: the window rows of a session, wind direction votes, the per-provider table, the texts (card 8). |
+| `src/weather_app/sessions.py` | `SESSIONS` and `session_times()`: the race weekend is the next 3 days, starting tomorrow. |
+| `src/weather_app/tracks.py` | Checks for a new track: inputs, haversine distance, "No racetrack found at these coordinates" (card 4). |
 | `src/weather_app/storage.py` | Every file read and write in `data/`. |
 | `src/weather_app/models.py` | `WeatherReading` (current weather) and `ForecastPoint` (one provider, one 3-hour window). |
-| `src/weather_app/analytics.py` | Analyses on the logged readings. |
+| `src/weather_app/analytics.py` | Analyses on the collector's logged history: `TrackSummary` (ranked with `sorted()`), `track_rain_history`, `compare_track_history` (card 5). |
 | `src/weather_app/config.py` | Reads `OPENWEATHER_API_KEY` from `variables.env`; `API_KEY` is `None` when missing. |
 | `tests/fake_forecast.py` | Invented forecast for 3 providers × 8 windows, for building cards 6–8 before real data. Tests only. |
 | `tests/sample_*.json` | Small saved real answers from Open-Meteo and MET Norway, for provider tests. |
 
 **Data files** (`data/`, real data only):
 - `grade1_tracks.csv`: the 16 FIA Grade 1 circuits in EU countries (`id, name, country, latitude, longitude`). The track list for the app.
-- `circuits.csv`: the older circuit list the current `app.py` still uses; card 4 moves the sidebar to `grade1_tracks.csv`.
 - `current_weather.csv`: current weather every 30 minutes, written by the collector routine; Arthur refreshes `dev`'s copy with a data commit. `dev`'s copy stops on 6 Nov and covers the old 18-circuit list, so Red Bull Ring, Hockenheim, Hungaroring, Mugello, Zandvoort and Valencia have little or no history. Read it with `load_history()`; never edit it by hand.
 - `weather_log.csv`: current weather the app itself fetched.
 - `forecasts.csv`: not on `dev` yet, created on the first forecast fetch: `fetched_at_utc, location, latitude, longitude, source, time_utc, temperature, wind_speed, wind_deg, rain`.
@@ -78,7 +80,7 @@ Other cards depend on these. If a card seems to need a change, stop and tell the
 - **Units everywhere:** °C, m/s stored (shown as km/h with `wind_kmh` or × 3.6), degrees the wind comes *from*, mm.
 - **The forecast table** (from `points_to_frame` / `fetch_forecasts_and_log`): one row per provider and window, columns `source, time_utc, temperature, wind_speed, wind_deg, rain`.
 - **Wind direction is never averaged** (350° and 10° would average to 180°). It's turned into 8 compass sectors (N, NE, E, SE, S, SW, W, NW) and counted as votes: "3 of 3 say SW".
-- **Session times** live in one place, a `SESSIONS` list in `src/weather_app/sessions.py` (created by card 4), written directly in UTC for the coming Friday to Sunday, the same for every track: FP1 Fri 08:00, FP2 Fri 14:00, FP3 Sat 08:00, Qualifying Sat 14:00, Race Sun 13:00 (09:00, 15:00… in Central European time, where 15 of the 16 tracks are). No time-zone conversion: with 3-hour windows, being an hour off in Portugal doesn't matter.
+- **Session times** live in one place, a `SESSIONS` list in `src/weather_app/sessions.py` (created by card 4), written directly in UTC for the next 3 days starting tomorrow (the forecasts only reach a few days ahead, MET Norway about 2.5), the same for every track: FP1 day 1 08:00, FP2 day 1 14:00, FP3 day 2 08:00, Qualifying day 2 14:00, Race day 3 13:00 (09:00, 15:00… in Central European time, where 15 of the 16 tracks are). No time-zone conversion: with 3-hour windows, being an hour off in Portugal doesn't matter.
 
 ## Rules the grader checks (never break these)
 
@@ -98,7 +100,7 @@ Other cards depend on these. If a card seems to need a change, stop and tell the
 Short hints so each card starts in the right place. The card text in the README is the requirement; these say how it connects.
 
 - **2. OpenWeatherMap client and errors.** `WeatherClient` already does current weather. Add `self.source = "openweathermap"` and `forecast(location, now=None)` on `data/2.5/forecast` (list items: `dt`, `main.temp`, `wind.speed`, `wind.deg`, `rain.3h`). OWM's `rain.3h` at 03:00 is taken to be the rain from 00:00 to 03:00, so it goes in the 00:00 window (not verified yet: card 9's live check confirms it). OWM leaves out `rain` when it doesn't rain: that's 0 mm, not missing. Cut with `keep_next_five_days`, then add `WeatherClient(API_KEY)` to the list in `fetch_forecasts_and_log` (only when `API_KEY` is set). One test per failure with a fake response, like `tests/test_client.py`.
-- **3. More providers.** Done (Open-Meteo, MET Norway, aggregator, `forecasts.csv`).
+- **3. More providers.** Done (Open-Meteo, MET Norway, `fetch_all_forecasts`, `forecasts.csv`).
 - **4. Sidebar.** Load `data/grade1_tracks.csv` plus `data/my_tracks.csv` (in `storage.py`) into the location shape: `name` becomes `"location"`, keep `id`. Check before anything else, each with its own message (empty name, name already used, latitude outside −90 to 90, longitude outside −180 to 180), and after the distance check "No racetrack found at these coordinates". Distance with the haversine formula; numpy comes with pandas, so no `uv add`. Within 3 km of a Grade 1 circuit, save it. Create `sessions.py` with `SESSIONS` and show the times.
 - **5. History and track comparison.** Use `load_history()`. It doesn't yet keep the collector's `location_id` and `rain_1h_mm` columns; adding both to `HISTORY_COLUMNS` in `storage.py` is part of this card (it doesn't change the CSV). Join tracks on `location_id`, not the name. Show an empty state for tracks with little or no history. Reuse `analytics.py` patterns (`groupby().agg()`, `sort_values`); rank with `sorted()` as the card says. Tests on a small slice copied into `tests/`.
 - **6. Statistics.** Input is the forecast table. Build on `points_to_frame(...)` of `fake_forecasts()`, so it works unchanged on real data. Per `time_utc`: mean, standard deviation and count of temperature, wind and rain (ignore `None`s), a 95% confidence interval `mean ± t × std / sqrt(n)` with Student's t from a small constant table (n=2: 12.71, n=3: 4.30; no interval for n=1), how many providers predict rain (`rain >= 0.1` mm), and wind direction as compass-sector votes. Keep the number of providers per window, so pages can say when only 2 answered. With 2–3 providers the interval is wide; that's correct.

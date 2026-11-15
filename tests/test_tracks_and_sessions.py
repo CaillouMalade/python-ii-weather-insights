@@ -2,7 +2,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from weather_app.sessions import session_times, weekend_friday
+from weather_app.sessions import session_times, weekend_start
 from weather_app.storage import GRADE1_TRACKS_PATH, TRACK_COLUMNS, append_track, load_all_tracks, load_tracks
 from weather_app.tracks import NOT_FOUND_MESSAGE, check_new_track, distance_km
 
@@ -11,21 +11,21 @@ GRADE1 = load_tracks(GRADE1_TRACKS_PATH)
 
 # Sessions
 
-def test_weekday_goes_to_the_coming_friday():
-    tuesday = datetime(2026, 11, 17, 10, 0, tzinfo=timezone.utc)
-    assert weekend_friday(tuesday) == datetime(2026, 11, 20, tzinfo=timezone.utc)
+def test_weekend_starts_tomorrow():
+    monday_evening = datetime(2026, 11, 16, 18, 30, tzinfo=timezone.utc)
+    assert weekend_start(monday_evening) == datetime(2026, 11, 17, tzinfo=timezone.utc)
 
 
-def test_sunday_stays_on_this_weekend():
-    sunday = datetime(2026, 11, 22, 18, 0, tzinfo=timezone.utc)
-    assert weekend_friday(sunday) == datetime(2026, 11, 20, tzinfo=timezone.utc)
+def test_weekend_crosses_the_end_of_a_month():
+    last_day = datetime(2026, 11, 30, 9, 0, tzinfo=timezone.utc)
+    assert weekend_start(last_day) == datetime(2026, 12, 1, tzinfo=timezone.utc)
 
 
 def test_session_times_in_utc():
-    sessions = session_times(datetime(2026, 11, 17, tzinfo=timezone.utc))
+    sessions = session_times(datetime(2026, 11, 16, 10, 0, tzinfo=timezone.utc))
     assert [s["session"] for s in sessions] == ["FP1", "FP2", "FP3", "Qualifying", "Race"]
-    assert sessions[0]["start_utc"] == datetime(2026, 11, 20, 8, 0, tzinfo=timezone.utc)
-    assert sessions[-1]["start_utc"] == datetime(2026, 11, 22, 13, 0, tzinfo=timezone.utc)
+    assert sessions[0]["start_utc"] == datetime(2026, 11, 17, 8, 0, tzinfo=timezone.utc)
+    assert sessions[-1]["start_utc"] == datetime(2026, 11, 19, 13, 0, tzinfo=timezone.utc)
 
 
 # Track files
