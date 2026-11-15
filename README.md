@@ -64,7 +64,7 @@ uv run pytest                   # run the tests (no key, no API calls)
 - Commit from your own GitHub account.
 - Keep it simple enough that anyone in the group could explain every line. Use what we saw in class.
 - Run `uv run pytest` before pushing, and add tests for what you build.
-- If an AI agent helps, add an entry to `PROMPTS.md` (what you asked, what you got, what you kept or changed) and the co-author trailer on that commit, e.g. `Co-Authored-By: Claude <noreply@anthropic.com>`.
+- If an AI agent helps, add an entry to `PROMPTS.md` under your card's heading, not at the end of the file (what you asked, what you got, what you kept or changed) and the co-author trailer on that commit, e.g. `Co-Authored-By: Claude <noreply@anthropic.com>`.
 
 ## Checklist
 

@@ -1,5 +1,7 @@
 # AI collaboration log
 
+One section per card, in card order. Write your entry under your own card's heading (replace the "To fill" line), never at the end of the file, so two pull requests don't edit the same lines.
+
 ## Repository setup — 21 October 2026
 
 **Asked:** "just let's make a private repo with the assignments docs. linked to the group assignment's folder"
@@ -291,6 +293,10 @@ The `[theme.light]` and `[theme.dark]` config sections; `st.context.theme.type`;
 
 **Kept / changed / rejected:** The radar, wind maps, track outlines, sessions and theming of `archive/racetrack-poc` were left out, to be brought back one at a time if wanted.
 
+## Card 2: OpenWeatherMap client and errors
+
+_To fill in this card's pull request._
+
 ## Card 3: more providers — 14 November 2026 (Arthur, with Claude Code)
 
 **Asked:** add Open-Meteo and MET Norway as `APIClient` subclasses returning `ForecastPoint`s on OpenWeatherMap's 3-hour UTC windows, plus a way to combine the providers.
@@ -336,3 +342,27 @@ The `[theme.light]` and `[theme.dark]` config sections; `st.context.theme.type`;
 **Checked:** the first window's numbers by hand in a test (9.33 °C, interval 7.90 to 10.77); ran it on the saved Open-Meteo and MET Norway answers in `tests/`; `uv run pytest`: 50 passed.
 
 **Kept / changed / rejected:** kept the module as written; rejected the normal approximation (too narrow with three values) and a 0 mm rain cutoff (counts rounding noise as rain).
+
+## Card 7: Weekend overview
+
+_To fill in this card's pull request._
+
+## Card 8: Session dashboard
+
+_To fill in this card's pull request._
+
+## Card 9: Live check
+
+_To fill in this card's pull request._
+
+## Card 10: Refactor
+
+_To fill in this card's pull request._
+
+## Card 11: Polish
+
+_To fill in this card's pull request._
+
+## Card 12: Finish
+
+_To fill in this card's pull request._
