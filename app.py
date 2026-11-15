@@ -10,7 +10,7 @@ import streamlit as st
 from weather_app.analytics import city_comparison, city_trend, compare_track_history, daily_range, feels_like_gap, rank_by_temperature, track_rain_history
 from weather_app.config import API_KEY, SETUP_MESSAGE
 from weather_app.dashboard import chance_of_rain, direction_votes, session_window_rows
-from weather_app.fetching import fetch_and_log, fetch_forecasts_and_log, fetch_many, find_city
+from weather_app.fetching import fetch_and_log, fetch_forecasts_and_log, fetch_many, fetch_radar_url, find_city
 from weather_app.forecast_stats import combine_forecasts
 from weather_app.sessions import session_times
 from weather_app.storage import append_track, load_all_readings, load_all_tracks, load_circuits, load_tracks
@@ -155,6 +155,32 @@ def forecast_chart(combined, column, title, unit_label, sessions):
     return fig
 
 
+def show_radar(track):
+    """A map around the track with the newest rain radar image laid over it."""
+    try:
+        radar_url = fetch_radar_url()
+    except ValueError as error:
+        st.warning(f"No rain radar right now: {error}")
+        return
+    # One row with the track's coordinates, so the map has a point to centre on.
+    track_point = pd.DataFrame([track])
+    fig = px.scatter_map(
+        track_point,
+        lat="latitude",
+        lon="longitude",
+        hover_name="location",
+        zoom=6,
+        map_style="carto-positron",
+        title="Rain radar now",
+    )
+    # The radar is a picture made of map tiles; the map fills in {z}/{x}/{y} itself.
+    # RainViewer's free images stop at their zoom 7. The map asks for one zoom level more detail
+    # than it shows, so from map zoom 6.5 it would get grey "not supported" tiles: hide the radar there.
+    fig.update_layout(map_layers=[{"sourcetype": "raster", "source": [radar_url], "maxzoom": 6.5}])
+    st.plotly_chart(fig)
+    st.caption("The map opens at the most detailed free radar there is (about 1 km per pixel). Zoom in further and the radar hides, since RainViewer has no finer images.")
+
+
 def show_weekend_overview(track):
     """The main page: the weather now and the next 5 days at the track picked in the sidebar."""
     if track is None:
@@ -177,6 +203,7 @@ def show_weekend_overview(track):
             col2.metric("Feels like", f"{reading.feels_like:.1f} °C")
             col3.metric("Wind", f"{reading.wind_kmh:.0f} km/h")
             col4.metric("Conditions", reading.conditions)
+    show_radar(track)
 
     # Every provider for this track. One that fails is skipped and named here.
     with st.spinner("Fetching the forecasts"):

@@ -6,6 +6,7 @@ from .aggregator import fetch_all_forecasts
 from .client import WeatherClient
 from .config import API_KEY
 from .providers import MetNorwayClient, OpenMeteoClient
+from .radar import RainViewerClient
 from .storage import append_forecasts, append_reading
 
 TEN_MINUTES = 600
@@ -48,3 +49,10 @@ def fetch_forecasts_and_log(location):
     table, failures = fetch_all_forecasts(location, providers)
     append_forecasts(table, location)
     return table, failures
+
+
+# RainViewer makes a new radar image every 10 minutes, so a 10-minute cache loses nothing.
+@st.cache_data(ttl=TEN_MINUTES, show_spinner=False)
+def fetch_radar_url():
+    """Return the newest rain radar image address. A failure raises and is not cached."""
+    return RainViewerClient().latest_radar_url()
