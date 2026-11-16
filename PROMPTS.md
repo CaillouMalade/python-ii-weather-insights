@@ -4,7 +4,7 @@ We used AI coding agents (Claude Code mostly, Codex on a few early commits) as c
 
 One section per card, in card order. Write your entry under your own card's heading, never at the end of the file, so two pull requests don't edit the same lines.
 
-## Before the racetrack app — 21 Oct to 10 Nov 2026 (Arthur, with Claude Code and Codex)
+## Before the racetrack app — up to 10 Nov 2026 (Arthur, with Claude Code and Codex via OpenBot)
 
 **Asked:** Set up the repo exactly as the assignment's scaffold recommends (`src/` package, `pyproject.toml`, `variables.env.example`), then build a first version to see what the brief allows: a general city weather app, reworked a few times (a stock-style dashboard, radar map, analytics, light mode), plus a separate collector logging the current weather at 18 circuits every 30 minutes. Then, on 10 Nov, archive all of that and restart from "one SIMPLE project that fits all the guidelines", which became the racetrack app.
 
