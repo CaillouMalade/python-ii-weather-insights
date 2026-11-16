@@ -5,7 +5,7 @@ import pandas as pd
 from fake_forecast import fake_forecasts
 
 from weather_app.fetching import points_to_frame
-from weather_app.analytics import compare_track_history, track_rain_history
+from weather_app.analytics import compare_track_history, days_logged, track_rain_history
 from weather_app.models import WeatherReading
 from weather_app.storage import FORECAST_LOG_COLUMNS, HISTORY_PATH, LOG_COLUMNS, append_forecasts, append_reading, load_history
 
@@ -44,6 +44,12 @@ def test_daily_track_history_estimates_rain_and_finds_temperature_range():
     daily = track_rain_history(make_track_history(), "imola")
     assert round(daily.loc[0, "rain_mm"], 2) == 10.32
     assert list(daily["temperature_range_c"]) == [0.0]
+
+
+def test_days_logged_counts_different_days():
+    history = make_track_history()
+    assert days_logged(history, "imola") == 1
+    assert days_logged(history, "no-such-track") == 0
 
 
 def test_track_comparison_sorts_and_counts_rain_days():

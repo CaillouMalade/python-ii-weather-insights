@@ -1,1 +1,12 @@
 timestamp_utc,location,latitude,longitude,temperature,feels_like,humidity,wind_speed,conditions
+2026-11-15T19:04:18.597937+00:00,Red Bull Ring,47.2197,14.7647,-2.06,-2.06,86,1.03,broken clouds
+2026-11-15T19:04:54.902840+00:00,Portimão,37.2319,-8.6267,16.07,16,87,0.78,clear sky
+2026-11-15T19:17:34.765682+00:00,Spa-Francorchamps,50.4372,5.9714,9.28,6.9,91,4.49,light rain
+2026-11-15T19:17:52.811684+00:00,Portimão,37.2319,-8.6267,16.09,16,86,0.78,clear sky
+2026-11-15T19:21:51.523190+00:00,Barcelona-Catalunya,41.57,2.2611,16.69,16.11,65,3.09,few clouds
+2026-11-16T06:52:48.130527+00:00,Red Bull Ring,47.2197,14.7647,-3.06,-3.06,93,1.03,broken clouds
+2026-11-16T07:03:14.745965+00:00,Red Bull Ring,47.2197,14.7647,-3.06,-3.06,93,1.03,broken clouds
+2026-11-16T07:32:44.630963+00:00,Red Bull Ring,47.2197,14.7647,-3.06,-6.1,93,2.06,light snow
+2026-11-16T07:45:19.340134+00:00,Red Bull Ring,47.2197,14.7647,-2.06,-4.17,86,1.54,light snow
+2026-11-16T07:45:25.108970+00:00,Spa-Francorchamps,50.4372,5.9714,6.47,2.78,95,5.94,overcast clouds
+2026-11-16T07:45:27.919257+00:00,Paul Ricard,43.2506,5.7917,11.21,10.45,79,3.35,scattered clouds

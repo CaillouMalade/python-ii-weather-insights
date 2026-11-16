@@ -21,6 +21,17 @@ class TrackSummary:
         return f"{self.location}: average {self.average_temperature_c:.1f} °C, {self.rain_days} rain days, {self.total_rain_mm:.1f} mm total rain over {self.days_logged} logged days."
 
 
+# A track needs readings on at least this many days before its history is drawn:
+# with a single reading every chart would be one lonely dot.
+MIN_DAYS_LOGGED = 2
+
+
+def days_logged(history, location_id):
+    """Return on how many different days a track was logged."""
+    track = history[history["location_id"] == location_id]
+    return track["timestamp_utc"].dt.date.nunique()
+
+
 def track_rain_history(history, location_id):
     """Return daily rain estimates and temperature range for one track ID."""
     track = history[history["location_id"] == location_id].copy()
