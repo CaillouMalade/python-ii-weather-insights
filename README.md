@@ -2,7 +2,7 @@
 
 A Streamlit app for race teams that tells you what the weather is going to do at a racetrack over a race weekend, built for our Python II group assignment (brief and rubric in [`assignment/BRIEF.md`](assignment/BRIEF.md)). It takes three forecast providers and combines them into one forecast with a 95% confidence interval, shows the rain radar around the track, and analyses the weather history we logged ourselves on the 16 FIA Grade 1 circuits in EU countries.
 
-## Why this app
+## Context
 
 When racing on a track, weather plays a massive role, and three factors basically drive everything:
 
@@ -12,7 +12,7 @@ When racing on a track, weather plays a massive role, and three factors basicall
 
 Knowing that, the idea is a weather app that aggregates several APIs, so instead of giving one ungrounded likelihood of rain, we give the statistical likelihood of rain and wind with more detail, on top of the wind over the track map and the rain radar. It's an MVP (we will need more granularity later), but that's the main idea.
 
-## What the app does
+## Navigating and Using the app
 
 You pick a track in the sidebar (or add your own), then go through the four pages in the top bar:
 
