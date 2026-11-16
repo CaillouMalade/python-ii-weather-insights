@@ -92,7 +92,7 @@ On the OOP side, `APIClient` holds what any JSON API needs (the request with a t
 
 ## For the grader
 
-This section follows the rubric row by row, and for each point it says what we did, why, and where to find it in the code, so you don't have to dig through the repo. All paths are relative to the repo root, and the Python files are in `src/weather_app/` unless said otherwise. To check the whole thing quickly, `uv sync` then `uv run pytest` runs the 79 tests, and `uv run streamlit run app.py` starts the app (see Setup and Run above).
+This section follows the rubric row by row, and for each point it says what we did, why, and where to find it in the code, so you don't have to dig through the repo. All paths are relative to the repo root, and the Python files are in `src/weather_app/` unless said otherwise. To check the whole thing quickly, `uv sync` then `uv run pytest` runs all the tests, and `uv run streamlit run app.py` starts the app (see Setup and Run above).
 
 ### OOP design (2 points)
 
