@@ -49,15 +49,13 @@ uv run pytest                   # runs the tests (no key and no API calls needed
 
 ## Data
 
-Everything in `data/` is real data we fetched, nothing invented:
-
 - `grade1_tracks.csv`: the 16 FIA Grade 1 circuits in EU countries (`id, name, country, latitude, longitude`), so the track list.
 - `current_weather.csv`: our weather history, the current weather at each track every 30 minutes, logged by our collector from 29 Oct to 13 Nov 2026 (about 11,600 readings). History and Track comparison run on it. The collector stopped right after we switched to the 16-track list, so the 6 tracks added last (Red Bull Ring, Hockenheim, Hungaroring, Mugello, Zandvoort, Valencia) only have one reading and the app says there isn't enough history for them yet.
 - `weather_log.csv`: every current-weather fetch the app makes, appended with a UTC timestamp.
 - `forecasts.csv`: every forecast the app fetches, one row per provider and 3-hour window, with the fetch time in UTC.
 - `my_tracks.csv`: the tracks users add (created with the first accepted one).
 
-Why three weather files and not one: `forecasts.csv` holds predictions, the other two hold the weather observed at a given moment, so they don't mix. And `current_weather.csv` comes from our collector, which was built before the app with a richer format (track id, rain, pressure, gusts…), while the app logs a smaller `WeatherReading` without the track id or the rain, so its rows can't feed the history pages and stay in their own log.
+Why three weather files and not one: `forecasts.csv` holds predictions, the other two hold the weather observed at a given moment, so they don't mix. And `current_weather.csv` comes from our collector, which was built before the app with a richer format (track id, rain, pressure, gusts…), ran by a separate collector getting all the data in case we wanted more information than planned, while the app logs a smaller `WeatherReading` without the track id or the rain, so its rows can't feed the history pages and stay in their own log.
 
 Units are °C, wind stored in m/s and shown in km/h, rain in mm, and wind direction in the degrees it comes from (shown as N, NE, E…).
 
@@ -66,6 +64,7 @@ Sources: [OpenWeatherMap](https://openweathermap.org) (key needed), [Open-Meteo]
 ## How the forecasts are combined
 
 Every provider's forecast is cut into the same 3-hour windows in UTC (00:00, 03:00 … 21:00) up to 5 days ahead. For each window we take the mean of the providers and a 95% confidence interval, mean ± t × standard deviation / √n, with Student's t for the number of providers that answered (no interval with only one). Wind direction is never averaged (350° and 10° would give 180°, so the opposite), instead each provider votes for one of 8 compass sectors, e.g. "3 of 3 providers agree: SW". MET Norway only forecasts about 2.5 days ahead hour by hour, so after that the windows combine two providers and the interval gets a lot wider, which is expected with n = 2.
+Note that in the session page we do not show the confidence interval with 2 providers only as it is usually big enough that it simply fills the whole graph. This would be patched in later version when adding providers.
 
 ## Project structure
 
