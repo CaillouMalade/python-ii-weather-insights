@@ -293,9 +293,13 @@ The `[theme.light]` and `[theme.dark]` config sections; `st.context.theme.type`;
 
 **Kept / changed / rejected:** The radar, wind maps, track outlines, sessions and theming of `archive/racetrack-poc` were left out, to be brought back one at a time if wanted.
 
-## Card 2: OpenWeatherMap client and errors
+## Card 2: OpenWeatherMap client and errors — 15 November 2026 (Arthur, with Claude Code)
 
-_To fill in this card's pull request._
+**Asked:** Add the OpenWeatherMap 5-day forecast as the third provider, on the same 3-hour windows as Open-Meteo and MET Norway, and give each failure its own message with a test.
+
+**Got:** `WeatherClient.forecast(location, now=None)` on `data/2.5/forecast`, returning `ForecastPoint`s cut with `keep_next_five_days`; OWM's `rain.3h` at 03:00 put in the 00:00 window, a missing `rain` read as 0 mm and the last window's rain left as `None` (no item after it); `WeatherClient(API_KEY)` added to `fetch_forecasts_and_log` only when the key is set; new messages in `APIClient` for 400 (bad coordinates), 429 (too many requests, easy to hit on the free key) and 5xx, so all three providers get them; 4 tests in `tests/test_client.py` with fake answers (the rain shift, the 5-day cut, one message per failure: 401, 404, 400, 429, 503, timeout, no connection, not JSON, wrong shape, and a bad location stopped before any call).
+
+**Kept / changed:** Kept the app running without a key (Open-Meteo and MET Norway only), rather than blocking every page on a missing key. Left the `rain.3h` question to card 9's live check, which confirmed it.
 
 ## Card 3: more providers — 14 November 2026 (Arthur, with Claude Code)
 
@@ -403,10 +407,32 @@ _To fill in this card's pull request._
 - `fig.add_scatter` with `fill="tonexty"` (the shaded band) and `yaxis="y2"` (temperature on a second axis), and `pandas.Series.where` (hiding the band where only 2 providers answered).
 - A satellite tile layer (Esri World Imagery, free, no key) in `px.scatter_map`, the same way the radar is drawn.
 
-## Card 11: Polish
+## Card 11: Polish — 16 November 2026 (Arthur, with Claude Code)
 
-_To fill in this card's pull request._
+**Asked:** Going through the app in the browser and pointing at what looked wrong, page by page: align the track map and the radar, shorter captions, the session dashboard reorganised (cards, charts for the session's own 3-hour slot, then a "Per provider detail" section), a confidence view for rain that is actually readable, the History charts fixed (negative rain axis, red for the highest temperature, a gradient on the temperature swing), more in Track comparison (variability, any number of tracks), the logo in the sidebar in light and dark mode, and why History showed almost no rain.
 
-## Card 12: Finish
+**Got:**
+- Weekend overview: the radar slider moved above both maps, so the track map and the radar line up at the same height and size; shorter captions ("MVP preview using free APIs…", "Note: MET Norway API is limited to 2.5 days.").
+- Session dashboard: the weekend charts reused for the session's 3-hour slot only, split into temperature, rain and wind (`wind_chart` became a general `line_chart`, plus `temperature_chart` and `rain_chart`); rain shows one flat line per provider and their mean as a bar, with a footnote on why the lines are flat; a "Per provider detail" section with the table and three bar charts (temperature, rain, wind), each with the combined value and its 95% interval as an error bar (`session_chart` now takes the value to draw).
+- History: rain axis starts at 0, "Highest" in red, the temperature swing as bars coloured from blue to red; tracks logged on fewer than 2 days say "Not enough logged history" instead of drawing one dot (`days_logged` and `MIN_DAYS_LOGGED` in `analytics.py`, with a test).
+- Track comparison: 2 to 4 tracks with `st.multiselect`; the `TrackSummary` ranking shown as metric cards, wettest on the left; a grouped bar chart of the daily temperature swing reusing `track_rain_history`; an "MVP preview" callout at the top. The "logged readings" line removed from both history pages.
+- Sidebar: the logo (`assets/logo.png`, and `assets/logo_dark.png` picked with `st.context.theme.type` in dark mode) in place of the title.
+- Rain in History: the committed `current_weather.csv` stopped on 6 Nov (174 rainy readings out of 6,013). The collector had kept running until 13 Nov, so its newer copy replaced it: 11,591 readings, 892 with rain. The collector stopped after the switch to the 16-track list, so the 6 new tracks have one reading each.
 
-_To fill in this card's pull request._
+**Checked:** `uv run pytest` passes after every change (79 tests). Each page checked in the browser on real data.
+
+**Kept / changed:** I rejected the gradient line, then kept the gradient bars for the swing. I rejected the rain error bar in the session chart (too wide to read with 3 providers) for one line per provider. I wanted to remove the one-line track summaries, but they are the only visible use of `TrackSummary.__lt__` with `sorted()`, so they became metric cards instead. I kept 3-hour windows rather than hourly: OpenWeatherMap's free forecast is 3-hourly and the group's `ForecastPoint` contract is built on them.
+
+### Be ready to explain: new forms
+- `st.context.theme.type` (light or dark logo), `st.multiselect` with `max_selections`.
+- `px.bar` with `error_y` and `error_y_minus` (an interval that is not symmetric because rain and wind never go below 0), and `color_continuous_scale` (the blue-to-red bars).
+
+## Card 12: Finish — 16 November 2026 (Arthur, with Claude Code)
+
+**Asked:** What the submitted repo must contain according to the brief, then a user README for `main`, the fresh data committed, and a clean-clone check before merging `dev` into `main`.
+
+**Got:** A checklist of the brief's repository requirements against the repo (all met except the user README and the data, which was 10 days old); `README.md` rewritten for a user and the grader (what the app does, setup, how to run it and the tests, the data files, how the forecasts are combined, the project structure, the team), with the card checklist kept at the end; `current_weather.csv`, `weather_log.csv` and `forecasts.csv` committed as real logged data; `AGENTS.md` and `CLAUDE.md` taken out of the repo and added to `.gitignore`.
+
+**Checked:** A fresh clone, `uv sync` and `uv run pytest` following only the README; the app started from it; no key in any committed file.
+
+**Kept / changed:** I took `AGENTS.md` and `CLAUDE.md` out of the repo: they were written for the assignment rules, and now that the MVP is done further development doesn't have to follow them. They stay in the git history and `PROMPTS.md` stays. I kept three CSVs rather than one: forecasts and observations don't mix, and the app's `WeatherReading` has no track id or rain, so its log can't join the collector's history without changing a shared contract on freeze day.
