@@ -1,0 +1,4 @@
+fetched_at_utc,location_id,location,temperature,rain
+2026-11-01T05:33:34.294196Z,imola,Imola,9.03,0.33
+2026-11-01T06:03:21.587905Z,imola,Imola,9.03,0.53
+2026-11-01T14:19:23.201080Z,monza,Monza,14.44,1.37

@@ -17,3 +17,8 @@ build/
 dist/
 .streamlit/secrets.toml
 
+# AI agent instructions (AGENTS.md, and CLAUDE.md which points to it). They were written for the
+# Python II assignment rules; now that the MVP is done, further development of the app does not
+# have to follow the assignment guidelines, hence why they are not in the repo.
+AGENTS.md
+CLAUDE.md
