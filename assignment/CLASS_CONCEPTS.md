@@ -2,7 +2,7 @@
 
 ## Sources
 
-Audited 2 November 2026. Course root: `C:/Users/Main/AGENTIC_VAULT/IE MBDS/Term 2/Python II/`. Paths below are relative to it unless specified otherwise.
+Audited 2 November 2026 from the Python II course material. Paths below are relative to the course folder unless specified otherwise.
 
 **Rule for future coding threads:** allow the specific demonstrated forms below, not every feature of a mentioned library. Distinguish primary teaching notebooks, assignment-summary examples, student notes, exercise prompts and supplementary practice. None proves everything said orally in class. Missing evidence means unverified, not proof that something was never discussed.
 
@@ -61,8 +61,6 @@ These are practice/reference artifacts, not independent evidence that their help
 - `s14_scripts/scripts/greet_argparse.py` — S14 argparse greeting.
 - `s14_scripts/scripts/predict_iris_knn.py` — S14 kNN CLI and CSV output.
 - `Material/Admin/SyllabusPDF_199957_1787553859564fPMzw.pdf` — all 14 pages; planned course coverage, not proof of demonstrated syntax.
-
-Operational guidance consulted, not curriculum evidence: `C:/Users/Main/AGENTIC_VAULT/IE MBDS/AGENTS.md`; relevant search excerpts in `C:/Users/Main/.codex/memories/MEMORY.md` about Python II/project preservation; `C:/Users/Main/.codex/plugins/cache/openai-primary-runtime/pdf/26.1029.11837/skills/pdf/SKILL.md`.
 
 ### Discovery limits
 
