@@ -62,6 +62,15 @@ def test_track_comparison_sorts_and_counts_rain_days():
     assert str(summaries[1]) == "Imola: average 9.0 °C, 1 rain days, 10.3 mm total rain over 1 logged days."
 
 
+def test_a_day_under_0_1_mm_is_not_a_rain_day():
+    history = make_track_history()
+    # 0.002 mm per hour on average, so about 0.05 mm over the day: below the 0.1 mm threshold.
+    history.loc[history["location_id"] == "imola", "rain"] = 0.002
+    imola = [summary for summary in compare_track_history(history, ["imola"])][0]
+    assert imola.total_rain_mm > 0
+    assert imola.rain_days == 0
+
+
 def test_missing_rain_becomes_zero_mm():
     history = make_track_history()
     history.loc[history["location_id"] == "imola", "rain"] = float("nan")

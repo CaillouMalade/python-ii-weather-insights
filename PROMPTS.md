@@ -66,6 +66,16 @@ One section per card, in card order. Write your entry under your own card's head
 
 **Kept / changed / rejected:** kept the module as written; rejected the normal approximation (too narrow with three values) and a 0 mm rain cutoff (counts rounding noise as rain).
 
+## Card 6 follow-up: history fixes — 16 November 2026 (Cedric, with Claude)
+
+**Asked:** Claude (Opus 5.5) to review the merged app, then fix three points: card 5 counted a rain day from anything above 0 mm while card 6 uses 0.1 mm; the daily rain estimate (× 24) was written both in `analytics.py` and in `app.py`; the RainViewer radar had no attribution on its map.
+
+**Got:** `compare_track_history` now counts a rain day from 0.1 mm (`RAIN_THRESHOLD_MM`, imported from `forecast_stats`) and takes its daily rain from `track_rain_history`, so the × 24 estimate lives in one function; Track comparison builds its three charts from `track_rain_history` too; "Rain radar: RainViewer" as the radar layer's attribution; one test that a day under 0.1 mm is not a rain day.
+
+**Checked:** `pytest`: 80 passed. Ran `compare_track_history` on the committed history before and after: average temperature, total rain and days logged are identical for all 24 tracks, only rain days drop where a day had under 0.1 mm (e.g. Imola 9 → 8). Rendered Track comparison with Streamlit's AppTest: no error, same three charts.
+
+**Kept / changed / rejected:** kept "Spa" for a user track sharing Spa-Francorchamps' id (people call it Spa), the session dashboard's wide two-provider interval (it is honest there, in a table rather than a chart), and every logged circuit in Track comparison, including those not in the sidebar (Silverstone, Le Mans…).
+
 ## Card 7: Weekend overview — 15 November 2026 (Emilio, with Claude)
 
 **Asked:** I began with an exploration phase together with Claude (Opus 5.5): we went through the card's requirements in the README and `AGENTS.md`, the code the group had already merged (cards 2 to 6), and the class material on Streamlit (s14) and Plotly (s18). From there I decided on the page layout and on an approach that reuses the group's existing functions and stays within the concepts covered in class. Claude then helped me structure and draft the code one piece at a time; I reviewed, tested and adjusted each piece before committing it.
