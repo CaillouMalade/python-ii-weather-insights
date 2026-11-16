@@ -92,37 +92,56 @@ On the OOP side, `APIClient` holds what any JSON API needs (the request with a t
 
 ## For the grader
 
-Where to find each point of the rubric, so you don't have to dig:
+This section follows the rubric row by row, and for each point it says what we did, why, and where to find it in the code, so you don't have to dig through the repo. All paths are relative to the repo root, and the Python files are in `src/weather_app/` unless said otherwise. To check the whole thing quickly, `uv sync` then `uv run pytest` runs the 79 tests, and `uv run streamlit run app.py` starts the app (see Setup and Run above).
 
-**OOP design**
-- Inheritance: `APIClient` in `src/weather_app/client.py` does the generic part (GET with a timeout, status-code checks, one `ValueError` per failure), and `WeatherClient` (same file) plus `OpenMeteoClient`, `MetNorwayClient` and `RainViewerClient` (`providers.py`) inherit from it, each only adding its URL and fields. That's the real reason for it, the same base serves four different APIs.
-- Encapsulation: the key is `self.__api_key` in `APIClient` (name-mangled, so no subclass or caller reads it by mistake), `_get` is `_protected` since the subclasses use it, and `source`, `headers`, `base_url` are public because callers need them.
-- Special method: `TrackSummary.__lt__` in `analytics.py`, so `sorted()` ranks tracks by total rain in `compare_track_history`, which orders the cards on the Track comparison page (wettest on the left). Also `__str__`/`__repr__` on `TrackSummary`, `WeatherReading` and `ForecastPoint` (`models.py`).
-- `@property`: `wind_kmh` on `WeatherReading` and `ForecastPoint` (`models.py`), m/s converted to km/h, shown in "Weather now".
+### OOP design (2 points)
 
-**API integration and robustness**
-- Key: read from `variables.env` with `python-dotenv` in `config.py`, never printed or shown, never committed (`.gitignore`). Error messages are fixed text since a `requests` error contains the URL, and the URL contains the key.
-- Distinct errors: one message each for bad input, bad key (401), location not found (404), bad coordinates (400), too many requests (429), server error (5xx), timeout, no connection and unreadable answer, in `APIClient._get` and `validate_location` (`client.py`), all tested with fake answers in `tests/test_client.py`. For a new track, "No racetrack found at these coordinates" (`tracks.py`).
-- Several at once: the app fetches one track at a time (that's how a team uses it, and results are cached for 10 minutes), so fetching many locations in one go isn't needed. The same logic is built into the forecast fetching though, `fetch_all_forecasts` in `fetching.py` asks the three providers in a loop, and one that fails is skipped and reported with `st.warning` while the others still load.
-- Validation before any call: `validate_location` (`client.py`) rejects an empty name or impossible coordinates, and `check_new_track` (`tracks.py`) checks a new track's name, latitude and longitude before anything is saved.
+**Inheritance.** We needed four different APIs (OpenWeatherMap, Open-Meteo, MET Norway and RainViewer), and they all need the same basic work: send a GET request with a timeout, check the status code, and turn every kind of failure into a clear message. So that shared part lives once in `APIClient` (`client.py`), and each API is a subclass that only adds its own URL and how to read its answer. `WeatherClient` is in the same file, and `OpenMeteoClient`, `MetNorwayClient` and `RainViewerClient` are in `providers.py`. Adding a fifth provider would mean writing one small subclass, not copying the error handling again.
 
-**Data and analytics**
-- Logging: `append_reading` and `append_forecasts` in `storage.py` append every successful fetch to `data/weather_log.csv` and `data/forecasts.csv` with a UTC timestamp, and our collector's history is in `data/current_weather.csv` (29 Oct to 13 Nov, about 11,600 readings, see Data above).
-- Three analytical views over two categories: trend over time on the History page (`track_rain_history` in `analytics.py`), cross-location comparison and ranking on Track comparison (`compare_track_history`), and computed metrics the API doesn't return, the daily temperature swing and the combined forecast with its 95% interval (`combine_forecasts` in `forecast_stats.py`).
-- Real data only: History and Track comparison read `current_weather.csv`, the forecast pages the live APIs, and fake data only exists in `tests/`.
+**Public, protected and private.** The API key is stored as `self.__api_key` in `APIClient`, with two underscores so Python name-mangles it, and no subclass or caller can read or print it by mistake. The request method `_get` has one underscore because it is meant for the subclasses only, not for the app. Attributes like `source`, `headers` and `base_url` stay public because the rest of the app reads them (for example `source` is the provider name shown in the warning when a provider fails).
 
-**Streamlit app**
-- Four pages in `app.py` (Weekend overview, Session dashboard, History, Track comparison), with the logic in the `src/weather_app/` package.
-- Interaction: picking and adding a track in the sidebar, previous/next session, the radar time slider, choosing 2 to 4 tracks to compare.
-- Charts: every chart has a title and axis labels with units (°C, mm, km/h).
-- Usability: an empty state or a message wherever there's no data (no key, a session out of reach, a track without history), never a traceback.
+**Special method.** `TrackSummary` in `analytics.py` defines `__lt__`, which compares two tracks by their total rain. This is what lets `compare_track_history` rank the tracks with a plain `sorted()`, and that ranking sets the order of the cards on the Track comparison page (wettest track on the left). `TrackSummary` also has a `__str__` that writes its one-line summary, and `WeatherReading` and `ForecastPoint` (`models.py`) have a `__repr__` that makes them readable when debugging (plus a `__str__` on `WeatherReading`).
 
-**Repository and AI collaboration**
-- `src/` package with `pyproject.toml`, this README, no secrets.
-- `PROMPTS.md` has one section per card, with what we asked, what we got and what we kept or changed.
+**`@property`.** The APIs give wind speed in m/s, but racing teams think in km/h. So `WeatherReading` and `ForecastPoint` (`models.py`) have a `wind_kmh` property that computes it from the stored value, instead of keeping two numbers that could drift apart. It is what the "Weather now" block displays.
 
-**Team collaboration**
-- Each member owns cards (checklist below) and committed from their own account, through pull requests into `dev`.
+### API integration and robustness (2 points)
+
+**API key.** The OpenWeatherMap key is read from `variables.env` with `python-dotenv` in `config.py`. It is never hardcoded, never printed or shown in the app, and `variables.env` is in `.gitignore` (only `variables.env.example` is committed). On top of this, our error messages are fixed text on purpose: a `requests` error contains the full URL, and that URL contains the key, so showing the raw error could leak it. Without a key the app still runs, and only the "Weather now" block shows a setup message, since the other two providers don't need a key.
+
+**Distinct error handling.** Every failure gets its own message, written for a user and not for a developer. Bad input and impossible coordinates are caught by `validate_location`, and in `APIClient._get` (both in `client.py`) a bad key (401), a location not found (404), coordinates the service refuses (400), too many requests (429), a server problem (5xx), a timeout, no connection, and an answer that can't be read each give a different message. Each case has a test with a fake response in `tests/test_client.py`. For a track a user adds, `tracks.py` also says "No racetrack found at these coordinates" when the point is not near a known circuit.
+
+**Several locations at once.** The app fetches one track at a time, because that's how a team would use it (you look at the circuit you're racing at that weekend), and results are cached for 10 minutes, so fetching every location in one go isn't needed. The rubric's logic is still there, applied across providers instead of across locations. `fetch_all_forecasts` in `fetching.py` asks the three providers in a loop, catches the error of any provider that fails, and keeps going, so the other providers still load and the failed one is named in a warning at the top of the page. A failed call is also not cached, so it is retried on the next refresh.
+
+**Validation before the API call.** Nothing is sent to an API before it is checked. `validate_location` (`client.py`) rejects an empty name or coordinates outside the valid range before any request, and when a user adds a track in the sidebar, `check_new_track` (`tracks.py`) checks the name (not empty, not already used), the latitude (a number between −90 and 90) and the longitude (between −180 and 180) before anything is saved.
+
+### Data and analytics (2 points)
+
+**Logging.** Every successful fetch is appended with a UTC timestamp: the current weather by `append_reading` to `data/weather_log.csv`, and the forecasts by `append_forecasts` to `data/forecasts.csv` (both in `storage.py`). On top of what the app logs itself, the data collector we ran from 29 Oct to 13 Nov is committed in `data/current_weather.csv`, with about 11,600 readings (see Data above), so you can see real accumulated history and not an empty file.
+
+**Three analytical views over two categories.**
+- *Trend over time:* the History page shows each track's daily rain and temperature over the logged period, computed by `track_rain_history` in `analytics.py`.
+- *Comparison across locations:* the Track comparison page puts 2 to 4 tracks side by side over the same days and ranks them, through `compare_track_history` in `analytics.py`.
+- *Derived metrics the API doesn't return:* the daily temperature swing (max minus min, in `track_rain_history`), and the combined forecast in `combine_forecasts` (`forecast_stats.py`), which averages the three providers for each 3-hour window and adds a 95% confidence interval and how many providers predict rain.
+
+**Real data only.** The History and Track comparison pages read `current_weather.csv`, and the forecast pages use the live APIs. The only fake data in the repo is in `tests/` (`fake_forecast.py` and the saved sample answers), and it is used by the tests only, never by the app.
+
+### Streamlit app (2 points)
+
+**Runs, with several views.** `app.py` has four pages: Weekend overview, Session dashboard, History and Track comparison. `app.py` only builds the pages, and the logic lives in the `src/weather_app/` package.
+
+**Interaction.** The user picks a track in the sidebar or adds their own, moves between sessions with previous/next buttons on the Session dashboard, scrolls through the last two hours of rain radar with a time slider, and chooses 2 to 4 tracks to compare.
+
+**Charts.** Every chart has a title and axis labels with units (°C, mm, km/h). The main ones are the 5-day forecast on the Weekend overview (with the confidence interval and the session times marked), the rain and temperature history, and the track comparison.
+
+**Usability.** We tried to make sure a stranger never hits a dead end or a traceback. Wherever there is no data, the app says why and what to do: no API key, a session too far ahead for any forecast, a provider that failed, or a track without enough history.
+
+### Repository and AI collaboration record (1 point)
+
+The code is a `src/` package with a `pyproject.toml` (installed with `uv sync`), this README explains setup and use, and no secret is committed. `PROMPTS.md` explains how we worked with the agents and then has one section per card, with what we asked, what we got, and what we kept, changed or rejected. AI-assisted commits carry a `Co-Authored-By` trailer, which you can check with `git log`.
+
+### Team collaboration (1 point)
+
+Each member owned one or more cards (see the checklist below), built them on their own branch, committed from their own GitHub account, and merged them into `dev` through a pull request, so the commit history and the pull requests show who did what. Before submitting, each of us walks the group through our own card (the Walkthrough step in the checklist), so that everyone can explain any part of the code, including the parts an agent wrote.
 
 ## Team and how we worked
 
