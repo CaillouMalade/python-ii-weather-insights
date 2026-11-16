@@ -1,5 +1,7 @@
 """Analyses of the collector's logged history (data/current_weather.csv), used by the History and Track comparison pages."""
 
+from .forecast_stats import RAIN_THRESHOLD_MM
+
 
 class TrackSummary:
     """Summary of the logged weather for one track."""
@@ -53,18 +55,18 @@ def compare_track_history(history, location_ids):
     """Summarize tracks over their logged data and rank them by estimated total rain."""
     summaries = []
     for location_id in location_ids:
-        track = history[history["location_id"] == location_id].copy()
+        track = history[history["location_id"] == location_id]
         if len(track) == 0:
             continue
-        track["rain"] = track["rain"].fillna(0)
-        track["day"] = track["timestamp_utc"].dt.date
-        daily_rain = track.groupby("day")["rain"].mean() * 24
+        # The daily rain comes from track_rain_history, so the estimate is written in one place only.
+        daily = track_rain_history(history, location_id)
         summaries.append(TrackSummary(
             location_id,
             track["location"].iloc[0],
             track["temperature"].mean(),
-            int((daily_rain > 0).sum()),
-            daily_rain.sum(),
-            int(track["day"].nunique()),
+            # Same threshold as the forecasts (forecast_stats): below 0.1 mm a day does not count as rainy.
+            int((daily["rain_mm"] >= RAIN_THRESHOLD_MM).sum()),
+            daily["rain_mm"].sum(),
+            len(daily),
         ))
     return sorted(summaries, reverse=True)

@@ -284,7 +284,8 @@ def show_radar(track, frame):
     # The radar is a picture made of map tiles; the map fills in {z}/{x}/{y} itself.
     # RainViewer's free images stop at their zoom 7. The map asks for one zoom level more detail
     # than it shows, so from map zoom 6.5 it would get grey "not supported" tiles: hide the radar there.
-    fig.update_layout(margin=MAP_MARGIN, map_layers=[{"sourcetype": "raster", "source": [frame["url"]], "maxzoom": 6.5}])
+    fig.update_layout(margin=MAP_MARGIN, map_layers=[{"sourcetype": "raster", "source": [frame["url"]], "maxzoom": 6.5,
+                                                      "sourceattribution": "Rain radar: RainViewer"}])
     st.plotly_chart(fig)
 
 
@@ -565,12 +566,15 @@ def show_track_comparison(history):
         column.metric("Rain days", summary.rain_days)
         column.metric("Total rain", f"{summary.total_rain_mm:.1f} mm")
         column.caption(f"Over {summary.days_logged} logged days")
-    shared["day"] = shared["timestamp_utc"].dt.date
-    daily_compare = shared.groupby(["location", "day"]).agg(temperature_c=("temperature", "mean")).reset_index()
-    shared["rain"] = shared["rain"].fillna(0)
-    rain_compare = (shared.groupby(["location", "day"])["rain"].mean() * 24).reset_index(name="rain_mm")
-    daily_compare = daily_compare.merge(rain_compare, on=["location", "day"])
-    temp_fig = px.line(daily_compare, x="day", y="temperature_c", color="location", markers=True, title="Average daily temperature comparison")
+    # One daily table per track from track_rain_history (the same as the History page), then stacked.
+    # It feeds all three charts: daily temperature, daily rain and the daily range.
+    dailies = []
+    for track_id in chosen_ids:
+        daily = track_rain_history(shared, track_id)
+        daily["location"] = track_names[track_id]
+        dailies.append(daily)
+    daily_compare = pd.concat(dailies)
+    temp_fig = px.line(daily_compare, x="day", y="temperature_mean_c", color="location", markers=True, title="Average daily temperature comparison")
     temp_fig.update_layout(xaxis_title="Day (UTC)", yaxis_title="Temperature (°C)")
     st.plotly_chart(temp_fig)
     rain_fig = px.line(daily_compare, x="day", y="rain_mm", color="location", markers=True, title="Daily rain comparison")
@@ -579,14 +583,8 @@ def show_track_comparison(history):
     rain_fig.update_yaxes(rangemode="nonnegative")
     st.plotly_chart(rain_fig)
 
-    # The same daily range (highest − lowest) as the History page, one track at a time, then stacked.
-    ranges = []
-    for track_id in chosen_ids:
-        daily = track_rain_history(shared, track_id)
-        daily["location"] = track_names[track_id]
-        ranges.append(daily)
-    range_compare = pd.concat(ranges)
-    range_fig = px.bar(range_compare, x="day", y="temperature_range_c", color="location", barmode="group",
+    # The same daily range (highest − lowest) as the History page.
+    range_fig = px.bar(daily_compare, x="day", y="temperature_range_c", color="location", barmode="group",
                        title="Daily temperature variability comparison (highest − lowest)")
     range_fig.update_layout(xaxis_title="Day (UTC)", yaxis_title="Temperature range (°C)", legend_title_text="")
     st.plotly_chart(range_fig)
